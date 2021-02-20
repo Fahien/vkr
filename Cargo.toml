@@ -1,0 +1,10 @@
+[package]
+name = "vkr"
+version = "0.0.1"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+ash = "0.37.1"
+sdl2 = "0.35.2"
