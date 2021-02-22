@@ -1,6 +1,6 @@
 [package]
 name = "vkr"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
@@ -8,3 +8,7 @@ license = "MIT"
 [dependencies]
 ash = "0.37.1"
 sdl2 = "0.35.2"
+byteorder = "1.4.3"
+
+[build-dependencies]
+glsl = { version = "6.0.1", features = ["spirv"] }
