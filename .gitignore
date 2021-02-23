@@ -1,4 +1,7 @@
 target
 *.spv
 .vscode
+res/font
 res/image
+imgui.ini
+SDL2*

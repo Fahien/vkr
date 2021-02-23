@@ -1,0 +1,12 @@
+[package]
+name = "vkr-shaders"
+version = "0.1.0"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[lib]
+crate-type =["dylib"]
+
+[dependencies]
+spirv-std = { git = "https://github.com/EmbarkStudios/rust-gpu.git", tag = "v0.4.0-alpha.12", features = ["glam"] }
