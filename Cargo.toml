@@ -1,6 +1,6 @@
 [package]
 name = "vkr"
-version = "0.0.2"
+version = "0.0.4"
 authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
@@ -9,3 +9,6 @@ license = "MIT"
 ash = "0.31.0"
 sdl2 = "0.34.3"
 byteorder = "1.4.2"
+
+[build-dependencies]
+spirv-builder = { path = "dep/rust-gpu/crates/spirv-builder" }
