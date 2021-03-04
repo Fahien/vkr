@@ -6,6 +6,7 @@ use ash::{extensions::ext::DebugReport, vk::Handle};
 use sdl2 as sdl;
 use std::{
     borrow::{Borrow, BorrowMut},
+    cell::RefCell,
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
     rc::Rc,
@@ -65,6 +66,7 @@ impl Win {
             .window("Test", 480, 480)
             .vulkan()
             .position_centered()
+            .resizable()
             .build()
             .expect("Failed to build SDL window");
 
@@ -217,7 +219,7 @@ impl Image {
 }
 
 pub struct Swapchain {
-    pub images: Vec<Image>,
+    pub images: Vec<Rc<RefCell<Image>>>,
     pub swapchain: ash::vk::SwapchainKHR,
     pub ext: ash::extensions::khr::Swapchain,
 }
@@ -235,10 +237,6 @@ impl Swapchain {
                 .get_physical_device_surface_capabilities(dev.physical, surface.surface)
         }
         .expect("Failed to get Vulkan physical device surface capabilities");
-        println!(
-            "Surface transform: {:?}",
-            surface_capabilities.current_transform
-        );
 
         let swapchain = {
             let create_info = ash::vk::SwapchainCreateInfoKHR::builder()
@@ -268,13 +266,13 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Image::new(
+            images.push(Rc::new(RefCell::new(Image::new(
                 image,
                 dev.surface_format.format,
                 dev.surface_format.color_space,
                 width,
                 height,
-            ));
+            ))));
         }
 
         Self {
