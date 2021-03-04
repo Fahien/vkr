@@ -366,7 +366,7 @@ checksum = "d63556a25bae6ea31b52e640d7c41d1ab27faba4ccb600013837a3d0b3994ca1"
 
 [[package]]
 name = "vkr"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "ash",
  "byteorder",

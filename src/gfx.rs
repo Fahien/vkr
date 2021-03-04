@@ -10,7 +10,9 @@ use ash::{
 use sdl2 as sdl;
 use std::{
     borrow::{Borrow, BorrowMut},
+    cell::RefCell,
     ffi::{c_void, CStr, CString},
+    ops::Deref,
     os::raw::c_char,
     rc::Rc,
 };
@@ -45,24 +47,27 @@ impl Vertex {
 
 pub struct Frame {
     pub area: ash::vk::Rect2D,
-    pub image_view: ash::vk::ImageView,
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: ash::vk::Framebuffer,
+    pub image_view: ash::vk::ImageView,
+    pub image: Rc<RefCell<Image>>,
     pub command_buffer: ash::vk::CommandBuffer,
     pub fence: ash::vk::Fence,
+    pub can_wait: bool,
     pub image_ready: ash::vk::Semaphore,
     pub image_drawn: ash::vk::Semaphore,
     device: Rc<ash::Device>,
 }
 
 impl Frame {
-    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
+    pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
+        let image_ref = image.deref().borrow();
         // Image view into a swapchain images (device, image, format)
         let image_view = {
             let create_info = ash::vk::ImageViewCreateInfo::builder()
-                .image(image.image)
+                .image(image_ref.image)
                 .view_type(ash::vk::ImageViewType::TYPE_2D)
-                .format(image.format)
+                .format(image_ref.format)
                 .components(
                     ash::vk::ComponentMapping::builder()
                         .r(ash::vk::ComponentSwizzle::IDENTITY)
@@ -95,8 +100,8 @@ impl Frame {
             let create_info = ash::vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
                 .attachments(&attachments)
-                .width(image.width)
-                .height(image.height)
+                .width(image_ref.width)
+                .height(image_ref.height)
                 .layers(1)
                 .build();
 
@@ -155,27 +160,35 @@ impl Frame {
             .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
             .extent(
                 ash::vk::Extent2D::builder()
-                    .width(image.width)
-                    .height(image.height)
+                    .width(image_ref.width)
+                    .height(image_ref.height)
                     .build(),
             )
             .build();
 
+        drop(image_ref);
+
         Frame {
             area,
-            image_view,
             framebuffer,
+            image_view,
+            image,
             command_buffer,
             fence,
+            can_wait: true,
             image_ready,
             image_drawn,
             device: Rc::clone(&dev.device),
         }
     }
 
-    pub fn wait(&self) {
+    pub fn wait(&mut self) {
+        if !self.can_wait {
+            return;
+        }
+
+        let device: &ash::Device = self.device.borrow();
         unsafe {
-            let device: &ash::Device = self.device.borrow();
             device
                 .wait_for_fences(&[self.fence], true, u64::max_value())
                 .expect("Failed to wait for Vulkan frame fence");
@@ -183,6 +196,7 @@ impl Frame {
                 .reset_fences(&[self.fence])
                 .expect("Failed to reset Vulkan frame fence");
         }
+        self.can_wait = false;
     }
 
     pub fn begin(&self, pass: &Pass) {
@@ -243,7 +257,12 @@ impl Frame {
         }
     }
 
-    pub fn present(&self, dev: &Dev, swapchain: &Swapchain, image_index: u32) {
+    pub fn present(
+        &mut self,
+        dev: &Dev,
+        swapchain: &Swapchain,
+        image_index: u32,
+    ) -> Result<(), ash::vk::Result> {
         // Wait for the image to be available ..
         let wait_semaphores = [self.image_ready];
         // .. at color attachment output stage
@@ -262,6 +281,8 @@ impl Frame {
         }
         .expect("Failed to submit to Vulkan queue");
 
+        self.can_wait = true;
+
         // Present result
         let pres_image_indices = [image_index];
         let pres_swapchains = [swapchain.swapchain];
@@ -270,12 +291,15 @@ impl Frame {
             .image_indices(&pres_image_indices)
             .swapchains(&pres_swapchains)
             .wait_semaphores(&pres_semaphores);
-        unsafe {
+
+        match unsafe {
             swapchain
                 .ext
                 .queue_present(dev.graphics_queue, &present_info)
+        } {
+            Ok(_subotimal) => Ok(()),
+            Err(result) => Err(result),
         }
-        .expect("Failed to present to Vulkan swapchain");
     }
 }
 
@@ -283,6 +307,7 @@ impl Drop for Frame {
     fn drop(&mut self) {
         let dev = self.device.borrow_mut();
         unsafe {
+            dev.device_wait_idle().expect("Failed to wait for device");
             dev.destroy_semaphore(self.image_drawn, None);
             dev.destroy_semaphore(self.image_ready, None);
             dev.destroy_fence(self.fence, None);
@@ -320,6 +345,7 @@ impl Win {
             .window("Test", 480, 320)
             .vulkan()
             .position_centered()
+            .resizable()
             .build()
             .expect("Failed to build SDL window");
 
@@ -472,7 +498,7 @@ impl Image {
 }
 
 pub struct Swapchain {
-    pub images: Vec<Image>,
+    pub images: Vec<Rc<RefCell<Image>>>,
     pub swapchain: ash::vk::SwapchainKHR,
     pub ext: ash::extensions::khr::Swapchain,
 }
@@ -490,10 +516,6 @@ impl Swapchain {
                 .get_physical_device_surface_capabilities(dev.physical, surface.surface)
         }
         .expect("Failed to get Vulkan physical device surface capabilities");
-        println!(
-            "Surface transform: {:?}",
-            surface_capabilities.current_transform
-        );
 
         let swapchain = {
             let create_info = ash::vk::SwapchainCreateInfoKHR::builder()
@@ -523,13 +545,13 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Image::new(
+            images.push(Rc::new(RefCell::new(Image::new(
                 image,
                 dev.surface_format.format,
                 dev.surface_format.color_space,
                 width,
                 height,
-            ));
+            ))));
         }
 
         Self {
