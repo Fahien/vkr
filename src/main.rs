@@ -5,6 +5,9 @@
 use sdl::{event::Event, keyboard::Keycode};
 use sdl2 as sdl;
 
+mod model;
+use model::*;
+
 mod frame;
 use frame::*;
 
