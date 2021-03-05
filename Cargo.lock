@@ -365,13 +365,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d63556a25bae6ea31b52e640d7c41d1ab27faba4ccb600013837a3d0b3994ca1"
 
 [[package]]
+name = "vk-mem"
+version = "0.2.3"
+source = "git+https://github.com/gwihlidal/vk-mem-rs#ec2772294fcded340d663487503fd356b70bc3a3"
+dependencies = [
+ "ash",
+ "bitflags",
+ "cc",
+]
+
+[[package]]
 name = "vkr"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "ash",
  "byteorder",
  "sdl2",
  "spirv-builder",
+ "vk-mem",
 ]
 
 [[package]]

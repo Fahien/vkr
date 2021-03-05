@@ -211,7 +211,12 @@ impl Frame {
                 &buffers,
                 &offsets,
             );
-            self.device.cmd_draw(self.command_buffer, 3, 1, 0, 0);
+        }
+
+        let vertex_count = buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
+        unsafe {
+            self.device
+                .cmd_draw(self.command_buffer, vertex_count, 1, 0, 0);
         }
     }
 
