@@ -7,6 +7,7 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::Handle,
 };
+use byteorder::{ByteOrder, NativeEndian};
 use sdl2 as sdl;
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -16,7 +17,6 @@ use std::{
     os::raw::c_char,
     rc::Rc,
 };
-use byteorder::{ByteOrder, NativeEndian};
 
 use super::model::*;
 
@@ -219,7 +219,12 @@ impl Frame {
                 &buffers,
                 &offsets,
             );
-            self.device.cmd_draw(self.command_buffer, 3, 1, 0, 0);
+        }
+
+        let vertex_count = buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
+        unsafe {
+            self.device
+                .cmd_draw(self.command_buffer, vertex_count, 1, 0, 0);
         }
     }
 
@@ -549,8 +554,12 @@ pub struct Dev {
     pub surface_format: ash::vk::SurfaceFormatKHR,
     graphics_command_pool: ash::vk::CommandPool,
     graphics_queue: ash::vk::Queue,
-    physical: ash::vk::PhysicalDevice,
+    /// Needs to be public if we want to create buffers outside this module.
+    /// The allocator is shared between the various buffers to release resources on drop.
+    /// Moreover it needs to be inside a RefCell, so we can mutably borrow it on destroy.
+    pub allocator: Rc<RefCell<vk_mem::Allocator>>,
     device: Rc<ash::Device>,
+    physical: ash::vk::PhysicalDevice,
 }
 
 impl Dev {
@@ -646,18 +655,40 @@ impl Dev {
         };
         println!("Surface format: {:?}", surface_format.format);
 
+        let allocator = {
+            let create_info = vk_mem::AllocatorCreateInfo {
+                physical_device: physical,
+                device: device.clone(),
+                instance: ctx.instance.clone(),
+                ..Default::default()
+            };
+            vk_mem::Allocator::new(&create_info)
+        }
+        .expect("Failed to create Vulkan allocator");
+
         Self {
             surface_format,
             graphics_command_pool,
             graphics_queue,
-            physical,
+            allocator: Rc::new(RefCell::new(allocator)),
             device: Rc::new(device),
+            physical,
+        }
+    }
+
+    pub fn wait(&self) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for Vulkan device");
         }
     }
 }
 
 impl Drop for Dev {
     fn drop(&mut self) {
+        self.wait();
+        self.allocator.deref().borrow_mut().destroy();
         unsafe {
             self.device
                 .destroy_command_pool(self.graphics_command_pool, None);
@@ -903,102 +934,82 @@ impl Drop for Pipeline {
 }
 
 pub struct Buffer {
-    memory: ash::vk::DeviceMemory,
+    allocation: vk_mem::Allocation,
     buffer: ash::vk::Buffer,
-    pub size: u64,
-    device: Rc<ash::Device>,
+    size: ash::vk::DeviceSize,
+    allocator: Rc<RefCell<vk_mem::Allocator>>,
 }
 
 impl Buffer {
-    pub fn new(ctx: &Ctx, dev: &mut Dev) -> Self {
-        // Vertex buffer of triangle to draw
-        let size = std::mem::size_of::<Vertex>() as u64 * 3;
-        let buffer_create_info = ash::vk::BufferCreateInfo::builder()
+    fn create_buffer(
+        allocator: &vk_mem::Allocator,
+        size: ash::vk::DeviceSize,
+    ) -> (ash::vk::Buffer, vk_mem::Allocation) {
+        let buffer_info = ash::vk::BufferCreateInfo::builder()
             .size(size)
             .usage(ash::vk::BufferUsageFlags::VERTEX_BUFFER)
             .sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
             .build();
-        let buffer = unsafe {
-            dev.device
-                .borrow_mut()
-                .create_buffer(&buffer_create_info, None)
-        }
-        .expect("Failed to create Vulkan vertex buffer");
 
-        let requirements = unsafe {
-            dev.device
-                .borrow_mut()
-                .get_buffer_memory_requirements(buffer)
-        };
+        // Vulkan memory
+        let mut create_info = vk_mem::AllocationCreateInfo::default();
+        create_info.usage = vk_mem::MemoryUsage::CpuToGpu;
+        create_info.required_flags = ash::vk::MemoryPropertyFlags::HOST_VISIBLE;
+        create_info.preferred_flags =
+            ash::vk::MemoryPropertyFlags::HOST_COHERENT | ash::vk::MemoryPropertyFlags::HOST_CACHED;
 
-        let memory_type_index: u32 = {
-            let mut mem_index: u32 = 0;
-            let memory_properties = unsafe {
-                ctx.instance
-                    .get_physical_device_memory_properties(dev.physical)
-            };
-            for (i, memtype) in memory_properties.memory_types.iter().enumerate() {
-                let res: ash::vk::MemoryPropertyFlags = memtype.property_flags
-                    & (ash::vk::MemoryPropertyFlags::HOST_VISIBLE
-                        | ash::vk::MemoryPropertyFlags::HOST_COHERENT);
-                if (requirements.memory_type_bits & (1 << i) != 0) && res.as_raw() != 0 {
-                    mem_index = i as u32;
-                }
-            }
-            mem_index
-        };
-        if memory_type_index == 0 {
-            panic!("Failed to find Vulkan memory type index");
-        }
+        let (buffer, allocation, _) = allocator
+            .create_buffer(&buffer_info, &create_info)
+            .expect("Failed to create Vulkan buffer");
 
-        let mem_allocate_info = ash::vk::MemoryAllocateInfo::builder()
-            .allocation_size(requirements.size)
-            .memory_type_index(memory_type_index)
-            .build();
-        let memory = unsafe {
-            dev.device
-                .borrow_mut()
-                .allocate_memory(&mem_allocate_info, None)
-        }
-        .expect("Failed to allocate Vulkan memory");
+        (buffer, allocation)
+    }
 
-        let offset = ash::vk::DeviceSize::default();
-        unsafe {
-            dev.device
-                .borrow_mut()
-                .bind_buffer_memory(buffer, memory, offset)
-        }
-        .expect("Failed to bind Vulkan memory to buffer");
+    pub fn new(allocator: &Rc<RefCell<vk_mem::Allocator>>) -> Self {
+        // Default size allows for 3 vertices
+        let size = std::mem::size_of::<Vertex>() as ash::vk::DeviceSize * 3;
+
+        let (buffer, allocation) = Self::create_buffer(&allocator.deref().borrow(), size);
 
         Self {
-            memory,
+            allocation,
             buffer,
             size,
-            device: Rc::clone(&dev.device),
+            allocator: allocator.clone(),
         }
     }
 
-    pub fn upload<T>(&mut self, src: *const T, size: usize) {
-        let device_size = ash::vk::DeviceSize::from(self.size);
-        let flags = ash::vk::MemoryMapFlags::default();
-        let data = unsafe { self.device.map_memory(self.memory, 0, device_size, flags) }
+    pub fn upload<T>(&mut self, src: *const T, size: ash::vk::DeviceSize) {
+        let alloc = self.allocator.deref().borrow();
+        let data = alloc
+            .map_memory(&self.allocation)
             .expect("Failed to map Vulkan memory");
+        unsafe { data.copy_from(src as _, size as usize) };
+        alloc.unmap_memory(&self.allocation);
+    }
 
-        unsafe {
-            data.copy_from(src as _, size);
-            self.device.unmap_memory(self.memory);
+    pub fn upload_arr<T>(&mut self, arr: &Vec<T>) {
+        // Create a new buffer if not enough size for the vector
+        let size = (arr.len() * std::mem::size_of::<T>()) as ash::vk::DeviceSize;
+        if size as ash::vk::DeviceSize != self.size {
+            let alloc = self.allocator.deref().borrow();
+            alloc.destroy_buffer(self.buffer, &self.allocation);
+
+            self.size = size;
+            let (buffer, allocation) = Self::create_buffer(&alloc, size);
+            self.buffer = buffer;
+            self.allocation = allocation;
         }
+
+        self.upload(arr.as_ptr(), size);
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        unsafe {
-            self.device
-                .device_wait_idle()
-                .expect("Failed to wait for the device");
-            self.device.borrow_mut().free_memory(self.memory, None);
-            self.device.borrow_mut().destroy_buffer(self.buffer, None);
-        }
+        self.allocator
+            .deref()
+            .borrow()
+            .destroy_buffer(self.buffer, &self.allocation);
     }
 }
