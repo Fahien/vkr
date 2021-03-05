@@ -7,7 +7,7 @@ use std::{ffi::CString, rc::Rc};
 use ash::{vk, Device};
 use byteorder::{ByteOrder, NativeEndian};
 
-use crate::gfx::*;
+use crate::{gfx::*, model::*};
 
 pub struct Pipeline {
     pub graphics: vk::Pipeline,
@@ -48,18 +48,8 @@ impl Pipeline {
                 .name(&entrypoint)
                 .build();
 
-            let vertex_binding = vk::VertexInputBindingDescription::builder()
-                .binding(0)
-                .stride(std::mem::size_of::<Vertex>() as u32)
-                .input_rate(vk::VertexInputRate::VERTEX)
-                .build();
-
-            let vertex_attribute = vk::VertexInputAttributeDescription::builder()
-                .location(0)
-                .binding(0)
-                .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(0)
-                .build();
+            let vertex_binding = Vertex::get_bindings();
+            let vertex_attribute = Vertex::get_attributes();
 
             let vertex_binding = [vertex_binding];
             let vertex_attribute = [vertex_attribute];
@@ -150,7 +140,7 @@ impl Pipeline {
 
         Self {
             graphics,
-            device: device.clone(),
+            device: Rc::clone(&device),
         }
     }
 }
