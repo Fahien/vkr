@@ -36,10 +36,23 @@ pub fn main() {
     );
 
     let lines = vec![
-        Line::new(Point::new(-0.3, -0.3, 0.0), Point::new(0.3, -0.3, 0.0)),
-        Line::new(Point::new(0.3, -0.3, 0.0), Point::new(0.3, 0.3, 0.0)),
-        Line::new(Point::new(0.3, 0.3, 0.0), Point::new(-0.3, 0.3, 0.0)),
-        Line::new(Point::new(-0.3, 0.3, 0.0), Point::new(-0.3, -0.3, 0.0)),
+        // Notice how this line appears at the top of the picture as Vulkan Y axis is pointing downwards
+        Line::new(
+            Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
+            Point::new(Vec3f::new(0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
+        ),
+        Line::new(
+            Point::new(Vec3f::new(0.3, -0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
+            Point::new(Vec3f::new(0.3, 0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
+        ),
+        Line::new(
+            Point::new(Vec3f::new(0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
+            Point::new(Vec3f::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
+        ),
+        Line::new(
+            Point::new(Vec3f::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
+            Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
+        ),
     ];
     let mut line_buffer = Buffer::new(&dev.allocator);
     line_buffer.upload_arr(&lines);

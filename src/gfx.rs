@@ -538,13 +538,12 @@ impl Pipeline {
                 .build();
 
             let vertex_binding = T::get_bindings();
-            let vertex_attribute = T::get_attributes();
+            let vertex_attributes = T::get_attributes();
 
             let vertex_binding = [vertex_binding];
-            let vertex_attribute = [vertex_attribute];
 
             let vertex_input = ash::vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_attribute)
+                .vertex_attribute_descriptions(&vertex_attributes)
                 .vertex_binding_descriptions(&vertex_binding)
                 .build();
 
