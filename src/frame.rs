@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{Device, vk};
+use ash::{vk, Device};
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,

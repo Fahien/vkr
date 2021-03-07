@@ -13,11 +13,12 @@
 use spirv_std::glam::{vec4, Vec3, Vec4};
 
 #[spirv(fragment)]
-pub fn main_fs(out_color: &mut Vec4) {
-    *out_color = vec4(1.0, 0.0, 0.0, 1.0)
+pub fn main_fs(color: Vec4, out_color: &mut Vec4) {
+    *out_color = color;
 }
 
 #[spirv(vertex)]
-pub fn main_vs(in_pos: Vec3, #[spirv(position)] out_pos: &mut Vec4) {
+pub fn main_vs(in_pos: Vec3, in_color: Vec4, color: &mut Vec4, #[spirv(position)] out_pos: &mut Vec4) {
     *out_pos = vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+    *color = in_color;
 }
