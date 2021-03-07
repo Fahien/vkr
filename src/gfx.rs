@@ -774,7 +774,13 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
+    pub fn new<T: VertexInput>(
+        dev: &mut Dev,
+        topology: ash::vk::PrimitiveTopology,
+        pass: &Pass,
+        width: u32,
+        height: u32,
+    ) -> Self {
         // Pipeline layout (device, shader reflection?)
         let layout = {
             let create_info = ash::vk::PipelineLayoutCreateInfo::builder().build();
@@ -815,8 +821,8 @@ impl Pipeline {
                 .name(&entrypoint)
                 .build();
 
-            let vertex_binding = Vertex::get_bindings();
-            let vertex_attribute = Vertex::get_attributes();
+            let vertex_binding = T::get_bindings();
+            let vertex_attribute = T::get_attributes();
 
             let vertex_binding = [vertex_binding];
             let vertex_attribute = [vertex_attribute];
@@ -827,7 +833,7 @@ impl Pipeline {
                 .build();
 
             let input_assembly = ash::vk::PipelineInputAssemblyStateCreateInfo::builder()
-                .topology(ash::vk::PrimitiveTopology::TRIANGLE_LIST)
+                .topology(topology)
                 .primitive_restart_enable(false)
                 .build();
 
