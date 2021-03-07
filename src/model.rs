@@ -26,7 +26,7 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn _new(x: f32, y: f32, z: f32) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             pos: Vec3f::new(x, y, z),
         }
@@ -49,6 +49,28 @@ impl VertexInput for Point {
             .format(ash::vk::Format::R32G32B32_SFLOAT)
             .offset(0)
             .build()
+    }
+}
+
+#[repr(C)]
+pub struct Line {
+    a: Point,
+    b: Point,
+}
+
+impl Line {
+    pub fn new(a: Point, b: Point) -> Line {
+        Line { a, b }
+    }
+}
+
+impl VertexInput for Line {
+    fn get_bindings() -> ash::vk::VertexInputBindingDescription {
+        Point::get_bindings()
+    }
+
+    fn get_attributes() -> ash::vk::VertexInputAttributeDescription {
+        Point::get_attributes()
     }
 }
 
