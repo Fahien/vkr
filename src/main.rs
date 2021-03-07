@@ -27,7 +27,30 @@ pub fn main() {
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
-    let pipeline = Pipeline::new(&mut dev, &pass, width, height);
+    let line_pipeline = Pipeline::new::<Line>(
+        &mut dev,
+        ash::vk::PrimitiveTopology::LINE_LIST,
+        &pass,
+        width,
+        height,
+    );
+
+    let lines = vec![
+        Line::new(Point::new(-0.3, -0.3, 0.0), Point::new(0.3, -0.3, 0.0)),
+        Line::new(Point::new(0.3, -0.3, 0.0), Point::new(0.3, 0.3, 0.0)),
+        Line::new(Point::new(0.3, 0.3, 0.0), Point::new(-0.3, 0.3, 0.0)),
+        Line::new(Point::new(-0.3, 0.3, 0.0), Point::new(-0.3, -0.3, 0.0)),
+    ];
+    let mut line_buffer = Buffer::new(&dev.allocator);
+    line_buffer.upload_arr(&lines);
+
+    let triangle_pipeline = Pipeline::new::<Vertex>(
+        &mut dev,
+        ash::vk::PrimitiveTopology::TRIANGLE_LIST,
+        &pass,
+        width,
+        height,
+    );
 
     let mut buffer = Buffer::new(&dev.allocator);
     let vertices = vec![
@@ -66,7 +89,8 @@ pub fn main() {
             };
 
             frame.begin(&pass);
-            frame.draw(&pipeline, &buffer);
+            frame.draw(&triangle_pipeline, &buffer);
+            frame.draw(&line_pipeline, &line_buffer);
             frame.end();
 
             match sfs.present(&dev) {
