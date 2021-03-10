@@ -8,6 +8,7 @@ use ash::{
     vk::Handle,
 };
 use byteorder::{ByteOrder, NativeEndian};
+use nalgebra as na;
 use sdl2 as sdl;
 use std::{borrow::{Borrow, BorrowMut}, cell::RefCell, ffi::{c_void, CStr, CString}, ops::Deref, os::raw::c_char, rc::Rc};
 
@@ -486,8 +487,8 @@ impl Drop for Pass {
 
 pub struct Pipeline {
     pub graphics: ash::vk::Pipeline,
-    layout: ash::vk::PipelineLayout,
-    set_layout: ash::vk::DescriptorSetLayout,
+    pub layout: ash::vk::PipelineLayout,
+    pub set_layout: ash::vk::DescriptorSetLayout,
     device: Rc<ash::Device>,
 }
 

@@ -191,6 +191,8 @@ impl Drop for Frameres {
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
+    // @todo An ubo for each node
+    pub ubo: Buffer,
     pub device: Rc<Device>,
 }
 
@@ -202,6 +204,10 @@ impl Frame {
         Frame {
             buffer,
             res,
+            ubo: Buffer::new::<na::Matrix4<f32>>(
+                &dev.allocator,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+            ),
             device: Rc::clone(&dev.device),
         }
     }
@@ -238,8 +244,51 @@ impl Frame {
                 self.res.command_buffer,
                 graphics_bind_point,
                 pipeline.graphics,
-            )
-        };
+            );
+        }
+
+        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.layout) {
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    sets,
+                    &[],
+                );
+            }
+        } else {
+            let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
+
+            // Update immediately the descriptor sets
+            let buffer_info = vk::DescriptorBufferInfo::builder()
+                .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
+                .buffer(self.ubo.buffer)
+                .build();
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(sets[0])
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&[buffer_info])
+                .build();
+
+            unsafe {
+                self.device.update_descriptor_sets(&[descriptor_write], &[]);
+
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    &sets,
+                    &[],
+                );
+            }
+            self.res.descriptors.sets.insert(pipeline.layout, sets);
+        }
 
         let first_binding = 0;
         let buffers = [buffer.buffer];
