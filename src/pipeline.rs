@@ -7,12 +7,25 @@ use std::{ffi::CString, rc::Rc};
 use ash::{vk, Device};
 use byteorder::{ByteOrder, NativeEndian};
 
-use crate::{gfx::*, model::*};
+use crate::{gfx::Pass, model::VertexInput, Descriptors};
+
+pub struct PipelineCache {
+    /// List of descriptors, one for each swapchain image
+    pub descriptors: Descriptors,
+}
+
+impl PipelineCache {
+    pub fn new(device: &Rc<Device>) -> Self {
+        Self {
+            descriptors: Descriptors::new(device)
+        }
+    }
+}
 
 pub struct Pipeline {
     pub graphics: vk::Pipeline,
-    layout: vk::PipelineLayout,
-    set_layout: vk::DescriptorSetLayout,
+    pub layout: vk::PipelineLayout,
+    pub set_layout: vk::DescriptorSetLayout,
     device: Rc<Device>,
 }
 
@@ -27,7 +40,7 @@ impl Pipeline {
         let set_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // delta time?
-            .descriptor_count(1) // can specify more?
+            .descriptor_count(1) // Referring the shader
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             .build();
         let arr_bindings = vec![set_layout_bindings];
@@ -162,7 +175,7 @@ impl Pipeline {
             graphics,
             set_layout,
             layout,
-            device: Rc::clone(&device),
+            device: device.clone(),
         }
     }
 }

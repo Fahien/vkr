@@ -2,6 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use nalgebra as na;
 use sdl::{event::Event, keyboard::Keycode};
 use sdl2 as sdl;
 
@@ -33,7 +34,7 @@ pub fn main() {
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
-    let line_pipeline = Pipeline::new::<Line>(
+    let mut line_pipeline = Pipeline::new::<Line>(
         &dev.device,
         ash::vk::PrimitiveTopology::LINE_LIST,
         &pass,
@@ -61,10 +62,11 @@ pub fn main() {
         ),
     ];
 
-    let mut line_buffer = Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
+    let mut line_buffer =
+        Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
     line_buffer.upload_arr(&lines);
 
-    let triangle_pipeline = Pipeline::new::<Vertex>(
+    let mut triangle_pipeline = Pipeline::new::<Vertex>(
         &dev.device,
         ash::vk::PrimitiveTopology::TRIANGLE_LIST,
         &pass,
@@ -72,7 +74,8 @@ pub fn main() {
         height,
     );
 
-    let mut buffer = Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
+    let mut buffer =
+        Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
     let vertices = vec![
         Vertex::new(-0.2, -0.2, 0.0),
         Vertex::new(0.2, -0.2, 0.0),
@@ -82,6 +85,8 @@ pub fn main() {
         Vertex::new(-0.2, 0.2, 0.0),
     ];
     buffer.upload_arr(&vertices);
+
+    let mut model = na::Matrix4::<f32>::identity();
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
@@ -96,6 +101,11 @@ pub fn main() {
                 _ => {}
             }
         }
+
+        let mut iso = na::Isometry3::identity();
+        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), 0.01);
+        iso.append_rotation_mut(&rot);
+        model = iso.to_homogeneous() * model;
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -114,10 +124,11 @@ pub fn main() {
             Err(result) => panic!("{:?}", result),
         };
 
-            frame.begin(&pass);
-            frame.draw(&triangle_pipeline, &buffer);
-            frame.draw(&line_pipeline, &line_buffer);
-            frame.end();
+        frame.begin(&pass);
+        frame.ubo.upload(&model);
+        frame.draw(&mut triangle_pipeline, &buffer);
+        frame.draw(&mut line_pipeline, &line_buffer);
+        frame.end();
 
         match sfs.present(&dev) {
             // Recreate swapchain

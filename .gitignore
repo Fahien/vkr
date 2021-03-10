@@ -5,3 +5,4 @@ res/font
 res/image
 imgui.ini
 SDL2*
+.DS_Store

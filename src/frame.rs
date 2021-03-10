@@ -103,6 +103,7 @@ impl Drop for Framebuffer {
 /// The frame cache contains resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct FrameCache {
+    pub pipeline_cache: PipelineCache,
     pub command_buffer: vk::CommandBuffer,
     pub fence: vk::Fence,
     pub can_wait: bool,
@@ -150,6 +151,7 @@ impl FrameCache {
         };
 
         Self {
+            pipeline_cache: PipelineCache::new(&dev.device),
             command_buffer,
             fence,
             can_wait: true,
@@ -189,6 +191,8 @@ impl Drop for FrameCache {
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: FrameCache,
+    // @todo An ubo for each node
+    pub ubo: Buffer,
     pub device: Rc<Device>,
 }
 
@@ -200,6 +204,10 @@ impl Frame {
         Frame {
             buffer,
             res,
+            ubo: Buffer::new::<na::Matrix4<f32>>(
+                &dev.allocator,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+            ),
             device: Rc::clone(&dev.device),
         }
     }
@@ -229,15 +237,72 @@ impl Frame {
         };
     }
 
-    pub fn draw(&mut self, pipeline: &Pipeline, buffer: &Buffer) {
+    pub fn draw(&mut self, pipeline: &mut Pipeline, buffer: &Buffer) {
         let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.res.command_buffer,
                 graphics_bind_point,
                 pipeline.graphics,
-            )
-        };
+            );
+        }
+
+        if let Some(sets) = self
+            .res
+            .pipeline_cache
+            .descriptors
+            .sets
+            .get(&pipeline.layout)
+        {
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    sets,
+                    &[],
+                );
+            }
+        } else {
+            let sets = self
+                .res
+                .pipeline_cache
+                .descriptors
+                .allocate(&[pipeline.set_layout]);
+
+            // Update immediately the descriptor sets
+            let buffer_info = vk::DescriptorBufferInfo::builder()
+                .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
+                .buffer(self.ubo.buffer)
+                .build();
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(sets[0])
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&[buffer_info])
+                .build();
+
+            unsafe {
+                self.device.update_descriptor_sets(&[descriptor_write], &[]);
+
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    &sets,
+                    &[],
+                );
+            }
+            self.res
+                .pipeline_cache
+                .descriptors
+                .sets
+                .insert(pipeline.layout, sets);
+        }
 
         let first_binding = 0;
         let buffers = [buffer.buffer];
