@@ -92,35 +92,45 @@ pub fn main() {
                 } => break 'running,
                 _ => {}
             }
+        }
 
-            let frame = match sfs.next_frame() {
-                Ok(frame) => frame,
-                // Recreate swapchain
-                Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    drop(sfs);
-                    let (width, height) = win.window.size();
-                    sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
-                    continue 'running;
+        let frame = match sfs.next_frame() {
+            Ok(frame) => frame,
+            // Recreate swapchain
+            Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                drop(sfs.swapchain);
+                let (width, height) = win.window.size();
+                sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
+                for i in 0..sfs.swapchain.images.len() {
+                    let frame = &mut sfs.frames[i];
+                    frame.buffer =
+                        Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
                 }
-                Err(result) => panic!("{:?}", result),
-            };
+                continue 'running;
+            }
+            Err(result) => panic!("{:?}", result),
+        };
 
             frame.begin(&pass);
             frame.draw(&triangle_pipeline, &buffer);
             frame.draw(&line_pipeline, &line_buffer);
             frame.end();
 
-            match sfs.present(&dev) {
-                // Recreate swapchain
-                Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    drop(sfs);
-                    let (width, height) = win.window.size();
-                    sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
-                    continue 'running;
+        match sfs.present(&dev) {
+            // Recreate swapchain
+            Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                drop(sfs.swapchain);
+                let (width, height) = win.window.size();
+                sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
+                for i in 0..sfs.swapchain.images.len() {
+                    let frame = &mut sfs.frames[i];
+                    frame.buffer =
+                        Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
                 }
-                Err(result) => panic!("{:?}", result),
-                _ => (),
+                continue 'running;
             }
+            Err(result) => panic!("{:?}", result),
+            _ => (),
         }
     }
 

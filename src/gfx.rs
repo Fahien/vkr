@@ -13,8 +13,6 @@ use std::{
     rc::Rc,
 };
 
-use crate::model::Vertex;
-
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
     _: ash::vk::DebugReportObjectTypeEXT,
