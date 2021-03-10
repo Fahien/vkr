@@ -824,6 +824,8 @@ impl Drop for Pass {
 
 pub struct Pipeline {
     graphics: ash::vk::Pipeline,
+    layout: ash::vk::PipelineLayout,
+    set_layout: ash::vk::DescriptorSetLayout,
     device: Rc<ash::Device>,
 }
 
@@ -835,9 +837,31 @@ impl Pipeline {
         width: u32,
         height: u32,
     ) -> Self {
-        // Pipeline layout (device, shader reflection?)
+        let set_layout_bindings = ash::vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
+            .descriptor_count(1) // can specify more?
+            .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
+            .build();
+        let arr_bindings = vec![set_layout_bindings];
+
+        let set_layout_info =
+            ash::vk::DescriptorSetLayoutCreateInfo::builder().bindings(&arr_bindings);
+
+        let set_layout = unsafe {
+            dev.device
+                .borrow_mut()
+                .create_descriptor_set_layout(&set_layout_info, None)
+        }
+        .expect("Failed to create Vulkan descriptor set layout");
+
+        let set_layouts = vec![set_layout];
+
+        // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
-            let create_info = ash::vk::PipelineLayoutCreateInfo::builder().build();
+            let create_info = ash::vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&set_layouts)
+                .build();
             unsafe {
                 dev.device
                     .borrow_mut()
@@ -969,14 +993,10 @@ impl Pipeline {
             pipelines[0]
         };
 
-        unsafe {
-            dev.device
-                .borrow_mut()
-                .destroy_pipeline_layout(layout, None);
-        }
-
         Self {
             graphics,
+            set_layout,
+            layout,
             device: Rc::clone(&dev.device),
         }
     }
@@ -986,8 +1006,9 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         unsafe {
             self.device
-                .borrow_mut()
-                .destroy_pipeline(self.graphics, None);
+                .destroy_descriptor_set_layout(self.set_layout, None);
+            self.device.destroy_pipeline_layout(self.layout, None);
+            self.device.destroy_pipeline(self.graphics, None);
         }
     }
 }
