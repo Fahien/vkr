@@ -28,7 +28,7 @@ pub struct Ubo {
 }
 
 impl Ubo {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Ubo {
             matrix: na::Matrix4::identity(),
         }
