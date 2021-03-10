@@ -2,6 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use nalgebra as na;
 use sdl::{event::Event, keyboard::Keycode};
 use sdl2 as sdl;
 
@@ -77,6 +78,8 @@ pub fn main() {
     ];
     buffer.upload_arr(&vertices);
 
+    let mut model = Ubo::new();
+
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
         // Handle events
@@ -90,6 +93,11 @@ pub fn main() {
                 _ => {}
             }
         }
+
+        let mut iso = na::Isometry3::identity();
+        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), 0.01);
+        iso.append_rotation_mut(&rot);
+        model.matrix = iso.to_homogeneous() * model.matrix;
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -108,10 +116,11 @@ pub fn main() {
             Err(result) => panic!("{:?}", result),
         };
 
-            frame.begin(&pass);
-            frame.draw(&triangle_pipeline, &buffer);
-            frame.draw(&line_pipeline, &line_buffer);
-            frame.end();
+        frame.begin(&pass);
+        frame.ubo.upload(&model);
+        frame.draw(&triangle_pipeline, &buffer);
+        frame.draw(&line_pipeline, &line_buffer);
+        frame.end();
 
         match sfs.present(&dev) {
             // Recreate swapchain

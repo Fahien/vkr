@@ -8,6 +8,7 @@ use ash::{
     vk::Handle,
 };
 use byteorder::{ByteOrder, NativeEndian};
+use nalgebra as na;
 use sdl2 as sdl;
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -20,6 +21,19 @@ use std::{
 };
 
 use super::model::*;
+
+#[repr(C)]
+pub struct Ubo {
+    pub matrix: na::Matrix4<f32>,
+}
+
+impl Ubo {
+    pub fn new() -> Self {
+        Ubo {
+            matrix: na::Matrix4::identity(),
+        }
+    }
+}
 
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
@@ -273,6 +287,8 @@ impl Drop for Frameres {
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
+    // @todo An ubo for each node
+    pub ubo: Buffer,
     pub device: Rc<ash::Device>,
 }
 
@@ -284,6 +300,7 @@ impl Frame {
         Frame {
             buffer,
             res,
+            ubo: Buffer::new::<Ubo>(dev, ash::vk::BufferUsageFlags::UNIFORM_BUFFER),
             device: Rc::clone(&dev.device),
         }
     }
@@ -320,8 +337,51 @@ impl Frame {
                 self.res.command_buffer,
                 graphics_bind_point,
                 pipeline.graphics,
-            )
-        };
+            );
+        }
+
+        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.layout) {
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    sets,
+                    &[],
+                );
+            }
+        } else {
+            let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
+
+            // Update immediately the descriptor sets
+            let buffer_info = ash::vk::DescriptorBufferInfo::builder()
+                .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
+                .buffer(self.ubo.buffer)
+                .build();
+
+            let descriptor_write = ash::vk::WriteDescriptorSet::builder()
+                .dst_set(sets[0])
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&[buffer_info])
+                .build();
+
+            unsafe {
+                self.device.update_descriptor_sets(&[descriptor_write], &[]);
+
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    &sets,
+                    &[],
+                );
+            }
+            self.res.descriptors.sets.insert(pipeline.layout, sets);
+        }
 
         let first_binding = 0;
         let buffers = [buffer.buffer];
