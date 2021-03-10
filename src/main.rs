@@ -6,6 +6,9 @@ use nalgebra as na;
 use sdl::{event::Event, keyboard::Keycode};
 use sdl2 as sdl;
 
+mod util;
+use util::*;
+
 mod model;
 use model::*;
 
@@ -16,6 +19,8 @@ mod gfx;
 use gfx::*;
 
 pub fn main() {
+    let mut timer = Timer::new();
+
     let win = Win::new();
     let (width, height) = win.window.size();
 
@@ -94,8 +99,9 @@ pub fn main() {
             }
         }
 
+        let delta = timer.get_delta().as_secs_f32();
         let mut iso = na::Isometry3::identity();
-        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), 0.01);
+        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
         iso.append_rotation_mut(&rot);
         model.matrix = iso.to_homogeneous() * model.matrix;
 
