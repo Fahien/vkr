@@ -66,13 +66,13 @@ impl Frames for SwapchainFrames {
     fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, ash::vk::Result> {
         // Wait for this frame to be ready
         let frame = &mut self.frames[self.current];
-        frame.wait();
+        frame.res.wait();
 
         let acquire_res = unsafe {
             self.swapchain.ext.acquire_next_image(
                 self.swapchain.swapchain,
                 u64::max_value(),
-                frame.image_ready,
+                frame.res.image_ready,
                 ash::vk::Fence::null(),
             )
         };
