@@ -88,7 +88,7 @@ pub fn main() {
     ];
     buffer.upload_arr(&vertices);
 
-    let mut model = na::Matrix4::<f32>::identity();
+    let mut node = Node::new();
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
@@ -105,10 +105,8 @@ pub fn main() {
         }
 
         let delta = timer.get_delta().as_secs_f32();
-        let mut iso = na::Isometry3::identity();
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        iso.append_rotation_mut(&rot);
-        model = iso.to_homogeneous() * model;
+        node.trs.rotate(&rot);
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -128,7 +126,7 @@ pub fn main() {
         };
 
         frame.begin(&pass);
-        frame.ubo.upload(&model);
+        frame.ubo.upload(&node.trs.get_matrix());
         frame.draw(&triangle_pipeline, &buffer);
         frame.draw(&line_pipeline, &line_buffer);
         frame.end();
