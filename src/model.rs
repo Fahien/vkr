@@ -2,7 +2,9 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use super::util::*;
 use memoffset::offset_of;
+use nalgebra as na;
 
 pub trait VertexInput {
     fn get_bindings() -> ash::vk::VertexInputBindingDescription;
@@ -136,5 +138,45 @@ impl VertexInput for Vertex {
                 .offset(offset_of!(Vertex, color) as u32)
                 .build(),
         ]
+    }
+}
+
+/// Transform
+pub struct Trs {
+    model: na::Isometry3<f32>,
+    scale: na::Vector3<f32>,
+}
+
+impl Trs {
+    pub fn new() -> Self {
+        Self {
+            model: na::Isometry3::identity(),
+            scale: na::Vector3::new(1.0, 1.0, 1.0),
+        }
+    }
+
+    pub fn get_matrix(&self) -> na::Matrix4<f32> {
+        // @todo Verify it works as intended
+        self.model
+            .to_homogeneous()
+            .append_nonuniform_scaling(&self.scale)
+    }
+
+    pub fn rotate(&mut self, rot: &na::UnitQuaternion<f32>) {
+        self.model.append_rotation_mut(rot);
+    }
+}
+
+pub struct Node {
+    pub trs: Trs,
+    pub children: Vec<Handle<Node>>,
+}
+
+impl Node {
+    pub fn new() -> Self {
+        Node {
+            trs: Trs::new(),
+            children: vec![],
+        }
     }
 }
