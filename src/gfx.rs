@@ -489,6 +489,7 @@ impl Drop for Pass {
 pub struct Buffer {
     allocation: vk_mem::Allocation,
     pub buffer: ash::vk::Buffer,
+    usage: ash::vk::BufferUsageFlags,
     pub size: ash::vk::DeviceSize,
     allocator: Rc<RefCell<vk_mem::Allocator>>,
 }
@@ -497,10 +498,11 @@ impl Buffer {
     fn create_buffer(
         allocator: &vk_mem::Allocator,
         size: ash::vk::DeviceSize,
+        usage: ash::vk::BufferUsageFlags,
     ) -> (ash::vk::Buffer, vk_mem::Allocation) {
         let buffer_info = ash::vk::BufferCreateInfo::builder()
             .size(size)
-            .usage(ash::vk::BufferUsageFlags::VERTEX_BUFFER)
+            .usage(usage)
             .sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
             .build();
 
@@ -518,21 +520,31 @@ impl Buffer {
         (buffer, allocation)
     }
 
-    pub fn new(allocator: &Rc<RefCell<vk_mem::Allocator>>) -> Self {
-        // Default size allows for 3 vertices
-        let size = std::mem::size_of::<Vertex>() as ash::vk::DeviceSize * 3;
+    pub fn new<T>(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        usage: ash::vk::BufferUsageFlags,
+    ) -> Self {
+        let size = std::mem::size_of::<T>() as ash::vk::DeviceSize;
 
-        let (buffer, allocation) = Self::create_buffer(&allocator.deref().borrow(), size);
+        let (buffer, allocation) = Self::create_buffer(&allocator.deref().borrow(), size, usage);
 
         Self {
             allocation,
             buffer,
             size,
+            usage,
             allocator: allocator.clone(),
         }
     }
 
-    pub fn upload<T>(&mut self, src: *const T, size: ash::vk::DeviceSize) {
+    pub fn upload<T>(&mut self, data: &T) {
+        self.upload_raw(
+            data as *const T,
+            std::mem::size_of::<T>() as ash::vk::DeviceSize,
+        );
+    }
+
+    pub fn upload_raw<T>(&mut self, src: *const T, size: ash::vk::DeviceSize) {
         let alloc = self.allocator.deref().borrow();
         let data = alloc
             .map_memory(&self.allocation)
@@ -549,12 +561,12 @@ impl Buffer {
             alloc.destroy_buffer(self.buffer, &self.allocation);
 
             self.size = size;
-            let (buffer, allocation) = Self::create_buffer(&alloc, size);
+            let (buffer, allocation) = Self::create_buffer(&alloc, size, self.usage);
             self.buffer = buffer;
             self.allocation = allocation;
         }
 
-        self.upload(arr.as_ptr(), size);
+        self.upload_raw(arr.as_ptr(), size);
     }
 }
 
