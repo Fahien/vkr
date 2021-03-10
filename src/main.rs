@@ -54,7 +54,8 @@ pub fn main() {
             Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
         ),
     ];
-    let mut line_buffer = Buffer::new(&dev.allocator);
+
+    let mut line_buffer = Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
     line_buffer.upload_arr(&lines);
 
     let triangle_pipeline = Pipeline::new::<Vertex>(
@@ -65,7 +66,7 @@ pub fn main() {
         height,
     );
 
-    let mut buffer = Buffer::new(&dev.allocator);
+    let mut buffer = Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
     let vertices = vec![
         Vertex::new(-0.2, -0.2, 0.0),
         Vertex::new(0.2, -0.2, 0.0),
