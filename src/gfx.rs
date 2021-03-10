@@ -20,23 +20,21 @@ use std::{
 
 use super::model::*;
 
-pub struct Frame {
+/// This is the one that is going to be recreated
+/// when the swapchain goes out of date
+pub struct Framebuffer {
     pub area: ash::vk::Rect2D,
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: ash::vk::Framebuffer,
     pub image_view: ash::vk::ImageView,
     pub image: Rc<RefCell<Image>>,
-    pub command_buffer: ash::vk::CommandBuffer,
-    pub fence: ash::vk::Fence,
-    pub can_wait: bool,
-    pub image_ready: ash::vk::Semaphore,
-    pub image_drawn: ash::vk::Semaphore,
     device: Rc<ash::Device>,
 }
 
-impl Frame {
+impl Framebuffer {
     pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
         let image_ref = image.deref().borrow();
+
         // Image view into a swapchain images (device, image, format)
         let image_view = {
             let create_info = ash::vk::ImageViewCreateInfo::builder()
@@ -88,6 +86,54 @@ impl Frame {
             .expect("Failed to create Vulkan framebuffer")
         };
 
+        // Needed by cmd_begin_render_pass
+        let area = ash::vk::Rect2D::builder()
+            .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
+            .extent(
+                ash::vk::Extent2D::builder()
+                    .width(image_ref.width)
+                    .height(image_ref.height)
+                    .build(),
+            )
+            .build();
+
+        drop(image_ref);
+
+        Self {
+            area,
+            framebuffer,
+            image_view,
+            image,
+            device: Rc::clone(&dev.device),
+        }
+    }
+}
+
+impl Drop for Framebuffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for device");
+            self.device.destroy_framebuffer(self.framebuffer, None);
+            self.device.destroy_image_view(self.image_view, None);
+        }
+    }
+}
+
+/// Frame resources that do not need to be recreated
+/// when the swapchain goes out of date
+pub struct Frameres {
+    pub command_buffer: ash::vk::CommandBuffer,
+    pub fence: ash::vk::Fence,
+    pub can_wait: bool,
+    pub image_ready: ash::vk::Semaphore,
+    pub image_drawn: ash::vk::Semaphore,
+    device: Rc<ash::Device>,
+}
+
+impl Frameres {
+    pub fn new(dev: &mut Dev) -> Self {
         // Graphics command buffer (device, command pool)
         let command_buffer = {
             let alloc_info = ash::vk::CommandBufferAllocateInfo::builder()
@@ -130,24 +176,7 @@ impl Frame {
             }
         };
 
-        // Needed by cmd_begin_render_pass
-        let area = ash::vk::Rect2D::builder()
-            .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
-            .extent(
-                ash::vk::Extent2D::builder()
-                    .width(image_ref.width)
-                    .height(image_ref.height)
-                    .build(),
-            )
-            .build();
-
-        drop(image_ref);
-
-        Frame {
-            area,
-            framebuffer,
-            image_view,
-            image,
+        Self {
             command_buffer,
             fence,
             can_wait: true,
@@ -173,12 +202,41 @@ impl Frame {
         }
         self.can_wait = false;
     }
+}
+
+impl Drop for Frameres {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_semaphore(self.image_drawn, None);
+            self.device.destroy_semaphore(self.image_ready, None);
+            self.device.destroy_fence(self.fence, None)
+        }
+    }
+}
+
+pub struct Frame {
+    pub buffer: Framebuffer,
+    pub res: Frameres,
+    pub device: Rc<ash::Device>,
+}
+
+impl Frame {
+    pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
+        let buffer = Framebuffer::new(dev, image, pass);
+        let res = Frameres::new(dev);
+
+        Frame {
+            buffer,
+            res,
+            device: Rc::clone(&dev.device),
+        }
+    }
 
     pub fn begin(&self, pass: &Pass) {
         let begin_info = ash::vk::CommandBufferBeginInfo::builder().build();
         unsafe {
             self.device
-                .begin_command_buffer(self.command_buffer, &begin_info)
+                .begin_command_buffer(self.res.command_buffer, &begin_info)
         }
         .expect("Failed to begin Vulkan command buffer");
 
@@ -186,24 +244,24 @@ impl Frame {
         clear.color.float32 = [0.025, 0.025, 0.025, 1.0];
         let clear_values = [clear];
         let create_info = ash::vk::RenderPassBeginInfo::builder()
-            .framebuffer(self.framebuffer)
+            .framebuffer(self.buffer.framebuffer)
             .render_pass(pass.render)
-            .render_area(self.area)
+            .render_area(self.buffer.area)
             .clear_values(&clear_values)
             .build();
         // Record it in the main command buffer
         let contents = ash::vk::SubpassContents::INLINE;
         unsafe {
             self.device
-                .cmd_begin_render_pass(self.command_buffer, &create_info, contents)
+                .cmd_begin_render_pass(self.res.command_buffer, &create_info, contents)
         };
     }
 
-    pub fn draw(&self, pipeline: &Pipeline, buffer: &Buffer) {
+    pub fn draw(&mut self, pipeline: &Pipeline, buffer: &Buffer) {
         let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
-                self.command_buffer,
+                self.res.command_buffer,
                 graphics_bind_point,
                 pipeline.graphics,
             )
@@ -214,7 +272,7 @@ impl Frame {
         let offsets = [ash::vk::DeviceSize::default()];
         unsafe {
             self.device.cmd_bind_vertex_buffers(
-                self.command_buffer,
+                self.res.command_buffer,
                 first_binding,
                 &buffers,
                 &offsets,
@@ -224,15 +282,15 @@ impl Frame {
         let vertex_count = buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
         unsafe {
             self.device
-                .cmd_draw(self.command_buffer, vertex_count, 1, 0, 0);
+                .cmd_draw(self.res.command_buffer, vertex_count, 1, 0, 0);
         }
     }
 
     pub fn end(&self) {
         unsafe {
-            self.device.cmd_end_render_pass(self.command_buffer);
+            self.device.cmd_end_render_pass(self.res.command_buffer);
             self.device
-                .end_command_buffer(self.command_buffer)
+                .end_command_buffer(self.res.command_buffer)
                 .expect("Failed to end command buffer");
         }
     }
@@ -244,11 +302,11 @@ impl Frame {
         image_index: u32,
     ) -> Result<(), ash::vk::Result> {
         // Wait for the image to be available ..
-        let wait_semaphores = [self.image_ready];
+        let wait_semaphores = [self.res.image_ready];
         // .. at color attachment output stage
         let wait_dst_stage_mask = [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [self.command_buffer];
-        let signal_semaphores = [self.image_drawn];
+        let command_buffers = [self.res.command_buffer];
+        let signal_semaphores = [self.res.image_drawn];
         let submits = [ash::vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_dst_stage_mask)
@@ -257,16 +315,16 @@ impl Frame {
             .build()];
         unsafe {
             self.device
-                .queue_submit(dev.graphics_queue, &submits, self.fence)
+                .queue_submit(dev.graphics_queue, &submits, self.res.fence)
         }
         .expect("Failed to submit to Vulkan queue");
 
-        self.can_wait = true;
+        self.res.can_wait = true;
 
         // Present result
         let pres_image_indices = [image_index];
         let pres_swapchains = [swapchain.swapchain];
-        let pres_semaphores = [self.image_drawn];
+        let pres_semaphores = [self.res.image_drawn];
         let present_info = ash::vk::PresentInfoKHR::builder()
             .image_indices(&pres_image_indices)
             .swapchains(&pres_swapchains)
@@ -285,14 +343,10 @@ impl Frame {
 
 impl Drop for Frame {
     fn drop(&mut self) {
-        let dev = self.device.borrow_mut();
         unsafe {
-            dev.device_wait_idle().expect("Failed to wait for device");
-            dev.destroy_semaphore(self.image_drawn, None);
-            dev.destroy_semaphore(self.image_ready, None);
-            dev.destroy_fence(self.fence, None);
-            dev.destroy_framebuffer(self.framebuffer, None);
-            dev.destroy_image_view(self.image_view, None);
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for device");
         }
     }
 }
