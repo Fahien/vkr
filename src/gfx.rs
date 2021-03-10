@@ -12,6 +12,7 @@ use sdl2 as sdl;
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
+    collections::HashMap,
     ffi::{c_void, CStr, CString},
     ops::Deref,
     os::raw::c_char,
@@ -19,6 +20,59 @@ use std::{
 };
 
 use super::model::*;
+
+/// Per-frame resource which contains a descriptor pool and a vector
+/// of descriptor sets of each pipeline layout used for rendering.
+struct Descriptors {
+    pub sets: HashMap<ash::vk::PipelineLayout, Vec<ash::vk::DescriptorSet>>,
+    pool: ash::vk::DescriptorPool,
+    device: Rc<ash::Device>,
+}
+
+impl Descriptors {
+    pub fn new(dev: &mut Dev) -> Self {
+        let pool = unsafe {
+            let pool_size = ash::vk::DescriptorPoolSize::builder()
+                // Just one for the moment
+                .descriptor_count(1)
+                .ty(ash::vk::DescriptorType::UNIFORM_BUFFER)
+                .build();
+            let pool_sizes = vec![pool_size, pool_size];
+            let create_info = ash::vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                // Support 4 different pipeline layouts
+                .max_sets(2)
+                .build();
+            dev.device.create_descriptor_pool(&create_info, None)
+        }
+        .expect("Failed to create Vulkan descriptor pool");
+
+        Self {
+            sets: HashMap::new(),
+            pool,
+            device: dev.device.clone(),
+        }
+    }
+
+    fn allocate(
+        &mut self,
+        layouts: &[ash::vk::DescriptorSetLayout],
+    ) -> Vec<ash::vk::DescriptorSet> {
+        let create_info = ash::vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(self.pool)
+            .set_layouts(layouts)
+            .build();
+
+        unsafe { self.device.allocate_descriptor_sets(&create_info) }
+            .expect("Failed to allocate Vulkan descriptor sets")
+    }
+}
+
+impl Drop for Descriptors {
+    fn drop(&mut self) {
+        unsafe { self.device.destroy_descriptor_pool(self.pool, None) };
+    }
+}
 
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
@@ -124,6 +178,7 @@ impl Drop for Framebuffer {
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
+    descriptors: Descriptors,
     pub command_buffer: ash::vk::CommandBuffer,
     pub fence: ash::vk::Fence,
     pub can_wait: bool,
@@ -177,6 +232,7 @@ impl Frameres {
         };
 
         Self {
+            descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
             can_wait: true,
@@ -840,7 +896,7 @@ impl Pipeline {
         let set_layout_bindings = ash::vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
-            .descriptor_count(1) // can specify more?
+            .descriptor_count(1) // Referring the shader
             .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
             .build();
         let arr_bindings = vec![set_layout_bindings];
