@@ -502,7 +502,7 @@ impl Pipeline {
         let set_layout_bindings = ash::vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
-            .descriptor_count(1) // can specify more?
+            .descriptor_count(1) // Referring the shader
             .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
             .build();
         let arr_bindings = vec![set_layout_bindings];

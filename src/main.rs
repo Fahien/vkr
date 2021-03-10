@@ -11,6 +11,9 @@ use model::*;
 mod gfx;
 use gfx::*;
 
+mod descriptor;
+use descriptor::*;
+
 mod frame;
 use frame::*;
 
@@ -55,7 +58,8 @@ pub fn main() {
         ),
     ];
 
-    let mut line_buffer = Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
+    let mut line_buffer =
+        Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
     line_buffer.upload_arr(&lines);
 
     let triangle_pipeline = Pipeline::new::<Vertex>(
@@ -66,7 +70,8 @@ pub fn main() {
         height,
     );
 
-    let mut buffer = Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
+    let mut buffer =
+        Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
     let vertices = vec![
         Vertex::new(-0.2, -0.2, 0.0),
         Vertex::new(0.2, -0.2, 0.0),
@@ -108,10 +113,10 @@ pub fn main() {
             Err(result) => panic!("{:?}", result),
         };
 
-            frame.begin(&pass);
-            frame.draw(&triangle_pipeline, &buffer);
-            frame.draw(&line_pipeline, &line_buffer);
-            frame.end();
+        frame.begin(&pass);
+        frame.draw(&triangle_pipeline, &buffer);
+        frame.draw(&line_pipeline, &line_buffer);
+        frame.end();
 
         match sfs.present(&dev) {
             // Recreate swapchain
