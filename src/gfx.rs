@@ -2,16 +2,17 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{extensions::ext::DebugReport, vk::Handle};
-use sdl2 as sdl;
 use std::{
-    borrow::{Borrow, BorrowMut},
+    borrow::Borrow,
     cell::RefCell,
     ffi::{c_void, CStr, CString},
     ops::Deref,
     os::raw::c_char,
     rc::Rc,
 };
+
+use ash::{extensions::ext::DebugReport, vk::Handle};
+use sdl2 as sdl;
 
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
@@ -460,12 +461,8 @@ impl Pass {
             .subpasses(&subpasses)
             .dependencies(&dependencies)
             .build();
-        let render = unsafe {
-            dev.device
-                .borrow_mut()
-                .create_render_pass(&create_info, None)
-        }
-        .expect("Failed to create Vulkan render pass");
+        let render = unsafe { dev.device.create_render_pass(&create_info, None) }
+            .expect("Failed to create Vulkan render pass");
 
         Self {
             render,
@@ -477,9 +474,7 @@ impl Pass {
 impl Drop for Pass {
     fn drop(&mut self) {
         unsafe {
-            self.device
-                .borrow_mut()
-                .destroy_render_pass(self.render, None);
+            self.device.destroy_render_pass(self.render, None);
         }
     }
 }

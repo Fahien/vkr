@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use ash::{vk, Device};
-use std::{cell::RefCell, ops::Deref, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use super::*;
 
@@ -103,6 +103,8 @@ impl Drop for Framebuffer {
 /// The frame cache contains resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct FrameCache {
+    /// Uniform buffers for model matrix are associated to nodes
+    ubos: HashMap<Handle<Node>, Buffer>,
     pub pipeline_cache: PipelineCache,
     pub command_buffer: vk::CommandBuffer,
     pub fence: vk::Fence,
@@ -151,6 +153,7 @@ impl FrameCache {
         };
 
         Self {
+            ubos: HashMap::new(),
             pipeline_cache: PipelineCache::new(&dev.device),
             command_buffer,
             fence,
@@ -191,8 +194,8 @@ impl Drop for FrameCache {
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: FrameCache,
-    // @todo An ubo for each node
-    pub ubo: Buffer,
+    /// A frame should be able to allocate a uniform buffer on draw
+    allocator: Rc<RefCell<vk_mem::Allocator>>,
     pub device: Rc<Device>,
 }
 
@@ -204,10 +207,7 @@ impl Frame {
         Frame {
             buffer,
             res,
-            ubo: Buffer::new::<na::Matrix4<f32>>(
-                &dev.allocator,
-                vk::BufferUsageFlags::UNIFORM_BUFFER,
-            ),
+            allocator: dev.allocator.clone(),
             device: Rc::clone(&dev.device),
         }
     }
@@ -237,7 +237,13 @@ impl Frame {
         };
     }
 
-    pub fn draw(&mut self, pipeline: &mut Pipeline, buffer: &Buffer) {
+    pub fn draw(
+        &mut self,
+        pipeline: &mut Pipeline,
+        nodes: &Pack<Node>,
+        buffer: &Buffer,
+        node: Handle<Node>,
+    ) {
         let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
@@ -252,7 +258,7 @@ impl Frame {
             .pipeline_cache
             .descriptors
             .sets
-            .get(&pipeline.layout)
+            .get(&(pipeline.layout, node))
         {
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
@@ -264,7 +270,18 @@ impl Frame {
                     &[],
                 );
             }
+
+            // If there is a descriptor set, there must be a uniform buffer
+            let ubo = self.res.ubos.get_mut(&node).unwrap();
+            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
         } else {
+            // Create a new uniform buffer for this node's model matrix
+            let mut ubo = Buffer::new::<na::Matrix4<f32>>(
+                &self.allocator,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+            );
+            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
+
             let sets = self
                 .res
                 .pipeline_cache
@@ -274,7 +291,7 @@ impl Frame {
             // Update immediately the descriptor sets
             let buffer_info = vk::DescriptorBufferInfo::builder()
                 .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
-                .buffer(self.ubo.buffer)
+                .buffer(ubo.buffer)
                 .build();
 
             let descriptor_write = vk::WriteDescriptorSet::builder()
@@ -297,11 +314,13 @@ impl Frame {
                     &[],
                 );
             }
+
+            self.res.ubos.insert(node, ubo);
             self.res
                 .pipeline_cache
                 .descriptors
                 .sets
-                .insert(pipeline.layout, sets);
+                .insert((pipeline.layout, node), sets);
         }
 
         let first_binding = 0;

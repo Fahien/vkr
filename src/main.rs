@@ -91,7 +91,9 @@ pub fn main() {
     ];
     buffer.upload_arr(&vertices);
 
-    let mut node = Node::new();
+    let mut nodes = Pack::new();
+    let rect = nodes.push(Node::new());
+    let lines = nodes.push(Node::new());
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
@@ -109,7 +111,9 @@ pub fn main() {
 
         let delta = timer.get_delta().as_secs_f32();
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        node.trs.rotate(&rot);
+        nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
+        nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -129,9 +133,8 @@ pub fn main() {
         };
 
         frame.begin(&pass);
-        frame.ubo.upload(&node.trs.get_matrix());
-        frame.draw(&mut triangle_pipeline, &buffer);
-        frame.draw(&mut line_pipeline, &line_buffer);
+        frame.draw(&mut triangle_pipeline, &nodes, &buffer, rect);
+        frame.draw(&mut line_pipeline, &nodes, &line_buffer, lines);
         frame.end();
 
         match sfs.present(&dev) {
