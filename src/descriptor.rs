@@ -11,9 +11,11 @@ use super::*;
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
 pub struct Descriptors {
-    pub sets: HashMap<ash::vk::PipelineLayout, Vec<ash::vk::DescriptorSet>>,
-    pool: ash::vk::DescriptorPool,
-    device: Rc<ash::Device>,
+    /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
+    /// where N is the number of pipeline layouts, and M is the node with the model matrix
+    pub sets: HashMap<(vk::PipelineLayout, Handle<Node>), Vec<vk::DescriptorSet>>,
+    pool: vk::DescriptorPool,
+    device: Rc<Device>,
 }
 
 impl Descriptors {

@@ -2,15 +2,22 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use std::{
+    borrow::Borrow,
+    cell::RefCell,
+    ffi::{c_void, CStr, CString},
+    ops::Deref,
+    os::raw::c_char,
+    rc::Rc,
+};
+
 use ash::{
     extensions::ext::DebugReport,
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::Handle,
 };
 use byteorder::{ByteOrder, NativeEndian};
-use nalgebra as na;
 use sdl2 as sdl;
-use std::{borrow::{Borrow, BorrowMut}, cell::RefCell, ffi::{c_void, CStr, CString}, ops::Deref, os::raw::c_char, rc::Rc};
 
 use super::*;
 
@@ -461,12 +468,8 @@ impl Pass {
             .subpasses(&subpasses)
             .dependencies(&dependencies)
             .build();
-        let render = unsafe {
-            dev.device
-                .borrow_mut()
-                .create_render_pass(&create_info, None)
-        }
-        .expect("Failed to create Vulkan render pass");
+        let render = unsafe { dev.device.create_render_pass(&create_info, None) }
+            .expect("Failed to create Vulkan render pass");
 
         Self {
             render,
@@ -478,9 +481,7 @@ impl Pass {
 impl Drop for Pass {
     fn drop(&mut self) {
         unsafe {
-            self.device
-                .borrow_mut()
-                .destroy_render_pass(self.render, None);
+            self.device.destroy_render_pass(self.render, None);
         }
     }
 }
@@ -513,7 +514,6 @@ impl Pipeline {
 
         let set_layout = unsafe {
             dev.device
-                .borrow_mut()
                 .create_descriptor_set_layout(&set_layout_info, None)
         }
         .expect("Failed to create Vulkan descriptor set layout");
@@ -525,12 +525,8 @@ impl Pipeline {
             let create_info = ash::vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&set_layouts)
                 .build();
-            unsafe {
-                dev.device
-                    .borrow_mut()
-                    .create_pipeline_layout(&create_info, None)
-            }
-            .expect("Failed to create Vulkan pipeline layout")
+            unsafe { dev.device.create_pipeline_layout(&create_info, None) }
+                .expect("Failed to create Vulkan pipeline layout")
         };
 
         // Graphics pipeline (shaders, renderpass)
@@ -542,12 +538,8 @@ impl Pipeline {
             let create_info = ash::vk::ShaderModuleCreateInfo::builder()
                 .code(rs_code.as_slice())
                 .build();
-            let rs_mod = unsafe {
-                dev.device
-                    .borrow_mut()
-                    .create_shader_module(&create_info, None)
-            }
-            .expect("Failed to create Vulkan shader module");
+            let rs_mod = unsafe { dev.device.create_shader_module(&create_info, None) }
+                .expect("Failed to create Vulkan shader module");
 
             let entrypoint = CString::new("main_vs").expect("Failed to create main entrypoint");
             let vert_stage = ash::vk::PipelineShaderStageCreateInfo::builder()
@@ -643,7 +635,7 @@ impl Pipeline {
                 .layout(layout)
                 .build()];
             let pipelines = unsafe {
-                dev.device.borrow_mut().create_graphics_pipelines(
+                dev.device.create_graphics_pipelines(
                     ash::vk::PipelineCache::null(),
                     &create_info,
                     None,
@@ -651,7 +643,7 @@ impl Pipeline {
             }
             .expect("Failed to create Vulkan graphics pipeline");
             unsafe {
-                dev.device.borrow_mut().destroy_shader_module(rs_mod, None);
+                dev.device.destroy_shader_module(rs_mod, None);
             }
             pipelines[0]
         };
