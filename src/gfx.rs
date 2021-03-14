@@ -20,7 +20,7 @@ use std::{
     rc::Rc,
 };
 
-use super::model::*;
+use super::*;
 
 #[repr(C)]
 pub struct Ubo {
@@ -38,7 +38,9 @@ impl Ubo {
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
 struct Descriptors {
-    pub sets: HashMap<ash::vk::PipelineLayout, Vec<ash::vk::DescriptorSet>>,
+    /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
+    /// where N is the number of pipeline layouts, and M is the node with the model matrix
+    sets: HashMap<(ash::vk::PipelineLayout, util::Handle<Node>), Vec<ash::vk::DescriptorSet>>,
     pool: ash::vk::DescriptorPool,
     device: Rc<ash::Device>,
 }
@@ -192,6 +194,8 @@ impl Drop for Framebuffer {
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
+    /// Uniform buffers for model matrix are associated to nodes
+    ubos: HashMap<util::Handle<Node>, Buffer>,
     descriptors: Descriptors,
     pub command_buffer: ash::vk::CommandBuffer,
     pub fence: ash::vk::Fence,
@@ -246,6 +250,7 @@ impl Frameres {
         };
 
         Self {
+            ubos: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
@@ -287,8 +292,8 @@ impl Drop for Frameres {
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
-    // @todo An ubo for each node
-    pub ubo: Buffer,
+    /// A frame should be able to allocate a uniform buffer on draw
+    allocator: Rc<RefCell<vk_mem::Allocator>>,
     pub device: Rc<ash::Device>,
 }
 
@@ -300,7 +305,7 @@ impl Frame {
         Frame {
             buffer,
             res,
-            ubo: Buffer::new::<Ubo>(dev, ash::vk::BufferUsageFlags::UNIFORM_BUFFER),
+            allocator: dev.allocator.clone(),
             device: Rc::clone(&dev.device),
         }
     }
@@ -330,7 +335,13 @@ impl Frame {
         };
     }
 
-    pub fn draw(&mut self, pipeline: &Pipeline, buffer: &Buffer) {
+    pub fn draw(
+        &mut self,
+        pipeline: &Pipeline,
+        nodes: &Pack<Node>,
+        buffer: &Buffer,
+        node: util::Handle<Node>,
+    ) {
         let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
@@ -340,7 +351,7 @@ impl Frame {
             );
         }
 
-        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.layout) {
+        if let Some(sets) = self.res.descriptors.sets.get(&(pipeline.layout, node)) {
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
@@ -351,13 +362,22 @@ impl Frame {
                     &[],
                 );
             }
+
+            // If there is a descriptor set, there must be a uniform buffer
+            let ubo = self.res.ubos.get_mut(&node).unwrap();
+            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
         } else {
+            // Create a new uniform buffer for this node's model matrix
+            let mut ubo =
+                Buffer::new::<Ubo>(&self.allocator, ash::vk::BufferUsageFlags::UNIFORM_BUFFER);
+            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
+
             let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
 
             // Update immediately the descriptor sets
             let buffer_info = ash::vk::DescriptorBufferInfo::builder()
                 .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
-                .buffer(self.ubo.buffer)
+                .buffer(ubo.buffer)
                 .build();
 
             let descriptor_write = ash::vk::WriteDescriptorSet::builder()
@@ -380,7 +400,12 @@ impl Frame {
                     &[],
                 );
             }
-            self.res.descriptors.sets.insert(pipeline.layout, sets);
+
+            self.res.ubos.insert(node, ubo);
+            self.res
+                .descriptors
+                .sets
+                .insert((pipeline.layout, node), sets);
         }
 
         let first_binding = 0;
