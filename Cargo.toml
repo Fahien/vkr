@@ -1,6 +1,6 @@
 [package]
 name = "vkr"
-version = "0.0.11"
+version = "0.0.12"
 authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
@@ -8,7 +8,7 @@ license = "MIT"
 [dependencies]
 ash = "0.33"
 sdl2 = "0.34.3"
-byteorder = "1.4.2"
+byteorder = "1.4.3"
 memoffset = "0.6.1"
 vk-mem = { git = "https://github.com/fahien/vk-mem-rs", version = "0.2.3" }
 nalgebra = "0.25.3"

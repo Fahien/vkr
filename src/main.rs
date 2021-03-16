@@ -164,6 +164,8 @@ pub fn main() {
 
         let frame = frame.unwrap();
 
+        let (width, height) = win.window.drawable_size();
+        frame.begin(&pass, width, height);
         frame.draw(&mut triangle_pipeline, &nodes, &rect_primitive, rect);
         frame.draw(&mut line_pipeline, &nodes, &lines_primitive, lines);
         frame.end();
