@@ -72,15 +72,20 @@ impl Frames for SwapchainFrames {
             self.swapchain.ext.acquire_next_image(
                 self.swapchain.swapchain,
                 u64::max_value(),
-                frame.res.image_ready,
+                frame.res.image_ready.semaphore,
                 ash::vk::Fence::null(),
             )
         };
 
         match acquire_res {
-            Ok((image_index, _)) => {
+            Ok((image_index, false)) => {
                 self.image_index = image_index;
                 Ok(frame)
+            }
+            // Suboptimal
+            Ok((_, true)) => {
+                self.current = 0;
+                Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR)
             }
             Err(result) => {
                 self.current = 0;
