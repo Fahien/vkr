@@ -22,6 +22,33 @@ use std::{
 
 use super::*;
 
+pub struct Primitive {
+    vertices: Buffer,
+    indices: Option<Buffer>,
+}
+
+impl Primitive {
+    pub fn new<T>(allocator: &Rc<RefCell<vk_mem::Allocator>>, vv: &[T]) -> Self {
+        let mut vertices = Buffer::new::<T>(allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
+
+        vertices.upload_arr(vv);
+
+        Self {
+            vertices,
+            indices: None,
+        }
+    }
+
+    pub fn set_indices(&mut self, ii: &[u16]) {
+        let mut indices = Buffer::new::<u16>(
+            &self.vertices.allocator,
+            ash::vk::BufferUsageFlags::INDEX_BUFFER,
+        );
+        indices.upload_arr(ii);
+        self.indices = Some(indices);
+    }
+}
+
 #[repr(C)]
 pub struct Ubo {
     pub matrix: na::Matrix4<f32>,
@@ -339,7 +366,7 @@ impl Frame {
         &mut self,
         pipeline: &Pipeline,
         nodes: &Pack<Node>,
-        buffer: &Buffer,
+        primitive: &Primitive,
         node: util::Handle<Node>,
     ) {
         let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
@@ -409,7 +436,7 @@ impl Frame {
         }
 
         let first_binding = 0;
-        let buffers = [buffer.buffer];
+        let buffers = [primitive.vertices.buffer];
         let offsets = [ash::vk::DeviceSize::default()];
         unsafe {
             self.device.cmd_bind_vertex_buffers(
@@ -420,10 +447,29 @@ impl Frame {
             );
         }
 
-        let vertex_count = buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
-        unsafe {
-            self.device
-                .cmd_draw(self.res.command_buffer, vertex_count, 1, 0, 0);
+        if let Some(indices) = &primitive.indices {
+            // Draw indexed if primitive has indices
+            unsafe {
+                self.device.cmd_bind_index_buffer(
+                    self.res.command_buffer,
+                    indices.buffer,
+                    0,
+                    ash::vk::IndexType::UINT16,
+                );
+            }
+            let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
+            unsafe {
+                self.device
+                    .cmd_draw_indexed(self.res.command_buffer, index_count, 1, 0, 0, 0);
+            }
+        } else {
+            // Draw without indices
+            let vertex_count =
+                primitive.vertices.size as u32 / std::mem::size_of::<Vertex>() as u32;
+            unsafe {
+                self.device
+                    .cmd_draw(self.res.command_buffer, vertex_count, 1, 0, 0);
+            }
         }
     }
 
@@ -1242,7 +1288,7 @@ impl Buffer {
         alloc.unmap_memory(&self.allocation);
     }
 
-    pub fn upload_arr<T>(&mut self, arr: &Vec<T>) {
+    pub fn upload_arr<T>(&mut self, arr: &[T]) {
         // Create a new buffer if not enough size for the vector
         let size = (arr.len() * std::mem::size_of::<T>()) as ash::vk::DeviceSize;
         if size as ash::vk::DeviceSize != self.size {
