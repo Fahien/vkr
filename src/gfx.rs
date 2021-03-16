@@ -2,6 +2,9 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use ash::{extensions::ext::DebugReport, vk::Handle};
+use sdl2 as sdl;
+
 use std::{
     borrow::Borrow,
     cell::RefCell,
@@ -10,9 +13,6 @@ use std::{
     os::raw::c_char,
     rc::Rc,
 };
-
-use ash::{extensions::ext::DebugReport, vk::Handle};
-use sdl2 as sdl;
 
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
