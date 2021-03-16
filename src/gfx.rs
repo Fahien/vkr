@@ -9,8 +9,10 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     ffi::{c_void, CStr, CString},
+    fs::File,
     ops::Deref,
     os::raw::c_char,
+    path::Path,
     rc::Rc,
 };
 
@@ -509,7 +511,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    fn create_buffer(
+    pub fn create_buffer(
         allocator: &vk_mem::Allocator,
         size: ash::vk::DeviceSize,
         usage: ash::vk::BufferUsageFlags,
@@ -532,6 +534,46 @@ impl Buffer {
             .expect("Failed to create Vulkan buffer");
 
         (buffer, allocation)
+    }
+
+    /// Loads data from a png image in `path` directly into a staging buffer
+    pub fn staging(allocator: &Rc<RefCell<vk_mem::Allocator>>, path: &str) -> Self {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+
+        let decoder = png::Decoder::new(file);
+        let (info, mut reader) = decoder.read_info().unwrap();
+
+        let size = info.buffer_size();
+        let usage = ash::vk::BufferUsageFlags::TRANSFER_SRC;
+
+        // Create staging buffer
+        let (buffer, allocation) = Self::create_buffer(
+            &allocator.deref().borrow(),
+            size as ash::vk::DeviceSize,
+            usage,
+        );
+
+        let alloc = allocator.deref().borrow();
+        let data = alloc
+            .map_memory(&allocation)
+            .expect("Failed to map Vulkan memory");
+
+        // Allocate the output buffer
+        let mut buf = unsafe { std::slice::from_raw_parts_mut(data, size) };
+
+        // Read the next frame. An APNG might contain multiple frames.
+        reader.next_frame(&mut buf).unwrap();
+
+        alloc.unmap_memory(&allocation);
+
+        Self {
+            allocation,
+            buffer,
+            usage,
+            size: size as ash::vk::DeviceSize,
+            allocator: allocator.clone(),
+        }
     }
 
     pub fn new<T>(

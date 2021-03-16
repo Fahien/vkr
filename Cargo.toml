@@ -12,6 +12,7 @@ byteorder = "1.4.3"
 memoffset = "0.6.1"
 vk-mem = { git = "https://github.com/fahien/vk-mem-rs", version = "0.2.3" }
 nalgebra = "0.25.3"
+png = "0.16.8"
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag="v0.4.0-alpha.12" }
