@@ -10,7 +10,6 @@ use super::*;
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
 pub struct Framebuffer {
-    pub area: vk::Rect2D,
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: vk::Framebuffer,
     pub image_view: vk::ImageView,
@@ -65,21 +64,9 @@ impl Framebuffer {
                 .expect("Failed to create Vulkan framebuffer")
         };
 
-        // Needed by cmd_begin_render_pass
-        let area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::builder().x(0).y(0).build())
-            .extent(
-                vk::Extent2D::builder()
-                    .width(image_ref.width)
-                    .height(image_ref.height)
-                    .build(),
-            )
-            .build();
-
         drop(image_ref);
 
         Self {
-            area,
             framebuffer,
             image_view,
             image,
@@ -171,6 +158,7 @@ impl Drop for Frameres {
         unsafe { self.device.destroy_fence(self.fence, None) }
     }
 }
+
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
@@ -192,7 +180,7 @@ impl Frame {
         }
     }
 
-    pub fn begin(&self, pass: &Pass) {
+    pub fn begin(&self, pass: &Pass, width: u32, height: u32) {
         let begin_info = vk::CommandBufferBeginInfo::builder().build();
         unsafe {
             self.device
@@ -200,13 +188,19 @@ impl Frame {
         }
         .expect("Failed to begin Vulkan command buffer");
 
+        // Needed by cmd_begin_render_pass
+        let area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::builder().x(0).y(0).build())
+            .extent(vk::Extent2D::builder().width(width).height(height).build())
+            .build();
+
         let mut clear = vk::ClearValue::default();
         clear.color.float32 = [0.025, 0.025, 0.025, 1.0];
         let clear_values = [clear];
         let create_info = vk::RenderPassBeginInfo::builder()
             .framebuffer(self.buffer.framebuffer)
             .render_pass(pass.render)
-            .render_area(self.buffer.area)
+            .render_area(area)
             .clear_values(&clear_values)
             .build();
         // Record it in the main command buffer
@@ -215,6 +209,23 @@ impl Frame {
             self.device
                 .cmd_begin_render_pass(self.res.command_buffer, &create_info, contents)
         };
+
+        let viewports = [vk::Viewport::builder()
+            .width(width as f32)
+            .height(height as f32)
+            .build()];
+        unsafe {
+            self.device
+                .cmd_set_viewport(self.res.command_buffer, 0, &viewports)
+        };
+
+        let scissors = [vk::Rect2D::builder()
+            .extent(vk::Extent2D::builder().width(width).height(height).build())
+            .build()];
+        unsafe {
+            self.device
+                .cmd_set_scissor(self.res.command_buffer, 0, &scissors)
+        }
     }
 
     pub fn draw(
@@ -311,7 +322,7 @@ impl Frame {
                     self.res.command_buffer,
                     indices.buffer,
                     0,
-                    ash::vk::IndexType::UINT16,
+                    vk::IndexType::UINT16,
                 );
             }
             let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;

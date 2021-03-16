@@ -7,8 +7,8 @@ use std::rc::Rc;
 use ash::{version::DeviceV1_0, *};
 
 pub struct Semaphore {
-    pub semaphore: ash::vk::Semaphore,
-    device: Rc<ash::Device>,
+    pub semaphore: vk::Semaphore,
+    device: Rc<Device>,
 }
 
 impl Semaphore {
