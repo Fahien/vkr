@@ -221,6 +221,30 @@ impl Drop for Framebuffer {
     }
 }
 
+pub struct Semaphore {
+    pub semaphore: ash::vk::Semaphore,
+    device: Rc<ash::Device>,
+}
+
+impl Semaphore {
+    pub fn new(device: &Rc<ash::Device>) -> Self {
+        let create_info = ash::vk::SemaphoreCreateInfo::builder().build();
+        let semaphore = unsafe { device.create_semaphore(&create_info, None) }
+            .expect("Failed to create Vulkan semaphore");
+
+        Self {
+            semaphore,
+            device: device.clone(),
+        }
+    }
+}
+
+impl Drop for Semaphore {
+    fn drop(&mut self) {
+        unsafe { self.device.destroy_semaphore(self.semaphore, None) };
+    }
+}
+
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
@@ -230,8 +254,8 @@ pub struct Frameres {
     pub command_buffer: ash::vk::CommandBuffer,
     pub fence: ash::vk::Fence,
     pub can_wait: bool,
-    pub image_ready: ash::vk::Semaphore,
-    pub image_drawn: ash::vk::Semaphore,
+    pub image_ready: Semaphore,
+    pub image_drawn: Semaphore,
     device: Rc<ash::Device>,
 }
 
@@ -262,32 +286,15 @@ impl Frameres {
         }
         .expect("Failed to create Vulkan fence");
 
-        // Semaphores (device)
-        let (image_ready, image_drawn) = {
-            let create_info = ash::vk::SemaphoreCreateInfo::builder().build();
-            unsafe {
-                (
-                    dev.device
-                        .borrow_mut()
-                        .create_semaphore(&create_info, None)
-                        .expect("Failed to create Vulkan semaphore"),
-                    dev.device
-                        .borrow_mut()
-                        .create_semaphore(&create_info, None)
-                        .expect("Failed to create Vulkan semaphore"),
-                )
-            }
-        };
-
         Self {
             ubos: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
             can_wait: true,
-            image_ready,
-            image_drawn,
-            device: Rc::clone(&dev.device),
+            image_ready: Semaphore::new(&dev.device),
+            image_drawn: Semaphore::new(&dev.device),
+            device: dev.device.clone(),
         }
     }
 
@@ -311,11 +318,7 @@ impl Frameres {
 
 impl Drop for Frameres {
     fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_semaphore(self.image_drawn, None);
-            self.device.destroy_semaphore(self.image_ready, None);
-            self.device.destroy_fence(self.fence, None)
-        }
+        unsafe { self.device.destroy_fence(self.fence, None) }
     }
 }
 
@@ -490,11 +493,11 @@ impl Frame {
         image_index: u32,
     ) -> Result<(), ash::vk::Result> {
         // Wait for the image to be available ..
-        let wait_semaphores = [self.res.image_ready];
+        let wait_semaphores = [self.res.image_ready.semaphore];
         // .. at color attachment output stage
         let wait_dst_stage_mask = [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [self.res.command_buffer];
-        let signal_semaphores = [self.res.image_drawn];
+        let signal_semaphores = [self.res.image_drawn.semaphore];
         let submits = [ash::vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_dst_stage_mask)
@@ -506,13 +509,13 @@ impl Frame {
                 .queue_submit(dev.graphics_queue, &submits, self.res.fence)
         }
         .expect("Failed to submit to Vulkan queue");
-
+        // Fence can wait after queue submit
         self.res.can_wait = true;
 
         // Present result
         let pres_image_indices = [image_index];
         let pres_swapchains = [swapchain.swapchain];
-        let pres_semaphores = [self.res.image_drawn];
+        let pres_semaphores = [self.res.image_drawn.semaphore];
         let present_info = ash::vk::PresentInfoKHR::builder()
             .image_indices(&pres_image_indices)
             .swapchains(&pres_swapchains)
@@ -523,7 +526,9 @@ impl Frame {
                 .ext
                 .queue_present(dev.graphics_queue, &present_info)
         } {
-            Ok(_subotimal) => Ok(()),
+            Ok(false) => Ok(()),
+            // Suboptimal
+            Ok(true) => Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR),
             Err(result) => Err(result),
         }
     }
@@ -801,7 +806,7 @@ pub struct Dev {
     /// The allocator is shared between the various buffers to release resources on drop.
     /// Moreover it needs to be inside a RefCell, so we can mutably borrow it on destroy.
     pub allocator: Rc<RefCell<vk_mem::Allocator>>,
-    device: Rc<ash::Device>,
+    pub device: Rc<ash::Device>,
     physical: ash::vk::PhysicalDevice,
 }
 

@@ -79,10 +79,23 @@ pub fn main() {
     let lines = nodes.push(Node::new());
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
+
     'running: loop {
+        let mut resized = false;
+
         // Handle events
         for event in events.poll_iter() {
             match event {
+                Event::Window {
+                    win_event: sdl::event::WindowEvent::Resized(_, _),
+                    ..
+                }
+                | Event::Window {
+                    win_event: sdl::event::WindowEvent::SizeChanged(_, _),
+                    ..
+                } => {
+                    resized = true;
+                }
                 Event::Quit { .. }
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
@@ -98,24 +111,47 @@ pub fn main() {
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
         nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
-        let frame = match sfs.next_frame() {
-            Ok(frame) => frame,
-            // Recreate swapchain
-            Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                drop(sfs.swapchain);
-                let (width, height) = win.window.drawable_size();
-                sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
-                for i in 0..sfs.swapchain.images.len() {
-                    let frame = &mut sfs.frames[i];
-                    frame.buffer =
-                        Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
-                }
-                continue 'running;
+        if resized {
+            dev.wait();
+            drop(sfs.swapchain);
+            // Current must be reset to avoid LAYOUT_UNDEFINED validation errors
+            sfs.current = 0;
+            let (width, height) = win.window.drawable_size();
+            sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
+            for i in 0..sfs.swapchain.images.len() {
+                let frame = &mut sfs.frames[i];
+                // Only this semaphore must be recreated to avoid validation errors
+                // The image drawn one is still in use at the moment
+                frame.res.image_ready = Semaphore::new(&dev.device);
+                frame.buffer = Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
             }
-            Err(result) => panic!("{:?}", result),
+        }
+
+        let frame = sfs.next_frame();
+
+        if frame.is_err() {
+            let result = frame.err().unwrap();
+            if result != ash::vk::Result::ERROR_OUT_OF_DATE_KHR {
+                panic!("{:?}", result);
+            }
+
+            dev.wait();
+            drop(sfs.swapchain);
+            let (width, height) = win.window.drawable_size();
+            sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
+            for i in 0..sfs.swapchain.images.len() {
+                let frame = &mut sfs.frames[i];
+                // Only this semaphore must be recreated to avoid validation errors
+                // The image drawn one is still in use at the moment
+                frame.res.image_ready = Semaphore::new(&dev.device);
+                frame.buffer = Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
+            }
+
+            continue 'running;
         };
 
-        frame.begin(&pass);
+        let frame = frame.unwrap();
+
         frame.draw(&triangle_pipeline, &nodes, &rect_primitive, rect);
         frame.draw(&line_pipeline, &nodes, &lines_primitive, lines);
         frame.end();
@@ -123,11 +159,15 @@ pub fn main() {
         match sfs.present(&dev) {
             // Recreate swapchain
             Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                dev.wait();
                 drop(sfs.swapchain);
                 let (width, height) = win.window.drawable_size();
                 sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
                 for i in 0..sfs.swapchain.images.len() {
                     let frame = &mut sfs.frames[i];
+                    // Semaphores must be recreated to avoid validation errors
+                    frame.res.image_ready = Semaphore::new(&dev.device);
+                    frame.res.image_drawn = Semaphore::new(&dev.device);
                     frame.buffer =
                         Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
                 }
