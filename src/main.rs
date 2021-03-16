@@ -21,6 +21,9 @@ use gfx::*;
 mod descriptor;
 use descriptor::*;
 
+mod primitive;
+use primitive::*;
+
 mod frame;
 use frame::*;
 
@@ -41,35 +44,23 @@ pub fn main() {
 
     let mut line_pipeline = Pipeline::new::<Line>(
         &dev.device,
-        ash::vk::PrimitiveTopology::LINE_LIST,
+        ash::vk::PrimitiveTopology::LINE_STRIP,
         &pass,
         width,
         height,
     );
 
-    let lines = vec![
-        // Notice how this line appears at the top of the picture as Vulkan Y axis is pointing downwards
-        Line::new(
+    let lines_primitive = {
+        // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
+        let lines_vertices = vec![
             Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
             Point::new(Vec3f::new(0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
-        ),
-        Line::new(
-            Point::new(Vec3f::new(0.3, -0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
             Point::new(Vec3f::new(0.3, 0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
-        ),
-        Line::new(
-            Point::new(Vec3f::new(0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
             Point::new(Vec3f::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
-        ),
-        Line::new(
-            Point::new(Vec3f::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
             Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
-        ),
-    ];
-
-    let mut line_buffer =
-        Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
-    line_buffer.upload_arr(&lines);
+        ];
+        Primitive::new(&dev.allocator, &lines_vertices)
+    };
 
     let mut triangle_pipeline = Pipeline::new::<Vertex>(
         &dev.device,
@@ -79,17 +70,18 @@ pub fn main() {
         height,
     );
 
-    let mut buffer =
-        Buffer::new::<Vertex>(&dev.allocator, ash::vk::BufferUsageFlags::VERTEX_BUFFER);
-    let vertices = vec![
-        Vertex::new(-0.2, -0.2, 0.0),
-        Vertex::new(0.2, -0.2, 0.0),
-        Vertex::new(-0.2, 0.2, 0.0),
-        Vertex::new(0.2, -0.2, 0.0),
-        Vertex::new(0.2, 0.2, 0.0),
-        Vertex::new(-0.2, 0.2, 0.0),
-    ];
-    buffer.upload_arr(&vertices);
+    let rect_primitive = {
+        let vertices = vec![
+            Vertex::new(-0.2, -0.2, 0.0),
+            Vertex::new(0.2, -0.2, 0.0),
+            Vertex::new(-0.2, 0.2, 0.0),
+            Vertex::new(0.2, 0.2, 0.0),
+        ];
+        let mut primitive = Primitive::new(&dev.allocator, &vertices);
+        let indices = vec![0, 1, 2, 1, 3, 2];
+        primitive.set_indices(&indices);
+        primitive
+    };
 
     let mut nodes = Pack::new();
     let rect = nodes.push(Node::new());
@@ -133,8 +125,8 @@ pub fn main() {
         };
 
         frame.begin(&pass);
-        frame.draw(&mut triangle_pipeline, &nodes, &buffer, rect);
-        frame.draw(&mut line_pipeline, &nodes, &line_buffer, lines);
+        frame.draw(&mut triangle_pipeline, &nodes, &rect_primitive, rect);
+        frame.draw(&mut line_pipeline, &nodes, &lines_primitive, lines);
         frame.end();
 
         match sfs.present(&dev) {

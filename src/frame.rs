@@ -241,7 +241,7 @@ impl Frame {
         &mut self,
         pipeline: &mut Pipeline,
         nodes: &Pack<Node>,
-        buffer: &Buffer,
+        primitive: &Primitive,
         node: Handle<Node>,
     ) {
         let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
@@ -324,7 +324,7 @@ impl Frame {
         }
 
         let first_binding = 0;
-        let buffers = [buffer.buffer];
+        let buffers = [primitive.vertices.buffer];
         let offsets = [vk::DeviceSize::default()];
         unsafe {
             self.device.cmd_bind_vertex_buffers(
@@ -335,10 +335,27 @@ impl Frame {
             );
         }
 
-        let vertex_count = buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
-        unsafe {
-            self.device
-                .cmd_draw(self.res.command_buffer, vertex_count, 1, 0, 0);
+        if let Some(indices) = &primitive.indices {
+            // Draw indexed if primitive has indices
+            unsafe {
+                self.device.cmd_bind_index_buffer(
+                    self.res.command_buffer,
+                    indices.buffer,
+                    0,
+                    ash::vk::IndexType::UINT16,
+                );
+            }
+            let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
+            unsafe {
+                self.device
+                    .cmd_draw_indexed(self.res.command_buffer, index_count, 1, 0, 0, 0);
+            }
+        } else {
+            // Draw without indices
+            unsafe {
+                self.device
+                    .cmd_draw(self.res.command_buffer, primitive.vertex_count, 1, 0, 0);
+            }
         }
     }
 

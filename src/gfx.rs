@@ -505,7 +505,7 @@ pub struct Buffer {
     pub buffer: ash::vk::Buffer,
     usage: ash::vk::BufferUsageFlags,
     pub size: ash::vk::DeviceSize,
-    allocator: Rc<RefCell<vk_mem::Allocator>>,
+    pub allocator: Rc<RefCell<vk_mem::Allocator>>,
 }
 
 impl Buffer {
@@ -567,7 +567,7 @@ impl Buffer {
         alloc.unmap_memory(&self.allocation);
     }
 
-    pub fn upload_arr<T>(&mut self, arr: &Vec<T>) {
+    pub fn upload_arr<T>(&mut self, arr: &[T]) {
         // Create a new buffer if not enough size for the vector
         let size = (arr.len() * std::mem::size_of::<T>()) as ash::vk::DeviceSize;
         if size as ash::vk::DeviceSize != self.size {
