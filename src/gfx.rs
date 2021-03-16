@@ -321,11 +321,16 @@ impl Dev {
                     .enumerate_physical_devices()
                     .expect("Failed to enumerate Vulkan physical devices")
             };
+
+            for physical in &phydevs {
+                let properties = unsafe { ctx.instance.get_physical_device_properties(*physical) };
+                let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) };
+                println!("Physical device: {:?}", name);
+            }
+
+            // Choose first one for now
             phydevs[0]
         };
-        let properties = unsafe { ctx.instance.get_physical_device_properties(physical) };
-        let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) };
-        println!("Physical device: {:?}", name);
 
         let graphics_queue_index = Dev::get_graphics_queue_index(&ctx.instance, physical, surface);
 
@@ -335,10 +340,25 @@ impl Dev {
             // Highest priority for a single graphics queue
             .queue_priorities(&[1.0])
             .build()];
-        let device_extensions = [ash::extensions::khr::Swapchain::name().as_ptr()];
+
+        // Enable some extensions
+        let mut enabled_extensions: Vec<*const i8> = vec![];
+
+        let extension_properties =
+            unsafe { ctx.instance.enumerate_device_extension_properties(physical) }
+                .expect("Failed to enumerate Vulkan device extension properties");
+
+        for prop in extension_properties.iter() {
+            let name = unsafe { CStr::from_ptr(prop.extension_name.as_ptr()) }
+                .to_str()
+                .unwrap();
+            println!("\t{}", name);
+        }
+        enabled_extensions.push(ash::extensions::khr::Swapchain::name().as_ptr());
+
         let device_create_info = ash::vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_infos)
-            .enabled_extension_names(&device_extensions);
+            .enabled_extension_names(&enabled_extensions);
 
         let device = unsafe {
             ctx.instance
