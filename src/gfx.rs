@@ -2,14 +2,6 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{
-    borrow::Borrow,
-    cell::RefCell,
-    ffi::{c_void, CStr, CString},
-    ops::Deref,
-    os::raw::c_char,
-    rc::Rc,
-};
 
 use ash::{
     extensions::ext::DebugReport,
@@ -18,6 +10,15 @@ use ash::{
 };
 use byteorder::{ByteOrder, NativeEndian};
 use sdl2 as sdl;
+
+use std::{
+    borrow::Borrow,
+    cell::RefCell,
+    ffi::{c_void, CStr, CString},
+    ops::Deref,
+    os::raw::c_char,
+    rc::Rc,
+};
 
 use super::*;
 
