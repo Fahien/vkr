@@ -47,6 +47,7 @@ impl Win {
         let video = ctx.video().expect("Failed to initialize SDL video");
         let window = video
             .window("Test", 480, 480)
+            .allow_highdpi()
             .vulkan()
             .position_centered()
             .resizable()
