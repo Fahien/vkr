@@ -22,7 +22,7 @@ pub fn main() {
     let mut timer = Timer::new();
 
     let win = Win::new();
-    let (width, height) = win.window.size();
+    let (width, height) = win.window.drawable_size();
 
     let vkr = Vkr::new(&win);
 
@@ -112,7 +112,7 @@ pub fn main() {
             // Recreate swapchain
             Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 drop(sfs.swapchain);
-                let (width, height) = win.window.size();
+                let (width, height) = win.window.drawable_size();
                 sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
                 for i in 0..sfs.swapchain.images.len() {
                     let frame = &mut sfs.frames[i];
@@ -133,7 +133,7 @@ pub fn main() {
             // Recreate swapchain
             Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 drop(sfs.swapchain);
-                let (width, height) = win.window.size();
+                let (width, height) = win.window.drawable_size();
                 sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
                 for i in 0..sfs.swapchain.images.len() {
                     let frame = &mut sfs.frames[i];
