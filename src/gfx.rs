@@ -123,7 +123,6 @@ impl Drop for Descriptors {
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
 pub struct Framebuffer {
-    pub area: ash::vk::Rect2D,
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: ash::vk::Framebuffer,
     pub image_view: ash::vk::ImageView,
@@ -186,21 +185,9 @@ impl Framebuffer {
             .expect("Failed to create Vulkan framebuffer")
         };
 
-        // Needed by cmd_begin_render_pass
-        let area = ash::vk::Rect2D::builder()
-            .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
-            .extent(
-                ash::vk::Extent2D::builder()
-                    .width(image_ref.width)
-                    .height(image_ref.height)
-                    .build(),
-            )
-            .build();
-
         drop(image_ref);
 
         Self {
-            area,
             framebuffer,
             image_view,
             image,
@@ -343,7 +330,7 @@ impl Frame {
         }
     }
 
-    pub fn begin(&self, pass: &Pass) {
+    pub fn begin(&self, pass: &Pass, width: u32, height: u32) {
         let begin_info = ash::vk::CommandBufferBeginInfo::builder().build();
         unsafe {
             self.device
@@ -351,13 +338,24 @@ impl Frame {
         }
         .expect("Failed to begin Vulkan command buffer");
 
+        // Needed by cmd_begin_render_pass
+        let area = ash::vk::Rect2D::builder()
+            .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
+            .extent(
+                ash::vk::Extent2D::builder()
+                    .width(width)
+                    .height(height)
+                    .build(),
+            )
+            .build();
+
         let mut clear = ash::vk::ClearValue::default();
         clear.color.float32 = [0.025, 0.025, 0.025, 1.0];
         let clear_values = [clear];
         let create_info = ash::vk::RenderPassBeginInfo::builder()
             .framebuffer(self.buffer.framebuffer)
             .render_pass(pass.render)
-            .render_area(self.buffer.area)
+            .render_area(area)
             .clear_values(&clear_values)
             .build();
         // Record it in the main command buffer
@@ -366,6 +364,28 @@ impl Frame {
             self.device
                 .cmd_begin_render_pass(self.res.command_buffer, &create_info, contents)
         };
+
+        let viewports = [ash::vk::Viewport::builder()
+            .width(width as f32)
+            .height(height as f32)
+            .build()];
+        unsafe {
+            self.device
+                .cmd_set_viewport(self.res.command_buffer, 0, &viewports)
+        };
+
+        let scissors = [ash::vk::Rect2D::builder()
+            .extent(
+                ash::vk::Extent2D::builder()
+                    .width(width)
+                    .height(height)
+                    .build(),
+            )
+            .build()];
+        unsafe {
+            self.device
+                .cmd_set_scissor(self.res.command_buffer, 0, &scissors)
+        }
     }
 
     pub fn draw(
