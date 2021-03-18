@@ -15,6 +15,12 @@ use model::*;
 mod frame;
 use frame::*;
 
+mod sync;
+use sync::*;
+
+mod queue;
+use queue::*;
+
 mod gfx;
 use gfx::*;
 
