@@ -94,11 +94,9 @@ pub struct Frameres {
     ubos: HashMap<Handle<Node>, Buffer>,
     descriptors: Descriptors,
     pub command_buffer: vk::CommandBuffer,
-    pub fence: vk::Fence,
-    pub can_wait: bool,
+    pub fence: Fence,
     pub image_ready: Semaphore,
     pub image_drawn: Semaphore,
-    device: Rc<Device>,
 }
 
 impl Frameres {
@@ -116,46 +114,23 @@ impl Frameres {
         };
 
         // Fence (device)
-        let fence = {
-            let create_info = vk::FenceCreateInfo::builder()
-                .flags(vk::FenceCreateFlags::SIGNALED)
-                .build();
-            unsafe { dev.device.create_fence(&create_info, None) }
-        }
-        .expect("Failed to create Vulkan fence");
+        let fence = Fence::signaled(&dev.device);
 
         Self {
             ubos: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
-            can_wait: true,
             image_ready: Semaphore::new(&dev.device),
             image_drawn: Semaphore::new(&dev.device),
-            device: dev.device.clone(),
         }
     }
 
     pub fn wait(&mut self) {
-        if !self.can_wait {
-            return;
+        if self.fence.can_wait {
+            self.fence.wait();
+            self.fence.reset();
         }
-
-        unsafe {
-            self.device
-                .wait_for_fences(&[self.fence], true, u64::max_value())
-                .expect("Failed to wait for Vulkan frame fence");
-            self.device
-                .reset_fences(&[self.fence])
-                .expect("Failed to reset Vulkan frame fence");
-        }
-        self.can_wait = false;
-    }
-}
-
-impl Drop for Frameres {
-    fn drop(&mut self) {
-        unsafe { self.device.destroy_fence(self.fence, None) }
     }
 }
 
@@ -354,45 +329,15 @@ impl Frame {
         swapchain: &Swapchain,
         image_index: u32,
     ) -> Result<(), vk::Result> {
-        // Wait for the image to be available ..
-        let wait_semaphores = [self.res.image_ready.semaphore];
-        // .. at color attachment output stage
-        let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [self.res.command_buffer];
-        let signal_semaphores = [self.res.image_drawn.semaphore];
-        let submits = [vk::SubmitInfo::builder()
-            .wait_semaphores(&wait_semaphores)
-            .wait_dst_stage_mask(&wait_dst_stage_mask)
-            .command_buffers(&command_buffers)
-            .signal_semaphores(&signal_semaphores)
-            .build()];
-        unsafe {
-            self.device
-                .queue_submit(dev.graphics_queue, &submits, self.res.fence)
-        }
-        .expect("Failed to submit to Vulkan queue");
-        // Fence can wait after queue submit
-        self.res.can_wait = true;
+        dev.graphics_queue.submit_draw(
+            &self.res.command_buffer,
+            &self.res.image_ready,
+            &self.res.image_drawn,
+            Some(&mut self.res.fence),
+        );
 
-        // Present result
-        let pres_image_indices = [image_index];
-        let pres_swapchains = [swapchain.swapchain];
-        let pres_semaphores = [self.res.image_drawn.semaphore];
-        let present_info = vk::PresentInfoKHR::builder()
-            .image_indices(&pres_image_indices)
-            .swapchains(&pres_swapchains)
-            .wait_semaphores(&pres_semaphores);
-
-        match unsafe {
-            swapchain
-                .ext
-                .queue_present(dev.graphics_queue, &present_info)
-        } {
-            Ok(false) => Ok(()),
-            // Suboptimal
-            Ok(true) => Err(vk::Result::ERROR_OUT_OF_DATE_KHR),
-            Err(result) => Err(result),
-        }
+        dev.graphics_queue
+            .present(image_index, swapchain, &self.res.image_drawn)
     }
 }
 

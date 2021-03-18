@@ -12,6 +12,9 @@ use util::*;
 mod model;
 use model::*;
 
+mod queue;
+use queue::*;
+
 mod gfx;
 use gfx::*;
 

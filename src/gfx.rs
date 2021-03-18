@@ -281,7 +281,7 @@ impl Drop for Swapchain {
 pub struct Dev {
     pub surface_format: ash::vk::SurfaceFormatKHR,
     pub graphics_command_pool: ash::vk::CommandPool,
-    pub graphics_queue: ash::vk::Queue,
+    pub graphics_queue: Queue,
     /// Needs to be public if we want to create buffers outside this module.
     /// The allocator is shared between the various buffers to release resources on drop.
     /// Moreover it needs to be inside a RefCell, so we can mutably borrow it on destroy.
@@ -375,8 +375,9 @@ impl Dev {
                 .create_device(physical, &device_create_info, None)
                 .expect("Failed to create Vulkan logical device")
         };
+        let device = Rc::new(device);
 
-        let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index, 0) };
+        let graphics_queue = Queue::new(&device, graphics_queue_index);
 
         // Command pool
         let create_info = ash::vk::CommandPoolCreateInfo::builder()
@@ -406,7 +407,7 @@ impl Dev {
         let allocator = {
             let create_info = vk_mem::AllocatorCreateInfo {
                 physical_device: physical,
-                device: device.clone(),
+                device: device.deref().clone(),
                 instance: ctx.instance.clone(),
                 ..Default::default()
             };
@@ -419,7 +420,7 @@ impl Dev {
             graphics_command_pool,
             graphics_queue,
             allocator: Rc::new(RefCell::new(allocator)),
-            device: Rc::new(device),
+            device: device,
             physical,
         }
     }
