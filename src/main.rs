@@ -15,6 +15,9 @@ use model::*;
 mod pipeline;
 use pipeline::*;
 
+mod queue;
+use queue::*;
+
 mod gfx;
 use gfx::*;
 

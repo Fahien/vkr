@@ -4,8 +4,9 @@
 
 use std::rc::Rc;
 
-use super::*;
-use ash::{version::DeviceV1_0, *};
+use ash::{vk, Device};
+
+use crate::{gfx::Swapchain, sync::*};
 
 pub struct Queue {
     queue: vk::Queue,
