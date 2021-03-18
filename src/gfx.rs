@@ -179,32 +179,6 @@ impl Drop for Surface {
     }
 }
 
-pub struct Image {
-    pub image: ash::vk::Image,
-    pub format: ash::vk::Format,
-    pub color_space: ash::vk::ColorSpaceKHR,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl Image {
-    pub fn new(
-        image: ash::vk::Image,
-        format: ash::vk::Format,
-        color_space: ash::vk::ColorSpaceKHR,
-        width: u32,
-        height: u32,
-    ) -> Self {
-        Self {
-            image,
-            format,
-            color_space,
-            width,
-            height,
-        }
-    }
-}
-
 pub struct Swapchain {
     pub images: Vec<Rc<RefCell<Image>>>,
     pub swapchain: ash::vk::SwapchainKHR,
@@ -253,12 +227,12 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Rc::new(RefCell::new(Image::new(
+            images.push(Rc::new(RefCell::new(Image::unmanaged(
                 image,
-                dev.surface_format.format,
-                dev.surface_format.color_space,
                 width,
                 height,
+                dev.surface_format.format,
+                dev.surface_format.color_space,
             ))));
         }
 
