@@ -174,8 +174,8 @@ impl Framebuffer {
             let create_info = ash::vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
                 .attachments(&attachments)
-                .width(image_ref.width)
-                .height(image_ref.height)
+                .width(image_ref.extent.width)
+                .height(image_ref.extent.height)
                 .layers(1)
                 .build();
 
@@ -665,32 +665,6 @@ impl Drop for Surface {
     }
 }
 
-pub struct Image {
-    pub image: ash::vk::Image,
-    pub format: ash::vk::Format,
-    pub color_space: ash::vk::ColorSpaceKHR,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl Image {
-    pub fn new(
-        image: ash::vk::Image,
-        format: ash::vk::Format,
-        color_space: ash::vk::ColorSpaceKHR,
-        width: u32,
-        height: u32,
-    ) -> Self {
-        Self {
-            image,
-            format,
-            color_space,
-            width,
-            height,
-        }
-    }
-}
-
 pub struct Swapchain {
     pub images: Vec<Rc<RefCell<Image>>>,
     pub swapchain: ash::vk::SwapchainKHR,
@@ -739,12 +713,12 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Rc::new(RefCell::new(Image::new(
+            images.push(Rc::new(RefCell::new(Image::unmanaged(
                 image,
-                dev.surface_format.format,
-                dev.surface_format.color_space,
                 width,
                 height,
+                dev.surface_format.format,
+                dev.surface_format.color_space,
             ))));
         }
 
@@ -1196,10 +1170,10 @@ impl Drop for Pipeline {
 
 pub struct Buffer {
     allocation: vk_mem::Allocation,
-    buffer: ash::vk::Buffer,
+    pub buffer: ash::vk::Buffer,
     usage: ash::vk::BufferUsageFlags,
     size: ash::vk::DeviceSize,
-    allocator: Rc<RefCell<vk_mem::Allocator>>,
+    pub allocator: Rc<RefCell<vk_mem::Allocator>>,
 }
 
 impl Buffer {
