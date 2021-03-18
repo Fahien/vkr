@@ -9,6 +9,7 @@ Download and install [Vulkan SDK 1.2.162.1](https://vulkan.lunarg.com/sdk/home) 
 ## Build
 
 Run `script/build-vkr.sh`. This script will make sure you are using the right `rust-gpu` version, together with its `rust-toolchain`.
+The script also makes sure that `cargo test` runs to ensure that required files are generated.
 
 ## Troubleshooting
 

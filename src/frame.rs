@@ -55,8 +55,8 @@ impl Framebuffer {
             let create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
                 .attachments(&attachments)
-                .width(image_ref.width)
-                .height(image_ref.height)
+                .width(image_ref.extent.width)
+                .height(image_ref.extent.height)
                 .layers(1)
                 .build();
 

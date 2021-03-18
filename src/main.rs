@@ -15,6 +15,9 @@ use model::*;
 mod pipeline;
 use pipeline::*;
 
+mod image;
+use image::*;
+
 mod queue;
 use queue::*;
 
@@ -94,6 +97,11 @@ pub fn main() {
     let lines = nodes.push(Node::new());
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
+
+    // @todo Remove testing image upload
+    let staging = Buffer::staging(&dev.allocator, "res/image/test.png");
+    let mut image = Image::new(&dev.allocator, 2, 2, ash::vk::Format::R8G8B8A8_UNORM);
+    image.copy_from(&staging, &dev);
 
     'running: loop {
         let mut resized = false;

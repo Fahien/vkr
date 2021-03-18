@@ -8,3 +8,6 @@ REPO=https://raw.githubusercontent.com/EmbarkStudios/rust-gpu
 
 curl $REPO/$BRANCH/rust-toolchain --output rust-toolchain
 cargo build
+
+# Run tests before the application to generate test PNG file
+cargo test
