@@ -7,7 +7,6 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::Handle,
 };
-use byteorder::{ByteOrder, NativeEndian};
 use nalgebra as na;
 use sdl2 as sdl;
 use std::{
@@ -987,6 +986,8 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new<T: VertexInput>(
         dev: &mut Dev,
+        vert: ash::vk::PipelineShaderStageCreateInfo,
+        frag: ash::vk::PipelineShaderStageCreateInfo,
         topology: ash::vk::PrimitiveTopology,
         pass: &Pass,
         width: u32,
@@ -1027,33 +1028,6 @@ impl Pipeline {
 
         // Graphics pipeline (shaders, renderpass)
         let graphics = {
-            const SHADERS: &[u8] = include_bytes!(env!("vkr_shaders.spv"));
-            let mut rs_code = vec![0; SHADERS.len() / std::mem::size_of::<u32>()];
-            NativeEndian::read_u32_into(SHADERS, rs_code.as_mut_slice());
-
-            let create_info = ash::vk::ShaderModuleCreateInfo::builder()
-                .code(rs_code.as_slice())
-                .build();
-            let rs_mod = unsafe {
-                dev.device
-                    .borrow_mut()
-                    .create_shader_module(&create_info, None)
-            }
-            .expect("Failed to create Vulkan shader module");
-
-            let entrypoint = CString::new("main_vs").expect("Failed to create main entrypoint");
-            let vert_stage = ash::vk::PipelineShaderStageCreateInfo::builder()
-                .stage(ash::vk::ShaderStageFlags::VERTEX)
-                .module(rs_mod)
-                .name(&entrypoint)
-                .build();
-            let entrypoint = CString::new("main_fs").expect("Failed to create main entrypoint");
-            let frag_stage = ash::vk::PipelineShaderStageCreateInfo::builder()
-                .stage(ash::vk::ShaderStageFlags::FRAGMENT)
-                .module(rs_mod)
-                .name(&entrypoint)
-                .build();
-
             let vertex_binding = T::get_bindings();
             let vertex_attributes = T::get_attributes();
 
@@ -1120,7 +1094,7 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let stages = [vert_stage, frag_stage];
+            let stages = [vert, frag];
 
             let create_info = [ash::vk::GraphicsPipelineCreateInfo::builder()
                 .stages(&stages)
@@ -1134,6 +1108,7 @@ impl Pipeline {
                 .subpass(0)
                 .layout(layout)
                 .build()];
+
             let pipelines = unsafe {
                 dev.device.borrow_mut().create_graphics_pipelines(
                     ash::vk::PipelineCache::null(),
@@ -1142,9 +1117,7 @@ impl Pipeline {
                 )
             }
             .expect("Failed to create Vulkan graphics pipeline");
-            unsafe {
-                dev.device.borrow_mut().destroy_shader_module(rs_mod, None);
-            }
+
             pipelines[0]
         };
 
@@ -1154,6 +1127,36 @@ impl Pipeline {
             layout,
             device: Rc::clone(&dev.device),
         }
+    }
+
+    pub fn line(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::new(&dev.device);
+        let vs = CString::new("line_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("line_fs").expect("Failed to create entrypoint");
+        Self::new::<Line>(
+            dev,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            ash::vk::PrimitiveTopology::LINE_STRIP,
+            pass,
+            width,
+            height,
+        )
+    }
+
+    pub fn main(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::new(&dev.device);
+        let vs = CString::new("main_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("main_fs").expect("Failed to create entrypoint");
+        Self::new::<Vertex>(
+            dev,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            ash::vk::PrimitiveTopology::TRIANGLE_LIST,
+            pass,
+            width,
+            height,
+        )
     }
 }
 
