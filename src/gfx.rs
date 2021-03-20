@@ -4,7 +4,6 @@
 
 use ash::{extensions::ext::DebugReport, vk::Handle};
 use sdl2 as sdl;
-
 use std::{
     borrow::Borrow,
     cell::RefCell,

@@ -21,6 +21,9 @@ use image::*;
 mod queue;
 use queue::*;
 
+mod shader;
+use shader::*;
+
 mod gfx;
 use gfx::*;
 
@@ -51,13 +54,7 @@ pub fn main() {
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
-    let mut line_pipeline = Pipeline::new::<Line>(
-        &dev.device,
-        ash::vk::PrimitiveTopology::LINE_STRIP,
-        &pass,
-        width,
-        height,
-    );
+    let mut line_pipeline = Pipeline::line(&dev.device, &pass, width, height);
 
     let lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
@@ -71,13 +68,7 @@ pub fn main() {
         Primitive::new(&dev.allocator, &lines_vertices)
     };
 
-    let mut triangle_pipeline = Pipeline::new::<Vertex>(
-        &dev.device,
-        ash::vk::PrimitiveTopology::TRIANGLE_LIST,
-        &pass,
-        width,
-        height,
-    );
+    let mut triangle_pipeline = Pipeline::main(&dev.device, &pass, width, height);
 
     let rect_primitive = {
         let vertices = vec![

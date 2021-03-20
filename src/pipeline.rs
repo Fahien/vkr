@@ -5,9 +5,13 @@
 use std::{ffi::CString, rc::Rc};
 
 use ash::{vk, Device};
-use byteorder::{ByteOrder, NativeEndian};
 
-use crate::{gfx::Pass, model::VertexInput, Descriptors};
+use crate::{
+    gfx::Pass,
+    model::{Line, Vertex, VertexInput},
+    shader::ShaderModule,
+    Descriptors,
+};
 
 pub struct PipelineCache {
     /// List of descriptors, one for each swapchain image
@@ -32,6 +36,8 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new<T: VertexInput>(
         device: &Rc<Device>,
+        vert: vk::PipelineShaderStageCreateInfo,
+        frag: vk::PipelineShaderStageCreateInfo,
         topology: vk::PrimitiveTopology,
         pass: &Pass,
         width: u32,
@@ -63,29 +69,6 @@ impl Pipeline {
 
         // Graphics pipeline (shaders, renderpass)
         let graphics = {
-            const SHADERS: &[u8] = include_bytes!(env!("vkr_shaders.spv"));
-            let mut rs_code = vec![0; SHADERS.len() / std::mem::size_of::<u32>()];
-            NativeEndian::read_u32_into(SHADERS, rs_code.as_mut_slice());
-
-            let create_info = vk::ShaderModuleCreateInfo::builder()
-                .code(rs_code.as_slice())
-                .build();
-            let rs_mod = unsafe { device.create_shader_module(&create_info, None) }
-                .expect("Failed to create Vulkan shader module");
-
-            let entrypoint = CString::new("main_vs").expect("Failed to create main entrypoint");
-            let vert_stage = vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::VERTEX)
-                .module(rs_mod)
-                .name(&entrypoint)
-                .build();
-            let entrypoint = CString::new("main_fs").expect("Failed to create main entrypoint");
-            let frag_stage = vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::FRAGMENT)
-                .module(rs_mod)
-                .name(&entrypoint)
-                .build();
-
             let vertex_binding = T::get_bindings();
             let vertex_attributes = T::get_attributes();
 
@@ -147,7 +130,7 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let stages = [vert_stage, frag_stage];
+            let stages = [vert, frag];
 
             let create_info = [vk::GraphicsPipelineCreateInfo::builder()
                 .stages(&stages)
@@ -161,13 +144,11 @@ impl Pipeline {
                 .subpass(0)
                 .layout(layout)
                 .build()];
+
             let pipelines = unsafe {
                 device.create_graphics_pipelines(vk::PipelineCache::null(), &create_info, None)
             }
             .expect("Failed to create Vulkan graphics pipeline");
-            unsafe {
-                device.destroy_shader_module(rs_mod, None);
-            }
             pipelines[0]
         };
 
@@ -177,6 +158,36 @@ impl Pipeline {
             layout,
             device: device.clone(),
         }
+    }
+
+    pub fn line(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::new(device);
+        let vs = CString::new("line_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("line_fs").expect("Failed to create entrypoint");
+        Self::new::<Line>(
+            device,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            vk::PrimitiveTopology::LINE_STRIP,
+            pass,
+            width,
+            height,
+        )
+    }
+
+    pub fn main(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::new(device);
+        let vs = CString::new("main_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("main_fs").expect("Failed to create entrypoint");
+        Self::new::<Vertex>(
+            device,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            pass,
+            width,
+            height,
+        )
     }
 }
 
