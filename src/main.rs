@@ -65,25 +65,47 @@ pub fn main() {
     let triangle_pipeline = Pipeline::main(&mut dev, &pass, width, height);
 
     let rect_primitive = {
-        let vertices = vec![
+        let mut vertices = vec![
+            // Up
             Vertex::new(-0.2, -0.2, 0.0),
             Vertex::new(0.2, -0.2, 0.0),
             Vertex::new(-0.2, 0.2, 0.0),
             Vertex::new(0.2, 0.2, 0.0),
         ];
+
+        vertices[1].uv.x = 1.0;
+        vertices[3].uv.x = 1.0;
+
+        vertices[0].uv.y = 0.0;
+        vertices[1].uv.y = 0.0;
+        vertices[2].uv.y = 1.0;
+        vertices[3].uv.y = 1.0;
+
         let mut primitive = Primitive::new(&dev.allocator, &vertices);
         let indices = vec![0, 1, 2, 1, 3, 2];
         primitive.set_indices(&indices);
         primitive
     };
 
-    let mut nodes = Pack::new();
-    let rect = nodes.push(Node::new());
-    let lines = nodes.push(Node::new());
+    let mut model = Model::new();
+
+    let rect = model.nodes.push(Node::new());
+    let lines = model.nodes.push(Node::new());
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
 
     let image = Image::load(&dev, "res/image/test.png");
+
+    let view = ImageView::new(&dev.device, &image);
+
+    model.images.push(image);
+
+    let view = model.views.push(view);
+
+    let sampler = model.samplers.push(Sampler::new(&dev.device));
+
+    let texture = Texture::new(view, sampler);
+    let texture = model.textures.push(texture);
 
     'running: loop {
         let mut resized = false;
@@ -112,9 +134,9 @@ pub fn main() {
 
         let delta = timer.get_delta().as_secs_f32();
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+        model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
-        nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+        model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
         if resized {
             dev.wait();
@@ -159,8 +181,8 @@ pub fn main() {
 
         let (width, height) = win.window.drawable_size();
         frame.begin(&pass, width, height);
-        frame.draw(&triangle_pipeline, &nodes, &rect_primitive, rect);
-        frame.draw(&line_pipeline, &nodes, &lines_primitive, lines);
+        frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
+        frame.draw::<Line>(&line_pipeline, &model, &lines_primitive, lines, Handle::none());
         frame.end();
 
         match sfs.present(&dev) {

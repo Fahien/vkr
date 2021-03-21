@@ -2,13 +2,36 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use super::util::*;
+use super::gfx::Buffer;
+use super::*;
+use ash::{version::DeviceV1_0, *};
 use memoffset::offset_of;
 use nalgebra as na;
+
+#[repr(C)]
+pub struct Ubo {
+    pub matrix: na::Matrix4<f32>,
+}
+
+impl Ubo {
+    pub fn _new() -> Self {
+        Ubo {
+            matrix: na::Matrix4::identity(),
+        }
+    }
+}
 
 pub trait VertexInput {
     fn get_bindings() -> ash::vk::VertexInputBindingDescription;
     fn get_attributes() -> Vec<ash::vk::VertexInputAttributeDescription>;
+    fn get_set_layout_bindings() -> Vec<ash::vk::DescriptorSetLayoutBinding>;
+    fn write_set(
+        device: &Device,
+        set: vk::DescriptorSet,
+        ubo: &Buffer,
+        view: Option<&ImageView>,
+        sampler: Option<&Sampler>,
+    );
 }
 
 #[repr(C)]
@@ -75,6 +98,42 @@ impl VertexInput for Point {
                 .build(),
         ]
     }
+
+    fn get_set_layout_bindings() -> Vec<ash::vk::DescriptorSetLayoutBinding> {
+        vec![ash::vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
+            .descriptor_count(1) // Referring the shader
+            .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
+            .build()]
+    }
+
+    fn write_set(
+        device: &Device,
+        set: vk::DescriptorSet,
+        ubo: &Buffer,
+        _view: Option<&ImageView>,
+        _sampler: Option<&Sampler>,
+    ) {
+        // Update immediately the descriptor sets
+        let buffer_info = ash::vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
+            .buffer(ubo.buffer)
+            .build();
+
+        let write = ash::vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let writes = vec![write];
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
 }
 
 #[repr(C)]
@@ -97,12 +156,27 @@ impl VertexInput for Line {
     fn get_attributes() -> Vec<ash::vk::VertexInputAttributeDescription> {
         Point::get_attributes()
     }
+
+    fn get_set_layout_bindings() -> Vec<ash::vk::DescriptorSetLayoutBinding> {
+        Point::get_set_layout_bindings()
+    }
+
+    fn write_set(
+        device: &Device,
+        set: vk::DescriptorSet,
+        ubo: &Buffer,
+        view: Option<&ImageView>,
+        sampler: Option<&Sampler>,
+    ) {
+        Point::write_set(device, set, ubo, view, sampler);
+    }
 }
 
 #[repr(C)]
 pub struct Vertex {
     pos: Vec3f,
     color: Color,
+    pub uv: na::Vector2<f32>,
 }
 
 impl Vertex {
@@ -110,6 +184,7 @@ impl Vertex {
         Self {
             pos: Vec3f::new(x, y, z),
             color: Color::new(1.0, 1.0, 1.0, 1.0),
+            uv: na::Vector2::new(0.0, 0.0),
         }
     }
 }
@@ -137,7 +212,73 @@ impl VertexInput for Vertex {
                 .format(ash::vk::Format::R32G32B32A32_SFLOAT)
                 .offset(offset_of!(Vertex, color) as u32)
                 .build(),
+            ash::vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(2)
+                .format(ash::vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Vertex, uv) as u32)
+                .build(),
         ]
+    }
+
+    fn get_set_layout_bindings() -> Vec<ash::vk::DescriptorSetLayoutBinding> {
+        let uniform = ash::vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
+            .descriptor_count(1) // Referring the shader
+            .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
+            .build();
+
+        let sampler = ash::vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(ash::vk::DescriptorType::COMBINED_IMAGE_SAMPLER) // delta time?
+            .descriptor_count(1) // Referring the shader
+            .stage_flags(ash::vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        vec![uniform, sampler]
+    }
+
+    fn write_set(
+        device: &Device,
+        set: vk::DescriptorSet,
+        ubo: &Buffer,
+        view: Option<&ImageView>,
+        sampler: Option<&Sampler>,
+    ) {
+        // Update immediately the descriptor sets
+        let buffer_info = ash::vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
+            .buffer(ubo.buffer)
+            .build();
+
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .sampler(sampler.unwrap().sampler)
+            .image_view(view.unwrap().view)
+            .build();
+
+        let buffer_write = ash::vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&[image_info])
+            .build();
+
+        let writes = vec![buffer_write, image_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
     }
 }
 

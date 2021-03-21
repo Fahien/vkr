@@ -53,25 +53,14 @@ impl Primitive {
     }
 }
 
-#[repr(C)]
-pub struct Ubo {
-    pub matrix: na::Matrix4<f32>,
-}
-
-impl Ubo {
-    pub fn _new() -> Self {
-        Ubo {
-            matrix: na::Matrix4::identity(),
-        }
-    }
-}
-
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
 struct Descriptors {
     /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the node with the model matrix
     sets: HashMap<(ash::vk::PipelineLayout, util::Handle<Node>), Vec<ash::vk::DescriptorSet>>,
+    /// Descriptor pools should be per-pipeline layout as weel as they could differ in terms of uniforms and samplers?
+    /// Or can we provide sufficient descriptors for all supported pipeline layouts? Trying this approach.
     pool: ash::vk::DescriptorPool,
     device: Rc<ash::Device>,
 }
@@ -79,15 +68,21 @@ struct Descriptors {
 impl Descriptors {
     pub fn new(dev: &mut Dev) -> Self {
         let pool = unsafe {
-            let pool_size = ash::vk::DescriptorPoolSize::builder()
-                // Just one for the moment
-                .descriptor_count(1)
+            // 2 uniform buffers, one for the line pipeline andd one for the main pipeline
+            let uniform_pool_size = ash::vk::DescriptorPoolSize::builder()
+                .descriptor_count(2)
                 .ty(ash::vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
-            let pool_sizes = vec![pool_size, pool_size];
+            // 1 sampler for the main pipeline
+            let sampler_pool_size = ash::vk::DescriptorPoolSize::builder()
+                .descriptor_count(1)
+                .ty(ash::vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .build();
+
+            let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
             let create_info = ash::vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
-                // Support 4 different pipeline layouts
+                // Support 2 frames?
                 .max_sets(2)
                 .build();
             dev.device.create_descriptor_pool(&create_info, None)
@@ -363,12 +358,13 @@ impl Frame {
         }
     }
 
-    pub fn draw(
+    pub fn draw<T: VertexInput>(
         &mut self,
         pipeline: &Pipeline,
-        nodes: &Pack<Node>,
+        model: &Model,
         primitive: &Primitive,
         node: util::Handle<Node>,
+        texture: util::Handle<Texture>,
     ) {
         let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
         unsafe {
@@ -393,32 +389,26 @@ impl Frame {
 
             // If there is a descriptor set, there must be a uniform buffer
             let ubo = self.res.ubos.get_mut(&node).unwrap();
-            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
+            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
         } else {
             // Create a new uniform buffer for this node's model matrix
             let mut ubo =
                 Buffer::new::<Ubo>(&self.allocator, ash::vk::BufferUsageFlags::UNIFORM_BUFFER);
-            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
+            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
 
             let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
 
-            // Update immediately the descriptor sets
-            let buffer_info = ash::vk::DescriptorBufferInfo::builder()
-                .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
-                .buffer(ubo.buffer)
-                .build();
-
-            let descriptor_write = ash::vk::WriteDescriptorSet::builder()
-                .dst_set(sets[0])
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(&[buffer_info])
-                .build();
+            let texture = model.textures.get(texture);
+            let (view, sampler) = match texture {
+                Some(texture) => (
+                    model.views.get(texture.view),
+                    model.samplers.get(texture.sampler),
+                ),
+                _ => (None, None),
+            };
+            T::write_set(self.device.borrow(), sets[0], &ubo, view, sampler);
 
             unsafe {
-                self.device.update_descriptor_sets(&[descriptor_write], &[]);
-
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
                     graphics_bind_point,
@@ -993,16 +983,10 @@ impl Pipeline {
         width: u32,
         height: u32,
     ) -> Self {
-        let set_layout_bindings = ash::vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
-            .descriptor_count(1) // Referring the shader
-            .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
+        let layout_bindings = T::get_set_layout_bindings();
+        let set_layout_info = ash::vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&layout_bindings)
             .build();
-        let arr_bindings = vec![set_layout_bindings];
-
-        let set_layout_info =
-            ash::vk::DescriptorSetLayoutCreateInfo::builder().bindings(&arr_bindings);
 
         let set_layout = unsafe {
             dev.device
