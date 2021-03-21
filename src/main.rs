@@ -89,10 +89,7 @@ pub fn main() {
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
 
-    // @todo Remove testing image upload
-    let staging = Buffer::staging(&dev.allocator, "res/image/test.png");
-    let mut image = Image::new(&dev.allocator, 2, 2, ash::vk::Format::R8G8B8A8_UNORM);
-    image.copy_from(&staging, &dev);
+    let image = Image::load(&dev, "res/image/test.png");
 
     'running: loop {
         let mut resized = false;
