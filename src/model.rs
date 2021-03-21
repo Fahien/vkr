@@ -180,3 +180,23 @@ impl Node {
         }
     }
 }
+
+pub struct Model {
+    pub nodes: Pack<Node>,
+    pub images: Pack<Image>,
+    pub views: Pack<ImageView>,
+    pub samplers: Pack<Sampler>,
+    pub textures: Pack<Texture>,
+}
+
+impl Model {
+    pub fn new() -> Self {
+        Self {
+            nodes: Pack::new(),
+            images: Pack::new(),
+            views: Pack::new(),
+            samplers: Pack::new(),
+            textures: Pack::new(),
+        }
+    }
+}
