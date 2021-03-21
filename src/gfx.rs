@@ -513,14 +513,8 @@ impl Buffer {
     }
 
     /// Loads data from a png image in `path` directly into a staging buffer
-    pub fn staging(allocator: &Rc<RefCell<vk_mem::Allocator>>, path: &str) -> Self {
-        let path = Path::new(path);
-        let file = File::open(path).unwrap();
-
-        let decoder = png::Decoder::new(file);
-        let (info, mut reader) = decoder.read_info().unwrap();
-
-        let size = info.buffer_size();
+    pub fn load(allocator: &Rc<RefCell<vk_mem::Allocator>>, png: &mut Png) -> Self {
+        let size = png.info.buffer_size();
         let usage = ash::vk::BufferUsageFlags::TRANSFER_SRC;
 
         // Create staging buffer
@@ -539,7 +533,7 @@ impl Buffer {
         let mut buf = unsafe { std::slice::from_raw_parts_mut(data, size) };
 
         // Read the next frame. An APNG might contain multiple frames.
-        reader.next_frame(&mut buf).unwrap();
+        png.reader.next_frame(&mut buf).unwrap();
 
         alloc.unmap_memory(&allocation);
 
