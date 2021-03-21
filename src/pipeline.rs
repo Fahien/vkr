@@ -43,15 +43,10 @@ impl Pipeline {
         width: u32,
         height: u32,
     ) -> Self {
-        let set_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // delta time?
-            .descriptor_count(1) // Referring the shader
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
+        let layout_bindings = T::get_set_layout_bindings();
+        let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&layout_bindings)
             .build();
-        let arr_bindings = vec![set_layout_bindings];
-
-        let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&arr_bindings);
 
         let set_layout = unsafe { device.create_descriptor_set_layout(&set_layout_info, None) }
             .expect("Failed to create Vulkan descriptor set layout");

@@ -2,9 +2,9 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs::File, path::Path, rc::Rc};
 
-use ash::vk;
+use ash::{vk, Device};
 
 use super::*;
 
