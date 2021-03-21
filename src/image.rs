@@ -13,6 +13,24 @@ use ash::{version::DeviceV1_0, *};
 
 use super::*;
 
+pub struct Png {
+    pub info: png::OutputInfo,
+    pub reader: png::Reader<File>,
+}
+
+impl Png {
+    /// Opens a PNG file without loading data yet
+    pub fn open(path: &str) -> Self {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+
+        let decoder = png::Decoder::new(file);
+        let (info, reader) = decoder.read_info().unwrap();
+
+        Self { info, reader }
+    }
+}
+
 pub struct Image {
     /// Whether this image is manages and should be freed, or not (like swapchain images)
     managed: bool,
