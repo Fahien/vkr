@@ -8,14 +8,12 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     ffi::{c_void, CStr, CString},
-    fs::File,
     ops::Deref,
     os::raw::c_char,
-    path::Path,
     rc::Rc,
 };
 
-use crate::{image::Image, queue::Queue};
+use crate::{image::{Image, Png}, queue::Queue};
 
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,

@@ -203,12 +203,13 @@ impl Frame {
         }
     }
 
-    pub fn draw(
+    pub fn draw<T: VertexInput>(
         &mut self,
         pipeline: &mut Pipeline,
-        nodes: &Pack<Node>,
+        model: &Model,
         primitive: &Primitive,
         node: Handle<Node>,
+        texture: Handle<Texture>,
     ) {
         let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
         unsafe {
@@ -239,14 +240,14 @@ impl Frame {
 
             // If there is a descriptor set, there must be a uniform buffer
             let ubo = self.res.ubos.get_mut(&node).unwrap();
-            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
+            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
         } else {
             // Create a new uniform buffer for this node's model matrix
             let mut ubo = Buffer::new::<na::Matrix4<f32>>(
                 &self.allocator,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
             );
-            ubo.upload(&nodes.get(node).unwrap().trs.get_matrix());
+            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
 
             let sets = self
                 .res
@@ -254,23 +255,17 @@ impl Frame {
                 .descriptors
                 .allocate(&[pipeline.set_layout]);
 
-            // Update immediately the descriptor sets
-            let buffer_info = vk::DescriptorBufferInfo::builder()
-                .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
-                .buffer(ubo.buffer)
-                .build();
-
-            let descriptor_write = vk::WriteDescriptorSet::builder()
-                .dst_set(sets[0])
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(&[buffer_info])
-                .build();
+            let texture = model.textures.get(texture);
+            let (view, sampler) = match texture {
+                Some(texture) => (
+                    model.views.get(texture.view),
+                    model.samplers.get(texture.sampler),
+                ),
+                _ => (None, None),
+            };
+            T::write_set(&self.device, sets[0], &ubo, view, sampler);
 
             unsafe {
-                self.device.update_descriptor_sets(&[descriptor_write], &[]);
-
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
                     graphics_bind_point,
