@@ -112,6 +112,19 @@ impl Image {
         }
     }
 
+    pub fn load(dev: &Dev, path: &str) -> Self {
+        let mut png = Png::open(path);
+        let staging = Buffer::load(&dev.allocator, &mut png);
+        let mut image = Image::new(
+            &dev.allocator,
+            png.info.width,
+            png.info.height,
+            vk::Format::R8G8B8A8_SRGB,
+        );
+        image.copy_from(&staging, dev);
+        image
+    }
+
     pub fn copy_from(&mut self, staging: &Buffer, dev: &Dev) {
         // @todo Use TRANSFER pool and transfer queue
         let command_buffer = unsafe {
