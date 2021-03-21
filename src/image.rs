@@ -1,12 +1,35 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs::File, path::Path, rc::Rc};
 
 use ash::vk;
 
 use super::*;
+
+pub struct Png {
+    pub info: png::OutputInfo,
+    pub reader: png::Reader<File>,
+}
+
+impl Png {
+    /// Opens a PNG file without loading data yet
+    pub fn open(path: &str) -> Self {
+        let current_dir = std::env::current_dir().expect("Failed to get current dir");
+        let path = Path::new(path);
+        let file = File::open(path).expect(&format!(
+            "Failed to load PNG file: {}/{}",
+            current_dir.display(),
+            path.display()
+        ));
+
+        let decoder = png::Decoder::new(file);
+        let (info, reader) = decoder.read_info().unwrap();
+
+        Self { info, reader }
+    }
+}
 
 pub struct Image {
     /// Whether this image is manages and should be freed, or not (like swapchain images)
