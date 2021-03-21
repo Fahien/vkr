@@ -27,6 +27,9 @@ use queue::*;
 mod shader;
 use shader::*;
 
+mod sampler;
+use sampler::*;
+
 mod gfx;
 use gfx::*;
 
