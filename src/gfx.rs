@@ -14,10 +14,8 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     ffi::{c_void, CStr, CString},
-    fs::File,
     ops::Deref,
     os::raw::c_char,
-    path::Path,
     rc::Rc,
 };
 
@@ -41,6 +39,37 @@ impl Primitive {
             vertices,
             indices: None,
         }
+    }
+
+    /// Returns a new primitive quad with side length 1 centered at the origin
+    pub fn quad(allocator: &Rc<RefCell<vk_mem::Allocator>>) -> Self {
+        let vertices = vec![
+            Vertex {
+                pos: na::Vector3::new(-0.5, -0.5, 0.0),
+                color: Color::white(),
+                uv: na::Vector2::new(0.0, 1.0),
+            },
+            Vertex {
+                pos: na::Vector3::new(0.5, -0.5, 0.0),
+                color: Color::white(),
+                uv: na::Vector2::new(1.0, 1.0),
+            },
+            Vertex {
+                pos: na::Vector3::new(0.5, 0.5, 0.0),
+                color: Color::white(),
+                uv: na::Vector2::new(1.0, 0.0),
+            },
+            Vertex {
+                pos: na::Vector3::new(-0.5, 0.5, 0.0),
+                color: Color::white(),
+                uv: na::Vector2::new(0.0, 0.0),
+            },
+        ];
+        let indices = vec![0, 1, 2, 2, 3, 0];
+
+        let mut ret = Self::new(allocator, &vertices);
+        ret.set_indices(&indices);
+        ret
     }
 
     pub fn set_indices(&mut self, ii: &[u16]) {
@@ -320,7 +349,7 @@ impl Frame {
             .build();
 
         let mut clear = ash::vk::ClearValue::default();
-        clear.color.float32 = [0.025, 0.025, 0.025, 1.0];
+        clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
         let clear_values = [clear];
         let create_info = ash::vk::RenderPassBeginInfo::builder()
             .framebuffer(self.buffer.framebuffer)

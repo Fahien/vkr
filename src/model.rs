@@ -35,19 +35,6 @@ pub trait VertexInput {
 }
 
 #[repr(C)]
-pub struct Vec3f {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-
-impl Vec3f {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Vec3f { x, y, z }
-    }
-}
-
-#[repr(C)]
 pub struct Color {
     r: f32,
     g: f32,
@@ -59,16 +46,20 @@ impl Color {
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Color { r, g, b, a }
     }
+
+    pub fn white() -> Self {
+        Self::new(1.0, 1.0, 1.0, 1.0)
+    }
 }
 
 #[repr(C)]
 pub struct Point {
-    pos: Vec3f,
+    pos: na::Vector3<f32>,
     color: Color,
 }
 
 impl Point {
-    pub fn new(pos: Vec3f, color: Color) -> Self {
+    pub fn new(pos: na::Vector3<f32>, color: Color) -> Self {
         Self { pos, color }
     }
 }
@@ -174,15 +165,15 @@ impl VertexInput for Line {
 
 #[repr(C)]
 pub struct Vertex {
-    pos: Vec3f,
-    color: Color,
+    pub pos: na::Vector3<f32>,
+    pub color: Color,
     pub uv: na::Vector2<f32>,
 }
 
 impl Vertex {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
-            pos: Vec3f::new(x, y, z),
+            pos: na::Vector3::new(x, y, z),
             color: Color::new(1.0, 1.0, 1.0, 1.0),
             uv: na::Vector2::new(0.0, 0.0),
         }
