@@ -59,39 +59,33 @@ pub fn main() {
     let lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
         let lines_vertices = vec![
-            Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
-            Point::new(Vec3f::new(0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
-            Point::new(Vec3f::new(0.3, 0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
-            Point::new(Vec3f::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
-            Point::new(Vec3f::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
+            Point::new(
+                na::Vector3::new(-0.3, -0.3, 0.0),
+                Color::new(1.0, 1.0, 0.0, 1.0),
+            ),
+            Point::new(
+                na::Vector3::new(0.3, -0.3, 0.0),
+                Color::new(0.2, 1.0, 1.0, 1.0),
+            ),
+            Point::new(
+                na::Vector3::new(0.3, 0.3, 0.0),
+                Color::new(0.1, 1.0, 0.0, 1.0),
+            ),
+            Point::new(
+                na::Vector3::new(-0.3, 0.3, 0.0),
+                Color::new(1.0, 0.1, 1.0, 1.0),
+            ),
+            Point::new(
+                na::Vector3::new(-0.3, -0.3, 0.0),
+                Color::new(1.0, 1.0, 0.0, 1.0),
+            ),
         ];
         Primitive::new(&dev.allocator, &lines_vertices)
     };
 
     let triangle_pipeline = Pipeline::main(&mut dev, &pass, width, height);
 
-    let rect_primitive = {
-        let mut vertices = vec![
-            // Up
-            Vertex::new(-0.2, -0.2, 0.0),
-            Vertex::new(0.2, -0.2, 0.0),
-            Vertex::new(-0.2, 0.2, 0.0),
-            Vertex::new(0.2, 0.2, 0.0),
-        ];
-
-        vertices[1].uv.x = 1.0;
-        vertices[3].uv.x = 1.0;
-
-        vertices[0].uv.y = 0.0;
-        vertices[1].uv.y = 0.0;
-        vertices[2].uv.y = 1.0;
-        vertices[3].uv.y = 1.0;
-
-        let mut primitive = Primitive::new(&dev.allocator, &vertices);
-        let indices = vec![0, 1, 2, 1, 3, 2];
-        primitive.set_indices(&indices);
-        primitive
-    };
+    let rect_primitive = Primitive::quad(&dev.allocator);
 
     let mut model = Model::new();
 
@@ -188,7 +182,13 @@ pub fn main() {
         let (width, height) = win.window.drawable_size();
         frame.begin(&pass, width, height);
         frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
-        frame.draw::<Line>(&line_pipeline, &model, &lines_primitive, lines, Handle::none());
+        frame.draw::<Line>(
+            &line_pipeline,
+            &model,
+            &lines_primitive,
+            lines,
+            Handle::none(),
+        );
         frame.end();
 
         match sfs.present(&dev) {
