@@ -150,7 +150,7 @@ pub fn main() {
                 // Only this semaphore must be recreated to avoid validation errors
                 // The image drawn one is still in use at the moment
                 frame.res.image_ready = Semaphore::new(&dev.device);
-                frame.buffer = Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
+                frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
             }
         }
 
@@ -171,7 +171,7 @@ pub fn main() {
                 // Only this semaphore must be recreated to avoid validation errors
                 // The image drawn one is still in use at the moment
                 frame.res.image_ready = Semaphore::new(&dev.device);
-                frame.buffer = Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
+                frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
             }
 
             continue 'running;
@@ -181,7 +181,6 @@ pub fn main() {
 
         let (width, height) = win.window.drawable_size();
         frame.begin(&pass, width, height);
-        frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
         frame.draw::<Line>(
             &line_pipeline,
             &model,
@@ -189,6 +188,7 @@ pub fn main() {
             lines,
             Handle::none(),
         );
+        frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
         frame.end();
 
         match sfs.present(&dev) {
@@ -204,7 +204,7 @@ pub fn main() {
                     frame.res.image_ready = Semaphore::new(&dev.device);
                     frame.res.image_drawn = Semaphore::new(&dev.device);
                     frame.buffer =
-                        Framebuffer::new(&mut dev, sfs.swapchain.images[i].clone(), &pass);
+                        Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
                 }
                 continue 'running;
             }

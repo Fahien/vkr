@@ -175,7 +175,7 @@ impl Drop for Surface {
 }
 
 pub struct Swapchain {
-    pub images: Vec<Rc<RefCell<Image>>>,
+    pub images: Vec<Image>,
     pub swapchain: ash::vk::SwapchainKHR,
     pub ext: ash::extensions::khr::Swapchain,
 }
@@ -222,13 +222,13 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Rc::new(RefCell::new(Image::unmanaged(
+            images.push(Image::unmanaged(
                 image,
                 width,
                 height,
                 dev.surface_format.format,
                 dev.surface_format.color_space,
-            ))));
+            ));
         }
 
         Self {

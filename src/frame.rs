@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use ash::{version::DeviceV1_0, *};
-use std::{borrow::Borrow, cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::*;
 
@@ -13,20 +13,17 @@ pub struct Framebuffer {
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: vk::Framebuffer,
     pub image_view: vk::ImageView,
-    pub image: Rc<RefCell<Image>>,
     device: Rc<Device>,
 }
 
 impl Framebuffer {
-    pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
-        let image_ref = image.deref().borrow();
-
+    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
         // Image view into a swapchain images (device, image, format)
         let image_view = {
             let create_info = vk::ImageViewCreateInfo::builder()
-                .image(image_ref.image)
+                .image(image.image)
                 .view_type(vk::ImageViewType::TYPE_2D)
-                .format(image_ref.format)
+                .format(image.format)
                 .components(
                     vk::ComponentMapping::builder()
                         .r(vk::ComponentSwizzle::IDENTITY)
@@ -55,8 +52,8 @@ impl Framebuffer {
             let create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
                 .attachments(&attachments)
-                .width(image_ref.extent.width)
-                .height(image_ref.extent.height)
+                .width(image.extent.width)
+                .height(image.extent.height)
                 .layers(1)
                 .build();
 
@@ -64,12 +61,9 @@ impl Framebuffer {
                 .expect("Failed to create Vulkan framebuffer")
         };
 
-        drop(image_ref);
-
         Self {
             framebuffer,
             image_view,
-            image,
             device: Rc::clone(&dev.device),
         }
     }
@@ -133,7 +127,6 @@ impl Frameres {
         }
     }
 }
-
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
@@ -143,7 +136,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
+    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
         let buffer = Framebuffer::new(dev, image, pass);
         let res = Frameres::new(dev);
 
@@ -390,7 +383,7 @@ impl SwapchainFrames {
 
         let mut frames = Vec::new();
         for image in swapchain.images.iter() {
-            let frame = Frame::new(dev, Rc::clone(image), pass);
+            let frame = Frame::new(dev, image, pass);
             frames.push(frame);
         }
 
