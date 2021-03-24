@@ -150,6 +150,8 @@ impl Drop for Descriptors {
 pub struct Framebuffer {
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: ash::vk::Framebuffer,
+    pub depth_view: ImageView,
+    pub depth_image: Image,
     pub image_view: ash::vk::ImageView,
     device: Rc<ash::Device>,
 }
@@ -187,6 +189,17 @@ impl Framebuffer {
             .expect("Failed to create Vulkan image view")
         };
 
+        let depth_format = ash::vk::Format::D32_SFLOAT;
+        let mut depth_image = Image::new(
+            &dev.allocator,
+            image.extent.width,
+            image.extent.height,
+            depth_format,
+        );
+        depth_image.transition(&dev, ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+        let depth_view = ImageView::new(&dev.device, &depth_image);
+
         // Framebuffers (image_view, renderpass)
         let framebuffer = {
             let attachments = [image_view];
@@ -209,6 +222,8 @@ impl Framebuffer {
 
         Self {
             framebuffer,
+            depth_view,
+            depth_image,
             image_view,
             device: Rc::clone(&dev.device),
         }
