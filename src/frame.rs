@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT;
 
 use crate::gfx::*;
-use std::rc::Rc;
 
 pub trait Frames {
     fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, ash::vk::Result>;
@@ -49,7 +48,7 @@ impl SwapchainFrames {
 
         let mut frames = Vec::new();
         for image in swapchain.images.iter() {
-            let frame = Frame::new(dev, Rc::clone(image), pass);
+            let frame = Frame::new(dev, image, pass);
             frames.push(frame);
         }
 

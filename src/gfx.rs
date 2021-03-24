@@ -151,20 +151,17 @@ pub struct Framebuffer {
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: ash::vk::Framebuffer,
     pub image_view: ash::vk::ImageView,
-    pub image: Rc<RefCell<Image>>,
     device: Rc<ash::Device>,
 }
 
 impl Framebuffer {
-    pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
-        let image_ref = image.deref().borrow();
-
+    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
         // Image view into a swapchain images (device, image, format)
         let image_view = {
             let create_info = ash::vk::ImageViewCreateInfo::builder()
-                .image(image_ref.image)
+                .image(image.image)
                 .view_type(ash::vk::ImageViewType::TYPE_2D)
-                .format(image_ref.format)
+                .format(image.format)
                 .components(
                     ash::vk::ComponentMapping::builder()
                         .r(ash::vk::ComponentSwizzle::IDENTITY)
@@ -197,8 +194,8 @@ impl Framebuffer {
             let create_info = ash::vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
                 .attachments(&attachments)
-                .width(image_ref.extent.width)
-                .height(image_ref.extent.height)
+                .width(image.extent.width)
+                .height(image.extent.height)
                 .layers(1)
                 .build();
 
@@ -210,12 +207,9 @@ impl Framebuffer {
             .expect("Failed to create Vulkan framebuffer")
         };
 
-        drop(image_ref);
-
         Self {
             framebuffer,
             image_view,
-            image,
             device: Rc::clone(&dev.device),
         }
     }
@@ -317,7 +311,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(dev: &mut Dev, image: Rc<RefCell<Image>>, pass: &Pass) -> Self {
+    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
         let buffer = Framebuffer::new(dev, image, pass);
         let res = Frameres::new(dev);
 
@@ -684,7 +678,7 @@ impl Drop for Surface {
 }
 
 pub struct Swapchain {
-    pub images: Vec<Rc<RefCell<Image>>>,
+    pub images: Vec<Image>,
     pub swapchain: ash::vk::SwapchainKHR,
     pub ext: ash::extensions::khr::Swapchain,
 }
@@ -731,13 +725,13 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Rc::new(RefCell::new(Image::unmanaged(
+            images.push(Image::unmanaged(
                 image,
                 width,
                 height,
                 dev.surface_format.format,
                 dev.surface_format.color_space,
-            ))));
+            ));
         }
 
         Self {
