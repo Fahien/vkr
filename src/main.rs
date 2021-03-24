@@ -63,23 +63,23 @@ pub fn main() {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
         let lines_vertices = vec![
             Point::new(
-                na::Vector3::new(-0.3, -0.3, 0.5),
+                na::Vector3::new(-0.5, -0.5, 0.0),
                 Color::new(1.0, 1.0, 0.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(0.3, -0.3, 0.5),
+                na::Vector3::new(0.5, -0.5, 0.0),
                 Color::new(0.2, 1.0, 1.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(0.3, 0.3, 0.5),
+                na::Vector3::new(0.5, 0.5, 0.0),
                 Color::new(0.1, 1.0, 0.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(-0.3, 0.3, 0.5),
+                na::Vector3::new(-0.5, 0.5, 0.0),
                 Color::new(1.0, 0.1, 1.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(-0.3, -0.3, 0.5),
+                na::Vector3::new(-0.5, -0.5, 0.0),
                 Color::new(1.0, 1.0, 0.0, 1.0),
             ),
         ];
@@ -92,8 +92,13 @@ pub fn main() {
 
     let mut model = Model::new();
 
-    let rect = model.nodes.push(Node::new());
-    let lines = model.nodes.push(Node::new());
+    let mut rect = Node::new();
+    rect.trs.translate(&na::Vector3::new(0.0, 0.0, 0.6));
+    let rect = model.nodes.push(rect);
+
+    let mut lines = Node::new();
+    lines.trs.scale(&na::Vector3::new(0.5, 0.5, 0.5));
+    let lines = model.nodes.push(lines);
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
 
