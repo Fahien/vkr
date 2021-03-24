@@ -281,8 +281,17 @@ impl Trs {
             .append_nonuniform_scaling(&self.scale)
     }
 
+    pub fn translate(&mut self, trs: &na::Vector3<f32>) {
+        let trs = na::Translation3::from(*trs);
+        self.model.append_translation_mut(&trs);
+    }
+
     pub fn rotate(&mut self, rot: &na::UnitQuaternion<f32>) {
         self.model.append_rotation_mut(rot);
+    }
+
+    pub fn scale(&mut self, scl: &na::Vector3<f32>) {
+        self.scale = *scl;
     }
 }
 
