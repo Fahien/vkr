@@ -423,7 +423,8 @@ pub struct Pass {
 impl Pass {
     pub fn new(dev: &mut Dev) -> Self {
         // Render pass (swapchain surface format, device)
-        let attachment = [ash::vk::AttachmentDescription::builder()
+        let color_attachment = ash::vk::AttachmentDescription::builder()
+            // @todo This format should come from a "framebuffer" object
             .format(dev.surface_format.format)
             .samples(ash::vk::SampleCountFlags::TYPE_1)
             .load_op(ash::vk::AttachmentLoadOp::CLEAR)
@@ -432,17 +433,39 @@ impl Pass {
             .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(ash::vk::ImageLayout::UNDEFINED)
             .final_layout(ash::vk::ImageLayout::PRESENT_SRC_KHR)
-            .build()];
+            .build();
 
-        let attach_refs = [ash::vk::AttachmentReference::builder()
+        let depth_attachment = ash::vk::AttachmentDescription::builder()
+            // @todo This format should come from a "framebuffer" object
+            .format(ash::vk::Format::D32_SFLOAT)
+            .samples(ash::vk::SampleCountFlags::TYPE_1)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(ash::vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(ash::vk::ImageLayout::UNDEFINED)
+            .final_layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let attachments = [color_attachment, depth_attachment];
+
+        let color_ref = ash::vk::AttachmentReference::builder()
             .attachment(0)
             .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .build()];
+            .build();
+
+        let depth_ref = ash::vk::AttachmentReference::builder()
+            .attachment(1)
+            .layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let color_refs = [color_ref];
 
         // Just one subpass
         let subpasses = [ash::vk::SubpassDescription::builder()
             .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&attach_refs)
+            .color_attachments(&color_refs)
+            .depth_stencil_attachment(&depth_ref)
             .build()];
 
         let present_dependency = ash::vk::SubpassDependency::builder()
@@ -458,7 +481,7 @@ impl Pass {
 
         // Build the render pass
         let create_info = ash::vk::RenderPassCreateInfo::builder()
-            .attachments(&attachment)
+            .attachments(&attachments)
             .subpasses(&subpasses)
             .dependencies(&dependencies)
             .build();
@@ -577,6 +600,14 @@ impl Pipeline {
                 .alpha_to_one_enable(false)
                 .build();
 
+            let depth_state = ash::vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(ash::vk::CompareOp::LESS)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .build();
+
             let blend_attachment = [ash::vk::PipelineColorBlendAttachmentState::builder()
                 .blend_enable(false)
                 .color_write_mask(ash::vk::ColorComponentFlags::all())
@@ -596,6 +627,7 @@ impl Pipeline {
                 .viewport_state(&view_state)
                 .rasterization_state(&raster_state)
                 .multisample_state(&multisample_state)
+                .depth_stencil_state(&depth_state)
                 .color_blend_state(&blend_state)
                 .render_pass(pass.render)
                 .subpass(0)

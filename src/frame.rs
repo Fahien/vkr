@@ -60,7 +60,7 @@ impl Framebuffer {
 
         // Framebuffers (image_view, renderpass)
         let framebuffer = {
-            let attachments = [image_view];
+            let attachments = [image_view, depth_view.view];
 
             let create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
@@ -142,12 +142,13 @@ impl Frameres {
         }
     }
 }
+
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
     /// A frame should be able to allocate a uniform buffer on draw
     allocator: Rc<RefCell<vk_mem::Allocator>>,
-    pub device: Rc<Device>,
+    pub device: Rc<ash::Device>,
 }
 
 impl Frame {
@@ -164,7 +165,7 @@ impl Frame {
     }
 
     pub fn begin(&self, pass: &Pass, width: u32, height: u32) {
-        let begin_info = vk::CommandBufferBeginInfo::builder().build();
+        let begin_info = ash::vk::CommandBufferBeginInfo::builder().build();
         unsafe {
             self.device
                 .begin_command_buffer(self.res.command_buffer, &begin_info)
@@ -172,28 +173,38 @@ impl Frame {
         .expect("Failed to begin Vulkan command buffer");
 
         // Needed by cmd_begin_render_pass
-        let area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::builder().x(0).y(0).build())
-            .extent(vk::Extent2D::builder().width(width).height(height).build())
+        let area = ash::vk::Rect2D::builder()
+            .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
+            .extent(
+                ash::vk::Extent2D::builder()
+                    .width(width)
+                    .height(height)
+                    .build(),
+            )
             .build();
 
-        let mut clear = vk::ClearValue::default();
-        clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
-        let clear_values = [clear];
-        let create_info = vk::RenderPassBeginInfo::builder()
+        let mut color_clear = ash::vk::ClearValue::default();
+        color_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
+
+        let mut depth_clear = ash::vk::ClearValue::default();
+        depth_clear.depth_stencil.depth = 1.0;
+        depth_clear.depth_stencil.stencil = 0;
+
+        let clear_values = [color_clear, depth_clear];
+        let create_info = ash::vk::RenderPassBeginInfo::builder()
             .framebuffer(self.buffer.framebuffer)
             .render_pass(pass.render)
             .render_area(area)
             .clear_values(&clear_values)
             .build();
         // Record it in the main command buffer
-        let contents = vk::SubpassContents::INLINE;
+        let contents = ash::vk::SubpassContents::INLINE;
         unsafe {
             self.device
                 .cmd_begin_render_pass(self.res.command_buffer, &create_info, contents)
         };
 
-        let viewports = [vk::Viewport::builder()
+        let viewports = [ash::vk::Viewport::builder()
             .width(width as f32)
             .height(height as f32)
             .build()];
@@ -202,8 +213,13 @@ impl Frame {
                 .cmd_set_viewport(self.res.command_buffer, 0, &viewports)
         };
 
-        let scissors = [vk::Rect2D::builder()
-            .extent(vk::Extent2D::builder().width(width).height(height).build())
+        let scissors = [ash::vk::Rect2D::builder()
+            .extent(
+                ash::vk::Extent2D::builder()
+                    .width(width)
+                    .height(height)
+                    .build(),
+            )
             .build()];
         unsafe {
             self.device
@@ -219,7 +235,7 @@ impl Frame {
         node: Handle<Node>,
         texture: Handle<Texture>,
     ) {
-        let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
+        let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.res.command_buffer,
@@ -247,7 +263,7 @@ impl Frame {
             // Create a new uniform buffer for this node's model matrix
             let mut ubo = Buffer::new::<na::Matrix4<f32>>(
                 &self.allocator,
-                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
             );
             ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
 
@@ -283,7 +299,7 @@ impl Frame {
 
         let first_binding = 0;
         let buffers = [primitive.vertices.buffer];
-        let offsets = [vk::DeviceSize::default()];
+        let offsets = [ash::vk::DeviceSize::default()];
         unsafe {
             self.device.cmd_bind_vertex_buffers(
                 self.res.command_buffer,
@@ -300,7 +316,7 @@ impl Frame {
                     self.res.command_buffer,
                     indices.buffer,
                     0,
-                    vk::IndexType::UINT16,
+                    ash::vk::IndexType::UINT16,
                 );
             }
             let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
@@ -331,7 +347,7 @@ impl Frame {
         dev: &Dev,
         swapchain: &Swapchain,
         image_index: u32,
-    ) -> Result<(), vk::Result> {
+    ) -> Result<(), ash::vk::Result> {
         dev.graphics_queue.submit_draw(
             &self.res.command_buffer,
             &self.res.image_ready,
