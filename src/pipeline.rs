@@ -115,6 +115,14 @@ impl Pipeline {
                 .alpha_to_one_enable(false)
                 .build();
 
+            let depth_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .build();
+
             let blend_attachment = [vk::PipelineColorBlendAttachmentState::builder()
                 .blend_enable(false)
                 .color_write_mask(vk::ColorComponentFlags::all())
@@ -134,6 +142,7 @@ impl Pipeline {
                 .viewport_state(&view_state)
                 .rasterization_state(&raster_state)
                 .multisample_state(&multisample_state)
+                .depth_stencil_state(&depth_state)
                 .color_blend_state(&blend_state)
                 .render_pass(pass.render)
                 .subpass(0)
@@ -196,3 +205,4 @@ impl Drop for Pipeline {
         }
     }
 }
+
