@@ -39,6 +39,22 @@ pub struct Image {
 }
 
 impl Image {
+    pub fn is_depth_format(format: vk::Format) -> bool {
+        format == vk::Format::D16_UNORM
+            || format == vk::Format::D16_UNORM_S8_UINT
+            || format == vk::Format::D24_UNORM_S8_UINT
+            || format == vk::Format::D32_SFLOAT
+            || format == vk::Format::D32_SFLOAT_S8_UINT
+    }
+
+    pub fn get_aspect_from_format(format: vk::Format) -> vk::ImageAspectFlags {
+        if Self::is_depth_format(format) {
+            vk::ImageAspectFlags::DEPTH
+        } else {
+            vk::ImageAspectFlags::COLOR
+        }
+    }
+
     pub fn unmanaged(
         image: ash::vk::Image,
         width: u32,
@@ -79,6 +95,13 @@ impl Image {
             .depth(1)
             .build();
 
+        let usage = if Image::is_depth_format(format) {
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+        } else {
+            // Default usage is as a texture
+            ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED
+        };
+
         let image_info = ash::vk::ImageCreateInfo::builder()
             .image_type(ash::vk::ImageType::TYPE_2D)
             .extent(extent)
@@ -87,7 +110,7 @@ impl Image {
             .tiling(ash::vk::ImageTiling::OPTIMAL)
             .format(format)
             .initial_layout(ash::vk::ImageLayout::UNDEFINED)
-            .usage(ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED)
+            .usage(usage)
             .sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
             .samples(ash::vk::SampleCountFlags::TYPE_1)
             .build();
@@ -123,6 +146,84 @@ impl Image {
         );
         image.copy_from(&staging, dev);
         image
+    }
+
+    pub fn transition(&mut self, dev: &Dev, new_layout: vk::ImageLayout) {
+        // @todo Use TRANSFER pool and transfer queue?
+        let command_buffer = unsafe {
+            let alloc_info = ash::vk::CommandBufferAllocateInfo::builder()
+                .command_pool(dev.graphics_command_pool)
+                .level(ash::vk::CommandBufferLevel::PRIMARY)
+                .command_buffer_count(1)
+                .build();
+            let buffers = dev
+                .device
+                .allocate_command_buffers(&alloc_info)
+                .expect("Failed to allocate Vulkan command buffer");
+            buffers[0]
+        };
+
+        unsafe {
+            let begin_info = ash::vk::CommandBufferBeginInfo::builder()
+                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                .build();
+            dev.device.begin_command_buffer(command_buffer, &begin_info)
+        }
+        .expect("Failed to begin Vulkan command buffer");
+
+        // Old layout -> New layout
+        unsafe {
+            let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
+            let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
+            let dependency_flags = ash::vk::DependencyFlags::default();
+            let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
+                .old_layout(self.layout)
+                .new_layout(new_layout)
+                .image(self.image)
+                .subresource_range(
+                    ash::vk::ImageSubresourceRange::builder()
+                        .aspect_mask(Image::get_aspect_from_format(self.format))
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1)
+                        .build(),
+                )
+                .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
+                .build()];
+            dev.device.cmd_pipeline_barrier(
+                command_buffer,
+                src_stage_mask,
+                dst_stage_mask,
+                dependency_flags,
+                &[],
+                &[],
+                &image_memory_barriers,
+            );
+
+            self.layout = new_layout;
+        }
+
+        // End
+        unsafe {
+            dev.device
+                .end_command_buffer(command_buffer)
+                .expect("Failed to end Vulkan command buffer");
+        }
+
+        let mut fence = Fence::unsignaled(&dev.device);
+
+        let submits = [ash::vk::SubmitInfo::builder()
+            .command_buffers(&[command_buffer])
+            .build()];
+        dev.graphics_queue.submit(&submits, Some(&mut fence));
+
+        fence.wait();
+
+        unsafe {
+            dev.device
+                .free_command_buffers(dev.graphics_command_pool, &[command_buffer]);
+        }
     }
 
     pub fn copy_from(&mut self, staging: &Buffer, dev: &Dev) {
@@ -284,13 +385,15 @@ impl ImageView {
     pub fn new(device: &Rc<Device>, image: &Image) -> Self {
         let device = device.clone();
 
+        let aspect = Image::get_aspect_from_format(image.format);
+
         let create_info = vk::ImageViewCreateInfo::builder()
             .image(image.image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(image.format)
             .subresource_range(
                 vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .aspect_mask(aspect)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
