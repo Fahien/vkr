@@ -63,23 +63,23 @@ pub fn main() {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
         let lines_vertices = vec![
             Point::new(
-                na::Vector3::new(-0.3, -0.3, 0.0),
+                na::Vector3::new(-0.3, -0.3, 0.5),
                 Color::new(1.0, 1.0, 0.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(0.3, -0.3, 0.0),
+                na::Vector3::new(0.3, -0.3, 0.5),
                 Color::new(0.2, 1.0, 1.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(0.3, 0.3, 0.0),
+                na::Vector3::new(0.3, 0.3, 0.5),
                 Color::new(0.1, 1.0, 0.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(-0.3, 0.3, 0.0),
+                na::Vector3::new(-0.3, 0.3, 0.5),
                 Color::new(1.0, 0.1, 1.0, 1.0),
             ),
             Point::new(
-                na::Vector3::new(-0.3, -0.3, 0.0),
+                na::Vector3::new(-0.3, -0.3, 0.5),
                 Color::new(1.0, 1.0, 0.0, 1.0),
             ),
         ];
