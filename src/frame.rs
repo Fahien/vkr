@@ -2,7 +2,10 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT;
 
-use crate::gfx::*;
+use super::gfx::*;
+use super::image::*;
+
+use ash::*;
 
 pub trait Frames {
     fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, ash::vk::Result>;
@@ -10,20 +13,36 @@ pub trait Frames {
 }
 
 /// Offscreen frames work on user allocated images
-struct OffscreenFrames {
-    _frames: Vec<Frame>,
-    _images: Vec<ash::vk::Image>,
+pub struct OffscreenFrames {
+    frames: Vec<Frame>,
+    pub images: Vec<Image>,
+}
+
+impl OffscreenFrames {
+    pub fn new(dev: &mut Dev, width: u32, height: u32, pass: &Pass) -> Self {
+        let format = vk::Format::R8G8B8A8_SRGB;
+        let usage = vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC;
+        let image = Image::new(&dev.allocator, width, height, format, usage);
+        let frame = Frame::new(dev, &image, pass);
+
+        Self {
+            frames: vec![frame],
+            images: vec![image],
+        }
+    }
 }
 
 impl Frames for OffscreenFrames {
     fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, ash::vk::Result> {
-        // Unimplemented
-        Err(ash::vk::Result::ERROR_UNKNOWN)
+        // Wait for this frame to be ready
+        let frame = &mut self.frames[0];
+        frame.res.wait();
+        Ok(frame)
     }
 
-    fn present(&mut self, _dev: &Dev) -> Result<(), ash::vk::Result> {
-        // Unimplemented
-        Err(ash::vk::Result::ERROR_UNKNOWN)
+    fn present(&mut self, dev: &Dev) -> Result<(), ash::vk::Result> {
+        self.frames[0].submit(dev);
+        Ok(())
     }
 }
 

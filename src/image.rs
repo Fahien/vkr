@@ -4,7 +4,7 @@
 
 use std::{cell::RefCell, fs::File, path::Path, rc::Rc};
 
-use ash::{version::DeviceV1_0, *};
+use ash::{version::DeviceV1_0, vk::CommandBuffer, *};
 
 use super::*;
 
@@ -30,7 +30,7 @@ pub struct Image {
     /// Whether this image is manages and should be freed, or not (like swapchain images)
     managed: bool,
     pub image: ash::vk::Image,
-    layout: ash::vk::ImageLayout,
+    pub layout: ash::vk::ImageLayout,
     pub extent: ash::vk::Extent3D,
     pub format: ash::vk::Format,
     pub color_space: ash::vk::ColorSpaceKHR,
@@ -86,6 +86,7 @@ impl Image {
         width: u32,
         height: u32,
         format: ash::vk::Format,
+        usage: ash::vk::ImageUsageFlags,
     ) -> Self {
         let allocator = allocator.clone();
 
@@ -95,12 +96,12 @@ impl Image {
             .depth(1)
             .build();
 
-        let usage = if Image::is_depth_format(format) {
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-        } else {
-            // Default usage is as a texture
-            ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED
-        };
+        // let usage = if Image::is_depth_format(format) {
+        //     vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+        // } else {
+        //     // Default usage is as a texture
+        //     ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED
+        // };
 
         let image_info = ash::vk::ImageCreateInfo::builder()
             .image_type(ash::vk::ImageType::TYPE_2D)
@@ -138,16 +139,61 @@ impl Image {
     pub fn load(dev: &Dev, path: &str) -> Self {
         let mut png = Png::open(path);
         let staging = Buffer::load(&dev.allocator, &mut png);
+        let usage = ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED;
         let mut image = Image::new(
             &dev.allocator,
             png.info.width,
             png.info.height,
             vk::Format::R8G8B8A8_SRGB,
+            usage,
         );
         image.copy_from(&staging, dev);
         image
     }
 
+    // @todo Better name?
+    pub fn transition_barrier(
+        &mut self,
+        new_layout: ash::vk::ImageLayout,
+        dev: &Dev,
+        command_buffer: ash::vk::CommandBuffer,
+    ) {
+        // Old layout -> New layout
+        let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
+        let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
+        let dependency_flags = ash::vk::DependencyFlags::default();
+        let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
+            .old_layout(self.layout)
+            .new_layout(new_layout)
+            .image(self.image)
+            .subresource_range(
+                ash::vk::ImageSubresourceRange::builder()
+                    .aspect_mask(Image::get_aspect_from_format(self.format))
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
+            .build()];
+
+        unsafe {
+            dev.device.cmd_pipeline_barrier(
+                command_buffer,
+                src_stage_mask,
+                dst_stage_mask,
+                dependency_flags,
+                &[],
+                &[],
+                &image_memory_barriers,
+            );
+        }
+
+        self.layout = new_layout;
+    }
+
+    // @todo Better name?
     pub fn transition(&mut self, dev: &Dev, new_layout: vk::ImageLayout) {
         // @todo Use TRANSFER pool and transfer queue?
         let command_buffer = unsafe {
@@ -171,38 +217,7 @@ impl Image {
         }
         .expect("Failed to begin Vulkan command buffer");
 
-        // Old layout -> New layout
-        unsafe {
-            let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
-            let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
-            let dependency_flags = ash::vk::DependencyFlags::default();
-            let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
-                .old_layout(self.layout)
-                .new_layout(new_layout)
-                .image(self.image)
-                .subresource_range(
-                    ash::vk::ImageSubresourceRange::builder()
-                        .aspect_mask(Image::get_aspect_from_format(self.format))
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build(),
-                )
-                .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
-                .build()];
-            dev.device.cmd_pipeline_barrier(
-                command_buffer,
-                src_stage_mask,
-                dst_stage_mask,
-                dependency_flags,
-                &[],
-                &[],
-                &image_memory_barriers,
-            );
-
-            self.layout = new_layout;
-        }
+        self.transition_barrier(new_layout, dev, command_buffer);
 
         // End
         unsafe {

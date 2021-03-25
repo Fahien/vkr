@@ -2,6 +2,8 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use std::{fs::File, io::BufWriter, path::Path};
+
 use nalgebra as na;
 use sdl::{event::Event, keyboard::Keycode};
 use sdl2 as sdl;
@@ -36,17 +38,17 @@ use gfx::*;
 pub fn main() {
     let mut timer = Timer::new();
 
-    let win = Win::new();
-    let (width, height) = win.window.drawable_size();
+    //let win = Win::new();
+    let (width, height) = (600, 600); //win.window.drawable_size();
 
-    let vkr = Vkr::new(&win);
+    let vkr = Vkr::headless();
 
-    let surface = Surface::new(&win, &vkr.ctx);
-    let mut dev = Dev::new(&vkr.ctx, &surface);
+    let mut dev = Dev::new(&vkr.ctx, None);
 
     let pass = Pass::new(&mut dev);
 
-    let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
+    let mut sfs = OffscreenFrames::new(&mut dev, width, height, &pass);
+    println!("Offscreen created");
 
     let line_pipeline = Pipeline::line(&mut dev, &pass, width, height);
 
@@ -91,8 +93,6 @@ pub fn main() {
     lines.trs.scale(&na::Vector3::new(0.5, 0.5, 0.5));
     let lines = model.nodes.push(lines);
 
-    let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
-
     let image = Image::load(&dev, "res/image/test.png");
 
     let view = ImageView::new(&dev.device, &image);
@@ -106,110 +106,48 @@ pub fn main() {
     let texture = Texture::new(view, sampler);
     let texture = model.textures.push(texture);
 
-    'running: loop {
-        let mut resized = false;
+    let delta = timer.get_delta().as_secs_f32();
+    let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
+    model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+    let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
+    model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
-        // Handle events
-        for event in events.poll_iter() {
-            match event {
-                Event::Window {
-                    win_event: sdl::event::WindowEvent::Resized(_, _),
-                    ..
-                }
-                | Event::Window {
-                    win_event: sdl::event::WindowEvent::SizeChanged(_, _),
-                    ..
-                } => {
-                    resized = true;
-                }
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'running,
-                _ => {}
-            }
-        }
+    println!("Next frame");
+    let frame = sfs.next_frame();
+    let frame = frame.unwrap();
 
-        let delta = timer.get_delta().as_secs_f32();
-        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
-        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
-        model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+    frame.begin(&pass, width, height);
+    frame.draw::<Line>(
+        &line_pipeline,
+        &model,
+        &lines_primitive,
+        lines,
+        Handle::none(),
+    );
+    frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
+    frame.end();
+    println!("Submitting");
+    frame.submit(&dev);
 
-        if resized {
-            dev.wait();
-            drop(sfs.swapchain);
-            // Current must be reset to avoid LAYOUT_UNDEFINED validation errors
-            sfs.current = 0;
-            let (width, height) = win.window.drawable_size();
-            sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
-            for i in 0..sfs.swapchain.images.len() {
-                let frame = &mut sfs.frames[i];
-                // Only this semaphore must be recreated to avoid validation errors
-                // The image drawn one is still in use at the moment
-                frame.res.image_ready = Semaphore::new(&dev.device);
-                frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
-            }
-        }
+    println!("Waiting for fence");
+    frame.res.fence.wait();
 
-        let frame = sfs.next_frame();
+    // Read image
+    let image = &mut sfs.images[0];
+    let mut buffer = Buffer::copy_from(&dev, image);
 
-        if frame.is_err() {
-            let result = frame.err().unwrap();
-            if result != ash::vk::Result::ERROR_OUT_OF_DATE_KHR {
-                panic!("{:?}", result);
-            }
+    let path = Path::new(r"res/image/screenshot.png");
+    let file = File::create(path).unwrap();
+    let ref mut w = BufWriter::new(file);
 
-            dev.wait();
-            drop(sfs.swapchain);
-            let (width, height) = win.window.drawable_size();
-            sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
-            for i in 0..sfs.swapchain.images.len() {
-                let frame = &mut sfs.frames[i];
-                // Only this semaphore must be recreated to avoid validation errors
-                // The image drawn one is still in use at the moment
-                frame.res.image_ready = Semaphore::new(&dev.device);
-                frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
-            }
+    let mut encoder = png::Encoder::new(w, image.extent.width, image.extent.height);
+    encoder.set_color(png::ColorType::RGBA);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
 
-            continue 'running;
-        };
-
-        let frame = frame.unwrap();
-
-        let (width, height) = win.window.drawable_size();
-        frame.begin(&pass, width, height);
-        frame.draw::<Line>(
-            &line_pipeline,
-            &model,
-            &lines_primitive,
-            lines,
-            Handle::none(),
-        );
-        frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
-        frame.end();
-
-        match sfs.present(&dev) {
-            // Recreate swapchain
-            Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                dev.wait();
-                drop(sfs.swapchain);
-                let (width, height) = win.window.drawable_size();
-                sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
-                for i in 0..sfs.swapchain.images.len() {
-                    let frame = &mut sfs.frames[i];
-                    // Semaphores must be recreated to avoid validation errors
-                    frame.res.image_ready = Semaphore::new(&dev.device);
-                    frame.res.image_drawn = Semaphore::new(&dev.device);
-                    frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
-                }
-                continue 'running;
-            }
-            Err(result) => panic!("{:?}", result),
-            _ => (),
-        }
-    }
+    let data = buffer.map();
+    writer.write_image_data(data).unwrap();
+    buffer.unmap();
 
     // Make sure device is idle before releasing Vulkan resources
     dev.wait();

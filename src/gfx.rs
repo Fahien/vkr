@@ -4,7 +4,7 @@
 
 use ash::{
     extensions::ext::DebugReport,
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    version::{DeviceV1_0, DeviceV1_2, EntryV1_0, InstanceV1_0},
     vk::Handle,
 };
 use nalgebra as na;
@@ -190,11 +190,13 @@ impl Framebuffer {
         };
 
         let depth_format = ash::vk::Format::D32_SFLOAT;
+        let depth_usage = ash::vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
         let mut depth_image = Image::new(
             &dev.allocator,
             image.extent.width,
             image.extent.height,
             depth_format,
+            depth_usage,
         );
         depth_image.transition(&dev, ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
@@ -514,6 +516,15 @@ impl Frame {
         }
     }
 
+    pub fn submit(&mut self, dev: &Dev) {
+        dev.graphics_queue.submit_draw(
+            &self.res.command_buffer,
+            None,
+            &self.res.image_drawn,
+            Some(&mut self.res.fence),
+        );
+    }
+
     pub fn present(
         &mut self,
         dev: &Dev,
@@ -522,7 +533,7 @@ impl Frame {
     ) -> Result<(), ash::vk::Result> {
         dev.graphics_queue.submit_draw(
             &self.res.command_buffer,
-            &self.res.image_ready,
+            Some(&self.res.image_ready),
             &self.res.image_drawn,
             Some(&mut self.res.fence),
         );
@@ -620,6 +631,28 @@ pub struct Ctx {
 }
 
 impl Ctx {
+    pub fn headless() -> Self {
+        // @todo Refactor common code
+        let extensions_names = vec![DebugReport::name().as_ptr()];
+        let layers = [CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
+        let layer_names: Vec<*const i8> = layers.iter().map(|name| name.as_ptr()).collect();
+
+        let entry = ash::Entry::new().expect("Failed to create ash entry");
+        let app_info = ash::vk::ApplicationInfo {
+            p_application_name: "Test" as *const str as _,
+            api_version: ash::vk::make_version(1, 0, 0),
+            ..Default::default()
+        };
+        let create_info = ash::vk::InstanceCreateInfo::builder()
+            .application_info(&app_info)
+            .enabled_extension_names(&extensions_names)
+            .enabled_layer_names(&layer_names);
+        let instance = unsafe { entry.create_instance(&create_info, None) }
+            .expect("Failed to create Vulkan instance");
+
+        Self { entry, instance }
+    }
+
     pub fn new(win: &Win) -> Self {
         let extensions = win
             .window
@@ -655,6 +688,13 @@ pub struct Vkr {
 }
 
 impl Vkr {
+    pub fn headless() -> Self {
+        let ctx = Ctx::headless();
+        let debug = Debug::new(&ctx);
+
+        Self { ctx, debug }
+    }
+
     pub fn new(win: &Win) -> Self {
         let ctx = Ctx::new(win);
         let debug = Debug::new(&ctx);
@@ -786,7 +826,7 @@ impl Dev {
     fn get_graphics_queue_index(
         instance: &ash::Instance,
         physical: ash::vk::PhysicalDevice,
-        surface: &Surface,
+        surface: Option<&Surface>,
     ) -> u32 {
         // Queue information (instance, physical device)
         let queue_properties =
@@ -795,12 +835,19 @@ impl Dev {
         let mut graphics_queue_index = std::u32::MAX;
 
         for (i, queue) in queue_properties.iter().enumerate() {
-            let supports_presentation = unsafe {
-                surface
-                    .ext
-                    .get_physical_device_surface_support(physical, i as u32, surface.surface)
-            }
-            .expect("Failed to check presentation support for Vulkan physical device");
+            // @todo Extract method
+            let supports_presentation = if let Some(surface) = surface {
+                unsafe {
+                    surface.ext.get_physical_device_surface_support(
+                        physical,
+                        i as u32,
+                        surface.surface,
+                    )
+                }
+                .expect("Failed to check presentation support for Vulkan physical device")
+            } else {
+                true
+            };
             if queue.queue_flags.contains(ash::vk::QueueFlags::GRAPHICS) && supports_presentation {
                 graphics_queue_index = i as u32;
                 break;
@@ -815,7 +862,7 @@ impl Dev {
         graphics_queue_index
     }
 
-    pub fn new(ctx: &Ctx, surface: &Surface) -> Self {
+    pub fn new(ctx: &Ctx, surface: Option<&Surface>) -> Self {
         // Physical device
         let physical = {
             let phydevs = unsafe {
@@ -856,7 +903,9 @@ impl Dev {
                 .unwrap();
             println!("\t{}", name);
         }
-        enabled_extensions.push(ash::extensions::khr::Swapchain::name().as_ptr());
+        if surface.is_some() {
+            enabled_extensions.push(ash::extensions::khr::Swapchain::name().as_ptr());
+        }
 
         let device_create_info = ash::vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_infos)
@@ -884,7 +933,7 @@ impl Dev {
         };
 
         // Surface format
-        let surface_format = {
+        let surface_format = if let Some(surface) = surface {
             let surface_formats = unsafe {
                 surface
                     .ext
@@ -893,6 +942,11 @@ impl Dev {
             .expect("Failed to get Vulkan physical device surface formats");
 
             surface_formats[1]
+        } else {
+            ash::vk::SurfaceFormatKHR::builder()
+                .color_space(ash::vk::ColorSpaceKHR::SRGB_NONLINEAR)
+                .format(ash::vk::Format::R8G8B8A8_SRGB)
+                .build()
         };
         println!("Surface format: {:?}", surface_format.format);
 
@@ -1264,6 +1318,21 @@ impl Buffer {
         (buffer, allocation)
     }
 
+    pub fn map<'a>(&'a mut self) -> &'a [u8] {
+        let alloc = self.allocator.deref().borrow();
+        unsafe {
+            let data = alloc
+                .map_memory(&self.allocation)
+                .expect("Failed to map Vulkan memory");
+            std::slice::from_raw_parts_mut(data, self.size as usize)
+        }
+    }
+
+    pub fn unmap(&self) {
+        let alloc = self.allocator.deref().borrow();
+        alloc.unmap_memory(&self.allocation);
+    }
+
     /// Loads data from a png image in `path` directly into a staging buffer
     pub fn load(allocator: &Rc<RefCell<vk_mem::Allocator>>, png: &mut Png) -> Self {
         let size = png.info.buffer_size();
@@ -1298,12 +1367,11 @@ impl Buffer {
         }
     }
 
-    pub fn new<T>(
+    pub fn new_with_size(
         allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        size: ash::vk::DeviceSize,
         usage: ash::vk::BufferUsageFlags,
     ) -> Self {
-        let size = std::mem::size_of::<T>() as ash::vk::DeviceSize;
-
         let (buffer, allocation) = Self::create_buffer(&allocator.deref().borrow(), size, usage);
 
         Self {
@@ -1313,6 +1381,14 @@ impl Buffer {
             usage,
             allocator: allocator.clone(),
         }
+    }
+
+    pub fn new<T>(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        usage: ash::vk::BufferUsageFlags,
+    ) -> Self {
+        let size = std::mem::size_of::<T>() as ash::vk::DeviceSize;
+        Self::new_with_size(allocator, size, usage)
     }
 
     pub fn upload<T>(&mut self, data: &T) {
@@ -1345,6 +1421,83 @@ impl Buffer {
         }
 
         self.upload_raw(arr.as_ptr(), size);
+    }
+
+    pub fn copy_from(dev: &Dev, image: &mut Image) -> Self {
+        let size = (image.extent.width * image.extent.height * 4) as ash::vk::DeviceSize; // bytes
+        let usage = ash::vk::BufferUsageFlags::TRANSFER_DST;
+        let mut buffer = Self::new_with_size(&dev.allocator, size, usage);
+
+        // @todo Use TRANSFER pool and transfer queue
+        let command_buffer = unsafe {
+            let alloc_info = ash::vk::CommandBufferAllocateInfo::builder()
+                .command_pool(dev.graphics_command_pool)
+                .level(ash::vk::CommandBufferLevel::PRIMARY)
+                .command_buffer_count(1)
+                .build();
+            let buffers = dev
+                .device
+                .allocate_command_buffers(&alloc_info)
+                .expect("Failed to allocate Vulkan command buffer");
+            buffers[0]
+        };
+
+        unsafe {
+            let begin_info = ash::vk::CommandBufferBeginInfo::builder()
+                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                .build();
+            dev.device.begin_command_buffer(command_buffer, &begin_info)
+        }
+        .expect("Failed to begin Vulkan command buffer");
+
+        image.transition_barrier(
+            ash::vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            dev,
+            command_buffer,
+        );
+
+        // Copy
+        unsafe {
+            let regions = vec![ash::vk::BufferImageCopy::builder()
+                .image_subresource(
+                    ash::vk::ImageSubresourceLayers::builder()
+                        .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
+                        .layer_count(1)
+                        .build(),
+                )
+                .image_extent(image.extent)
+                .build()];
+            dev.device.cmd_copy_image_to_buffer(
+                command_buffer,
+                image.image,
+                image.layout,
+                buffer.buffer,
+                &regions,
+            );
+        }
+
+        // End
+        unsafe {
+            dev.device
+                .end_command_buffer(command_buffer)
+                .expect("Failed to end Vulkan command buffer");
+        }
+
+        let mut fence = Fence::unsignaled(&dev.device);
+
+        let submits = [ash::vk::SubmitInfo::builder()
+            .command_buffers(&[command_buffer])
+            .build()];
+        dev.graphics_queue.submit(&submits, Some(&mut fence));
+
+        fence.wait();
+
+        unsafe {
+            dev.device
+                .free_command_buffers(dev.graphics_command_pool, &[command_buffer]);
+        }
+
+        buffer
     }
 }
 
