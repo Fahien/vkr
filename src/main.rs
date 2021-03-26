@@ -196,6 +196,7 @@ pub fn main() {
 
         let (width, height) = win.window.drawable_size();
         frame.begin(&pass, width, height);
+        frame.bind(&mut line_pipeline, &model, camera_node);
         frame.draw::<Line>(
             &mut line_pipeline,
             &model,
@@ -203,6 +204,7 @@ pub fn main() {
             lines,
             Handle::none(),
         );
+        frame.bind(&mut triangle_pipeline, &model, camera_node);
         frame.draw::<Vertex>(
             &mut triangle_pipeline,
             &model,
