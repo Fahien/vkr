@@ -242,30 +242,6 @@ impl Drop for Framebuffer {
     }
 }
 
-pub struct Semaphore {
-    pub semaphore: ash::vk::Semaphore,
-    device: Rc<ash::Device>,
-}
-
-impl Semaphore {
-    pub fn new(device: &Rc<ash::Device>) -> Self {
-        let create_info = ash::vk::SemaphoreCreateInfo::builder().build();
-        let semaphore = unsafe { device.create_semaphore(&create_info, None) }
-            .expect("Failed to create Vulkan semaphore");
-
-        Self {
-            semaphore,
-            device: device.clone(),
-        }
-    }
-}
-
-impl Drop for Semaphore {
-    fn drop(&mut self) {
-        unsafe { self.device.destroy_semaphore(self.semaphore, None) };
-    }
-}
-
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
