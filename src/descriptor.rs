@@ -8,53 +8,57 @@ use ash::{version::DeviceV1_0, *};
 
 use super::*;
 
+type SetCache = HashMap<(vk::PipelineLayout, Handle<Node>), Vec<vk::DescriptorSet>>;
+
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
 pub struct Descriptors {
+    /// These descriptor sets are for camera view and proj uniform, therefore we need NxM descriptor sets
+    /// where N is the number of pipeline layouts, and M is the number of nodes with cameras
+    pub view_sets: SetCache,
+
     /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the node with the model matrix
-    pub sets: HashMap<(vk::PipelineLayout, Handle<Node>), Vec<vk::DescriptorSet>>,
+    pub model_sets: SetCache,
+
     /// Descriptor pools should be per-pipeline layout as weel as they could differ in terms of uniforms and samplers?
     /// Or can we provide sufficient descriptors for all supported pipeline layouts? Trying this approach.
     pool: vk::DescriptorPool,
+
     device: Rc<Device>,
 }
 
 impl Descriptors {
     pub fn new(dev: &mut Dev) -> Self {
         let pool = unsafe {
-            // 2 uniform buffers, one for the line pipeline andd one for the main pipeline
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(2)
+                .descriptor_count(2) // Support 1 model matrix and 1 view matrix?
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
-            // 1 sampler for the main pipeline
             let sampler_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(1)
+                .descriptor_count(1) // Support 1 material?
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
             let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
-                // Support 2 frames?
-                .max_sets(2)
+                // @todo Use a parameter instead of 2 for frame count
+                .max_sets(2 * 2) // Support 2 frames with 2 pipelines
                 .build();
             dev.device.create_descriptor_pool(&create_info, None)
         }
         .expect("Failed to create Vulkan descriptor pool");
 
         Self {
-            sets: HashMap::new(),
+            view_sets: HashMap::new(),
+            model_sets: HashMap::new(),
             pool,
             device: dev.device.clone(),
         }
     }
 
-    pub fn allocate(
-        &mut self,
-        layouts: &[vk::DescriptorSetLayout],
-    ) -> Vec<vk::DescriptorSet> {
+    pub fn allocate(&mut self, layouts: &[vk::DescriptorSetLayout]) -> Vec<vk::DescriptorSet> {
         let create_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(self.pool)
             .set_layouts(layouts)

@@ -506,7 +506,7 @@ impl Drop for Pass {
 pub struct Pipeline {
     pub graphics: ash::vk::Pipeline,
     pub layout: ash::vk::PipelineLayout,
-    pub set_layout: ash::vk::DescriptorSetLayout,
+    pub set_layouts: Vec<ash::vk::DescriptorSetLayout>,
     device: Rc<ash::Device>,
 }
 
@@ -520,18 +520,7 @@ impl Pipeline {
         width: u32,
         height: u32,
     ) -> Self {
-        let layout_bindings = T::get_set_layout_bindings();
-        let set_layout_info = ash::vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&layout_bindings)
-            .build();
-
-        let set_layout = unsafe {
-            dev.device
-                .create_descriptor_set_layout(&set_layout_info, None)
-        }
-        .expect("Failed to create Vulkan descriptor set layout");
-
-        let set_layouts = vec![set_layout];
+        let set_layouts = T::get_set_layouts(&dev.device);
 
         // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
@@ -647,7 +636,7 @@ impl Pipeline {
 
         Self {
             graphics,
-            set_layout,
+            set_layouts,
             layout,
             device: Rc::clone(&dev.device),
         }
@@ -687,8 +676,9 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         unsafe {
-            self.device
-                .destroy_descriptor_set_layout(self.set_layout, None);
+            for set_layout in &self.set_layouts {
+                self.device.destroy_descriptor_set_layout(*set_layout, None);
+            }
             self.device.destroy_pipeline_layout(self.layout, None);
             self.device.destroy_pipeline(self.graphics, None);
         }
