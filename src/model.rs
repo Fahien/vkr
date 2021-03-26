@@ -294,9 +294,35 @@ impl Trs {
     }
 }
 
+pub struct Camera {
+    pub proj: na::Matrix4<f32>,
+}
+
+impl Camera {
+    pub fn perspective(aspect: f32, fovy: f32, znear: f32, zfar: f32) -> Self {
+        Self {
+            proj: na::Perspective3::new(aspect, fovy, znear, zfar).to_homogeneous(),
+        }
+    }
+
+    pub fn orthographic(
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        znear: f32,
+        zfar: f32,
+    ) -> Self {
+        Self {
+            proj: na::Orthographic3::new(left, right, bottom, top, znear, zfar).to_homogeneous(),
+        }
+    }
+}
+
 pub struct Node {
     pub trs: Trs,
     pub children: Vec<Handle<Node>>,
+    pub camera: Handle<Camera>,
 }
 
 impl Node {
@@ -304,11 +330,13 @@ impl Node {
         Node {
             trs: Trs::new(),
             children: vec![],
+            camera: Handle::none(),
         }
     }
 }
 
 pub struct Model {
+    pub cameras: Pack<Camera>,
     pub nodes: Pack<Node>,
     pub images: Pack<Image>,
     pub views: Pack<ImageView>,
@@ -319,6 +347,7 @@ pub struct Model {
 impl Model {
     pub fn new() -> Self {
         Self {
+            cameras: Pack::new(),
             nodes: Pack::new(),
             images: Pack::new(),
             views: Pack::new(),
