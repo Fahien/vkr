@@ -82,44 +82,51 @@ impl Primitive {
     }
 }
 
+type SetCache = HashMap<(ash::vk::PipelineLayout, util::Handle<Node>), Vec<ash::vk::DescriptorSet>>;
+
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
 struct Descriptors {
+    /// These descriptor sets are for camera view and proj uniform, therefore we need NxM descriptor sets
+    /// where N is the number of pipeline layouts, and M is the number of nodes with cameras
+    view_sets: SetCache,
+
     /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the node with the model matrix
-    sets: HashMap<(ash::vk::PipelineLayout, util::Handle<Node>), Vec<ash::vk::DescriptorSet>>,
+    model_sets: SetCache,
+
     /// Descriptor pools should be per-pipeline layout as weel as they could differ in terms of uniforms and samplers?
     /// Or can we provide sufficient descriptors for all supported pipeline layouts? Trying this approach.
     pool: ash::vk::DescriptorPool,
+
     device: Rc<ash::Device>,
 }
 
 impl Descriptors {
     pub fn new(dev: &mut Dev) -> Self {
         let pool = unsafe {
-            // 2 uniform buffers, one for the line pipeline andd one for the main pipeline
             let uniform_pool_size = ash::vk::DescriptorPoolSize::builder()
-                .descriptor_count(2)
+                .descriptor_count(2) // Support 1 model matrix and 1 view matrix?
                 .ty(ash::vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
-            // 1 sampler for the main pipeline
             let sampler_pool_size = ash::vk::DescriptorPoolSize::builder()
-                .descriptor_count(1)
+                .descriptor_count(1) // Support 1 material?
                 .ty(ash::vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
             let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
             let create_info = ash::vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
-                // Support 2 frames?
-                .max_sets(2)
+                // @todo Use a parameter instead of 2 for frame count
+                .max_sets(2 * 2) // Support 2 frames with 2 pipelines
                 .build();
             dev.device.create_descriptor_pool(&create_info, None)
         }
         .expect("Failed to create Vulkan descriptor pool");
 
         Self {
-            sets: HashMap::new(),
+            view_sets: HashMap::new(),
+            model_sets: HashMap::new(),
             pool,
             device: dev.device.clone(),
         }
@@ -242,11 +249,17 @@ impl Drop for Framebuffer {
     }
 }
 
+type BufferCache = HashMap<util::Handle<Node>, Buffer>;
+
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
-    /// Uniform buffers for model matrix are associated to nodes
-    ubos: HashMap<util::Handle<Node>, Buffer>,
+    /// Uniform buffers for model matrices associated to nodes
+    model_buffers: BufferCache,
+
+    /// Uniform buffers for view matrices associated to nodes with cameras
+    view_buffers: BufferCache,
+
     descriptors: Descriptors,
     pub command_buffer: ash::vk::CommandBuffer,
     pub fence: Fence,
@@ -276,7 +289,8 @@ impl Frameres {
         let fence = Fence::signaled(&dev.device);
 
         Self {
-            ubos: HashMap::new(),
+            model_buffers: HashMap::new(),
+            view_buffers: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
@@ -377,6 +391,75 @@ impl Frame {
         }
     }
 
+    pub fn bind(&mut self, pipeline: &Pipeline, model: &Model, camera_node: util::Handle<Node>) {
+        let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
+        unsafe {
+            self.device.cmd_bind_pipeline(
+                self.res.command_buffer,
+                graphics_bind_point,
+                pipeline.graphics,
+            );
+        }
+
+        let node = model.nodes.get(camera_node).unwrap();
+        assert!(model.cameras.get(node.camera).is_some());
+
+        if let Some(sets) = self
+            .res
+            .descriptors
+            .view_sets
+            .get(&(pipeline.layout, camera_node))
+        {
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    1,
+                    sets,
+                    &[],
+                )
+            };
+
+            // If there is a descriptor set, there must be a buffer
+            let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
+            view_buffer.upload(&node.trs.get_view_matrix());
+        } else {
+            // Allocate and write desc set for camera view
+            let sets = self.res.descriptors.allocate(&[pipeline.camera_set_layout]);
+
+            if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
+                // Buffer already there, just make the set pointing to it
+                Camera::write_set(self.device.borrow(), sets[0], &view_buffer);
+            } else {
+                // Create a new buffer for this node's view matrix
+                let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
+                    &self.allocator,
+                    ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+                );
+                view_buffer.upload(&node.trs.get_view_matrix());
+                Camera::write_set(self.device.borrow(), sets[0], &view_buffer);
+                self.res.view_buffers.insert(camera_node, view_buffer);
+            }
+
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    1,
+                    &sets,
+                    &[],
+                );
+            }
+
+            self.res
+                .descriptors
+                .view_sets
+                .insert((pipeline.layout, camera_node), sets);
+        }
+    }
+
     pub fn draw<T: VertexInput>(
         &mut self,
         pipeline: &Pipeline,
@@ -394,7 +477,14 @@ impl Frame {
             );
         }
 
-        if let Some(sets) = self.res.descriptors.sets.get(&(pipeline.layout, node)) {
+        let cnode = model.nodes.get(node).unwrap();
+
+        if let Some(sets) = self
+            .res
+            .descriptors
+            .model_sets
+            .get(&(pipeline.layout, node))
+        {
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
@@ -407,14 +497,15 @@ impl Frame {
             }
 
             // If there is a descriptor set, there must be a uniform buffer
-            let ubo = self.res.ubos.get_mut(&node).unwrap();
-            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
+            let ubo = self.res.model_buffers.get_mut(&node).unwrap();
+            ubo.upload(&cnode.trs.get_matrix());
         } else {
             // Create a new uniform buffer for this node's model matrix
-            let mut ubo =
-                Buffer::new::<na::Matrix4<f32>>(&self.allocator, ash::vk::BufferUsageFlags::UNIFORM_BUFFER);
-
-            let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
+            let mut model_buffer = Buffer::new::<na::Matrix4<f32>>(
+                &self.allocator,
+                ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+            );
+            model_buffer.upload(&cnode.trs.get_matrix());
 
             let texture = model.textures.get(texture);
             let (view, sampler) = match texture {
@@ -424,7 +515,10 @@ impl Frame {
                 ),
                 _ => (None, None),
             };
-            T::write_set(self.device.borrow(), sets[0], &ubo, view, sampler);
+
+            // Allocate and write descriptors
+            let sets = self.res.descriptors.allocate(&[pipeline.model_set_layout]);
+            T::write_set(self.device.borrow(), sets[0], &model_buffer, view, sampler);
 
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
@@ -437,10 +531,10 @@ impl Frame {
                 );
             }
 
-            self.res.ubos.insert(node, ubo);
+            self.res.model_buffers.insert(node, model_buffer);
             self.res
                 .descriptors
-                .sets
+                .model_sets
                 .insert((pipeline.layout, node), sets);
         }
 
@@ -1010,11 +1104,35 @@ impl Drop for Pass {
 pub struct Pipeline {
     graphics: ash::vk::Pipeline,
     layout: ash::vk::PipelineLayout,
-    set_layout: ash::vk::DescriptorSetLayout,
+    camera_set_layout: ash::vk::DescriptorSetLayout,
+    model_set_layout: ash::vk::DescriptorSetLayout,
     device: Rc<ash::Device>,
 }
 
 impl Pipeline {
+    fn create_set_layout(
+        device: &ash::Device,
+        bindings: &[ash::vk::DescriptorSetLayoutBinding],
+    ) -> ash::vk::DescriptorSetLayout {
+        let set_layout_info = ash::vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings)
+            .build();
+        unsafe { device.create_descriptor_set_layout(&set_layout_info, None) }
+            .expect("Failed to create Vulkan descriptor set layout")
+    }
+
+    fn create_vertex_set_layout<T: VertexInput>(
+        device: &ash::Device,
+    ) -> ash::vk::DescriptorSetLayout {
+        let bindings = T::get_set_layout_bindings();
+        Self::create_set_layout(device, &bindings)
+    }
+
+    fn create_camera_set_layout(device: &ash::Device) -> ash::vk::DescriptorSetLayout {
+        let bindings = Camera::get_set_layout_bindings();
+        Self::create_set_layout(device, &bindings)
+    }
+
     pub fn new<T: VertexInput>(
         dev: &mut Dev,
         vert: ash::vk::PipelineShaderStageCreateInfo,
@@ -1024,19 +1142,10 @@ impl Pipeline {
         width: u32,
         height: u32,
     ) -> Self {
-        let layout_bindings = T::get_set_layout_bindings();
-        let set_layout_info = ash::vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&layout_bindings)
-            .build();
+        let model_set_layout = Self::create_vertex_set_layout::<T>(&dev.device);
+        let camera_set_layout = Self::create_camera_set_layout(&dev.device);
 
-        let set_layout = unsafe {
-            dev.device
-                .borrow_mut()
-                .create_descriptor_set_layout(&set_layout_info, None)
-        }
-        .expect("Failed to create Vulkan descriptor set layout");
-
-        let set_layouts = vec![set_layout];
+        let set_layouts = vec![model_set_layout, camera_set_layout];
 
         // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
@@ -1157,7 +1266,8 @@ impl Pipeline {
 
         Self {
             graphics,
-            set_layout,
+            model_set_layout,
+            camera_set_layout,
             layout,
             device: Rc::clone(&dev.device),
         }
@@ -1198,7 +1308,9 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         unsafe {
             self.device
-                .destroy_descriptor_set_layout(self.set_layout, None);
+                .destroy_descriptor_set_layout(self.camera_set_layout, None);
+            self.device
+                .destroy_descriptor_set_layout(self.model_set_layout, None);
             self.device.destroy_pipeline_layout(self.layout, None);
             self.device.destroy_pipeline(self.graphics, None);
         }

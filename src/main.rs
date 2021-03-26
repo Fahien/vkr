@@ -187,6 +187,7 @@ pub fn main() {
 
         let (width, height) = win.window.drawable_size();
         frame.begin(&pass, width, height);
+        frame.bind(&line_pipeline, &model, camera_node);
         frame.draw::<Line>(
             &line_pipeline,
             &model,
@@ -194,6 +195,7 @@ pub fn main() {
             lines,
             Handle::none(),
         );
+        frame.bind(&triangle_pipeline, &model, camera_node);
         frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
         frame.end();
 
