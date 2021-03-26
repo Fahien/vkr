@@ -8,19 +8,6 @@ use ash::{version::DeviceV1_0, *};
 use memoffset::offset_of;
 use nalgebra as na;
 
-#[repr(C)]
-pub struct Ubo {
-    pub matrix: na::Matrix4<f32>,
-}
-
-impl Ubo {
-    pub fn _new() -> Self {
-        Ubo {
-            matrix: na::Matrix4::identity(),
-        }
-    }
-}
-
 pub trait VertexInput {
     fn get_bindings() -> ash::vk::VertexInputBindingDescription;
     fn get_attributes() -> Vec<ash::vk::VertexInputAttributeDescription>;
@@ -108,7 +95,7 @@ impl VertexInput for Point {
     ) {
         // Update immediately the descriptor sets
         let buffer_info = ash::vk::DescriptorBufferInfo::builder()
-            .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
+            .range(std::mem::size_of::<na::Matrix4<f32>>() as ash::vk::DeviceSize)
             .buffer(ubo.buffer)
             .build();
 
@@ -237,9 +224,8 @@ impl VertexInput for Vertex {
         view: Option<&ImageView>,
         sampler: Option<&Sampler>,
     ) {
-        // Update immediately the descriptor sets
         let buffer_info = ash::vk::DescriptorBufferInfo::builder()
-            .range(std::mem::size_of::<Ubo>() as ash::vk::DeviceSize)
+            .range(std::mem::size_of::<na::Matrix4<f32>>() as ash::vk::DeviceSize)
             .buffer(ubo.buffer)
             .build();
 

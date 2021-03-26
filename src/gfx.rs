@@ -412,8 +412,7 @@ impl Frame {
         } else {
             // Create a new uniform buffer for this node's model matrix
             let mut ubo =
-                Buffer::new::<Ubo>(&self.allocator, ash::vk::BufferUsageFlags::UNIFORM_BUFFER);
-            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
+                Buffer::new::<na::Matrix4<f32>>(&self.allocator, ash::vk::BufferUsageFlags::UNIFORM_BUFFER);
 
             let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
 
