@@ -96,11 +96,17 @@ impl Drop for Framebuffer {
     }
 }
 
+type BufferCache = HashMap<Handle<Node>, Buffer>;
+
 /// The frame cache contains resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct FrameCache {
-    /// Uniform buffers for model matrix are associated to nodes
-    ubos: HashMap<Handle<Node>, Buffer>,
+    /// Uniform buffers for model matrices associated to nodes
+    pub model_buffers: BufferCache,
+
+    /// Uniform buffers for view matrices associated to nodes with cameras
+    pub view_buffers: BufferCache,
+
     pub pipeline_cache: PipelineCache,
     pub command_buffer: vk::CommandBuffer,
     pub fence: Fence,
@@ -126,7 +132,8 @@ impl FrameCache {
         let fence = Fence::signaled(&dev.device);
 
         Self {
-            ubos: HashMap::new(),
+            model_buffers: HashMap::new(),
+            view_buffers: HashMap::new(),
             pipeline_cache: PipelineCache::new(&dev.device),
             command_buffer,
             fence,
@@ -227,6 +234,82 @@ impl Frame {
         }
     }
 
+    pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
+        let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
+        unsafe {
+            self.device.cmd_bind_pipeline(
+                self.res.command_buffer,
+                graphics_bind_point,
+                pipeline.graphics,
+            );
+        }
+
+        let node = model.nodes.get(camera_node).unwrap();
+        assert!(model.cameras.get(node.camera).is_some());
+
+        if let Some(sets) = self
+            .res
+            .pipeline_cache
+            .descriptors
+            .view_sets
+            .get(&(pipeline.layout, camera_node))
+        {
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    1,
+                    sets,
+                    &[],
+                )
+            };
+
+            // If there is a descriptor set, there must be a buffer
+            let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
+            view_buffer.upload(&node.trs.get_view_matrix());
+        } else {
+            // Allocate and write desc set for camera view
+            // Camera set layout is at index 1 (use a constant?)
+            let sets = self
+                .res
+                .pipeline_cache
+                .descriptors
+                .allocate(&[pipeline.set_layouts[1]]);
+
+            if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
+                // Buffer already there, just make the set pointing to it
+                Camera::write_set(&self.device, sets[0], &view_buffer);
+            } else {
+                // Create a new buffer for this node's view matrix
+                let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
+                    &self.allocator,
+                    ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+                );
+                view_buffer.upload(&node.trs.get_view_matrix());
+                Camera::write_set(&self.device, sets[0], &view_buffer);
+                self.res.view_buffers.insert(camera_node, view_buffer);
+            }
+
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    1,
+                    &sets,
+                    &[],
+                );
+            }
+
+            self.res
+                .pipeline_cache
+                .descriptors
+                .view_sets
+                .insert((pipeline.layout, camera_node), sets);
+        }
+    }
+
     pub fn draw<T: VertexInput>(
         &mut self,
         pipeline: &mut Pipeline,
@@ -244,11 +327,12 @@ impl Frame {
             );
         }
 
+        let cnode = model.nodes.get(node).unwrap();
         if let Some(sets) = self
             .res
             .pipeline_cache
             .descriptors
-            .sets
+            .model_sets
             .get(&(pipeline.layout, node))
         {
             unsafe {
@@ -263,21 +347,15 @@ impl Frame {
             }
 
             // If there is a descriptor set, there must be a uniform buffer
-            let ubo = self.res.ubos.get_mut(&node).unwrap();
-            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
+            let ubo = self.res.model_buffers.get_mut(&node).unwrap();
+            ubo.upload(&cnode.trs.get_matrix());
         } else {
             // Create a new uniform buffer for this node's model matrix
-            let mut ubo = Buffer::new::<na::Matrix4<f32>>(
+            let mut model_buffer = Buffer::new::<na::Matrix4<f32>>(
                 &self.allocator,
                 ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
             );
-            ubo.upload(&model.nodes.get(node).unwrap().trs.get_matrix());
-
-            let sets = self
-                .res
-                .pipeline_cache
-                .descriptors
-                .allocate(&[pipeline.set_layout]);
+            model_buffer.upload(&cnode.trs.get_matrix());
 
             let texture = model.textures.get(texture);
             let (view, sampler) = match texture {
@@ -287,7 +365,15 @@ impl Frame {
                 ),
                 _ => (None, None),
             };
-            T::write_set(&self.device, sets[0], &ubo, view, sampler);
+
+            // Allocate and write descriptors
+            // Model set layout is at index 0 (use a constant?)
+            let sets = self
+                .res
+                .pipeline_cache
+                .descriptors
+                .allocate(&[pipeline.set_layouts[0]]);
+            T::write_set(&self.device, sets[0], &model_buffer, view, sampler);
 
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
@@ -300,11 +386,11 @@ impl Frame {
                 );
             }
 
-            self.res.ubos.insert(node, ubo);
+            self.res.model_buffers.insert(node, model_buffer);
             self.res
                 .pipeline_cache
                 .descriptors
-                .sets
+                .model_sets
                 .insert((pipeline.layout, node), sets);
         }
 
