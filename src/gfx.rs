@@ -506,11 +506,35 @@ impl Drop for Pass {
 pub struct Pipeline {
     pub graphics: ash::vk::Pipeline,
     pub layout: ash::vk::PipelineLayout,
-    pub set_layout: ash::vk::DescriptorSetLayout,
+    pub camera_set_layout: ash::vk::DescriptorSetLayout,
+    pub model_set_layout: ash::vk::DescriptorSetLayout,
     device: Rc<ash::Device>,
 }
 
 impl Pipeline {
+    fn create_set_layout(
+        device: &ash::Device,
+        bindings: &[ash::vk::DescriptorSetLayoutBinding],
+    ) -> ash::vk::DescriptorSetLayout {
+        let set_layout_info = ash::vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings)
+            .build();
+        unsafe { device.create_descriptor_set_layout(&set_layout_info, None) }
+            .expect("Failed to create Vulkan descriptor set layout")
+    }
+
+    fn create_vertex_set_layout<T: VertexInput>(
+        device: &ash::Device,
+    ) -> ash::vk::DescriptorSetLayout {
+        let bindings = T::get_set_layout_bindings();
+        Self::create_set_layout(device, &bindings)
+    }
+
+    fn create_camera_set_layout(device: &ash::Device) -> ash::vk::DescriptorSetLayout {
+        let bindings = Camera::get_set_layout_bindings();
+        Self::create_set_layout(device, &bindings)
+    }
+
     pub fn new<T: VertexInput>(
         dev: &mut Dev,
         vert: ash::vk::PipelineShaderStageCreateInfo,
@@ -520,18 +544,10 @@ impl Pipeline {
         width: u32,
         height: u32,
     ) -> Self {
-        let layout_bindings = T::get_set_layout_bindings();
-        let set_layout_info = ash::vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&layout_bindings)
-            .build();
+        let model_set_layout = Self::create_vertex_set_layout::<T>(&dev.device);
+        let camera_set_layout = Self::create_camera_set_layout(&dev.device);
 
-        let set_layout = unsafe {
-            dev.device
-                .create_descriptor_set_layout(&set_layout_info, None)
-        }
-        .expect("Failed to create Vulkan descriptor set layout");
-
-        let set_layouts = vec![set_layout];
+        let set_layouts = vec![model_set_layout, camera_set_layout];
 
         // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
@@ -647,7 +663,8 @@ impl Pipeline {
 
         Self {
             graphics,
-            set_layout,
+            model_set_layout,
+            camera_set_layout,
             layout,
             device: Rc::clone(&dev.device),
         }
@@ -688,7 +705,9 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         unsafe {
             self.device
-                .destroy_descriptor_set_layout(self.set_layout, None);
+                .destroy_descriptor_set_layout(self.camera_set_layout, None);
+            self.device
+                .destroy_descriptor_set_layout(self.model_set_layout, None);
             self.device.destroy_pipeline_layout(self.layout, None);
             self.device.destroy_pipeline(self.graphics, None);
         }

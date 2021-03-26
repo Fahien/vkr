@@ -281,6 +281,17 @@ impl Trs {
             .append_nonuniform_scaling(&self.scale)
     }
 
+    pub fn get_view_matrix(&self) -> na::Matrix4<f32> {
+        let mut matrix = self.get_matrix();
+
+        // Invert translation
+        matrix.m14 = -matrix.m14;
+        matrix.m24 = -matrix.m24;
+        matrix.m34 = -matrix.m34;
+
+        matrix
+    }
+
     pub fn translate(&mut self, trs: &na::Vector3<f32>) {
         let trs = na::Translation3::from(*trs);
         self.model.append_translation_mut(&trs);
@@ -316,6 +327,38 @@ impl Camera {
     ) -> Self {
         Self {
             proj: na::Orthographic3::new(left, right, bottom, top, znear, zfar).to_homogeneous(),
+        }
+    }
+
+    pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
+        let uniform = ash::vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER) // delta time?
+            .descriptor_count(1) // Referring the shader?
+            .stage_flags(ash::vk::ShaderStageFlags::VERTEX)
+            .build();
+
+        vec![uniform]
+    }
+
+    pub fn write_set(device: &Device, set: vk::DescriptorSet, view: &Buffer) {
+        let buffer_info = ash::vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<na::Matrix4<f32>>() as ash::vk::DeviceSize)
+            .buffer(view.buffer)
+            .build();
+
+        let buffer_write = ash::vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let writes = vec![buffer_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
         }
     }
 }
