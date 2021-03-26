@@ -89,6 +89,13 @@ pub fn main() {
 
     let mut model = Model::new();
 
+    let camera = Camera::orthographic(-1.0, 1.0, -1.0, 1.0, 0.0, 1.0);
+    let camera = model.cameras.push(camera);
+    let mut camera_node = Node::new();
+    camera_node.camera = camera;
+    camera_node.trs.translate(&na::Vector3::new(0.5, 0.0, 0.0));
+    let camera_node = model.nodes.push(camera_node);
+
     let mut rect = Node::new();
     rect.trs.translate(&na::Vector3::new(0.0, 0.0, 0.6));
     let rect = model.nodes.push(rect);
