@@ -249,16 +249,19 @@ impl Drop for Framebuffer {
     }
 }
 
-type BufferCache = HashMap<util::Handle<Node>, Buffer>;
+type BufferCache<T> = HashMap<util::Handle<T>, Buffer>;
 
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
     /// Uniform buffers for model matrices associated to nodes
-    model_buffers: BufferCache,
+    model_buffers: BufferCache<Node>,
 
     /// Uniform buffers for view matrices associated to nodes with cameras
-    view_buffers: BufferCache,
+    view_buffers: BufferCache<Node>,
+
+    // Uniform buffers for proj matrices associated to cameras
+    proj_buffers: BufferCache<Camera>,
 
     descriptors: Descriptors,
     pub command_buffer: ash::vk::CommandBuffer,
@@ -289,8 +292,9 @@ impl Frameres {
         let fence = Fence::signaled(&dev.device);
 
         Self {
-            model_buffers: HashMap::new(),
-            view_buffers: HashMap::new(),
+            model_buffers: BufferCache::new(),
+            view_buffers: BufferCache::new(),
+            proj_buffers: BufferCache::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
@@ -424,13 +428,17 @@ impl Frame {
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
             view_buffer.upload(&node.trs.get_view_matrix());
+
+            let camera = model.cameras.get(node.camera).unwrap();
+            let proj_buffer = self.res.proj_buffers.get_mut(&node.camera).unwrap();
+            proj_buffer.upload(&camera.proj);
         } else {
             // Allocate and write desc set for camera view
             let sets = self.res.descriptors.allocate(&[pipeline.camera_set_layout]);
 
             if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
                 // Buffer already there, just make the set pointing to it
-                Camera::write_set(self.device.borrow(), sets[0], &view_buffer);
+                Camera::write_set_view(self.device.borrow(), sets[0], &view_buffer);
             } else {
                 // Create a new buffer for this node's view matrix
                 let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
@@ -438,8 +446,23 @@ impl Frame {
                     ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
                 );
                 view_buffer.upload(&node.trs.get_view_matrix());
-                Camera::write_set(self.device.borrow(), sets[0], &view_buffer);
+                Camera::write_set_view(self.device.borrow(), sets[0], &view_buffer);
                 self.res.view_buffers.insert(camera_node, view_buffer);
+            }
+
+            if let Some(proj_buffer) = self.res.proj_buffers.get_mut(&node.camera) {
+                // Buffer already there, just make the set pointing to it
+                Camera::write_set_proj(self.device.borrow(), sets[0], &proj_buffer);
+            } else {
+                // Create a new buffer for this camera proj matrix
+                let mut proj_buffer = Buffer::new::<na::Matrix4<f32>>(
+                    &self.allocator,
+                    ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+                );
+                let camera = model.cameras.get(node.camera).unwrap();
+                proj_buffer.upload(&camera.proj);
+                Camera::write_set_proj(self.device.borrow(), sets[0], &proj_buffer);
+                self.res.proj_buffers.insert(node.camera, proj_buffer);
             }
 
             unsafe {

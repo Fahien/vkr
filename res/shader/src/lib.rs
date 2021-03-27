@@ -27,12 +27,13 @@ pub fn line_fs(color: Input<Vec4>, mut out_color: Output<Vec4>) {
 pub fn line_vs(
     #[spirv(descriptor_set = 0, binding = 0)] model: Uniform<Mat>,
     #[spirv(descriptor_set = 1, binding = 0)] view: Uniform<Mat>,
+    #[spirv(descriptor_set = 1, binding = 1)] proj: Uniform<Mat>,
     in_pos: Input<Vec3>,
     in_color: Input<Vec4>,
     mut color: Output<Vec4>,
     #[spirv(position)] mut out_pos: Output<Vec4>,
 ) {
-    *out_pos = view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+    *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
     *color = *in_color;
 }
 
@@ -53,6 +54,7 @@ pub fn main_fs(
 pub fn main_vs(
     #[spirv(descriptor_set = 0, binding = 0)] model: Uniform<Mat>,
     #[spirv(descriptor_set = 1, binding = 0)] view: Uniform<Mat>,
+    #[spirv(descriptor_set = 1, binding = 1)] proj: Uniform<Mat>,
     in_pos: Input<Vec3>,
     in_color: Input<Vec4>,
     in_uv: Input<Vec2>,
@@ -60,9 +62,9 @@ pub fn main_vs(
     mut uv: Output<Vec2>,
     #[spirv(position)] mut out_pos: Output<Vec4>,
 ) {
-    *out_pos = view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+    *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
     *color = *in_color;
     uv.x = in_uv.x;
     // UV coords system in Vulkan has inverted Y
-    uv.y = 1.0 - in_uv.y;
+    uv.y = in_uv.y;
 }
