@@ -340,29 +340,47 @@ impl Camera {
         }
     }
 
-    pub fn orthographic(
-        left: f32,
-        right: f32,
-        bottom: f32,
-        top: f32,
-        znear: f32,
-        zfar: f32,
-    ) -> Self {
+    /// Parameters here are referred to the camera, where towards direction is positive.
+    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+        let mid = na::Vector3::new(
+            (left + right) / (right - left),
+            (bottom + top) / (top - bottom),
+            near / (far - near),
+        );
+
+        let scale = na::Vector3::new(
+            2.0 / (right - left),
+            2.0 / (top - bottom),
+            -1.0 / (far - near),
+        );
+
         Self {
-            proj: na::Orthographic3::new(left, right, bottom, top, znear, zfar).to_homogeneous(),
+            proj: na::Matrix4::new(
+                scale.x, 0.0, 0.0, mid.x, 0.0, -scale.y, 0.0, mid.y, 0.0, 0.0, scale.z, mid.z, 0.0,
+                0.0, 0.0, 1.0,
+            ),
         }
     }
 
     pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
-        vec![vk::DescriptorSetLayoutBinding::builder()
+        let view = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // delta time?
             .descriptor_count(1) // Referring the shader?
             .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build()]
+            .build();
+
+        let proj = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build();
+
+        vec![view, proj]
     }
 
-    pub fn write_set(device: &Device, set: vk::DescriptorSet, view: &Buffer) {
+    pub fn write_set_view(device: &Device, set: vk::DescriptorSet, view: &Buffer) {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
             .buffer(view.buffer)
@@ -371,6 +389,27 @@ impl Camera {
         let buffer_write = vk::WriteDescriptorSet::builder()
             .dst_set(set)
             .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let writes = vec![buffer_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
+
+    pub fn write_set_proj(device: &Device, set: vk::DescriptorSet, proj: &Buffer) {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
+            .buffer(proj.buffer)
+            .build();
+
+        let buffer_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(1)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .buffer_info(&[buffer_info])
