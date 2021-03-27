@@ -47,14 +47,14 @@ impl Framebuffer {
                 .expect("Failed to create Vulkan image view")
         };
 
-        let depth_format = ash::vk::Format::D32_SFLOAT;
+        let depth_format = vk::Format::D32_SFLOAT;
         let mut depth_image = Image::new(
             &dev.allocator,
             image.extent.width,
             image.extent.height,
             depth_format,
         );
-        depth_image.transition(&dev, ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        depth_image.transition(&dev, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
         let depth_view = ImageView::new(&dev.device, &depth_image);
 
@@ -96,16 +96,19 @@ impl Drop for Framebuffer {
     }
 }
 
-type BufferCache = HashMap<Handle<Node>, Buffer>;
+type BufferCache<T> = HashMap<Handle<T>, Buffer>;
 
 /// The frame cache contains resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct FrameCache {
     /// Uniform buffers for model matrices associated to nodes
-    pub model_buffers: BufferCache,
+    pub model_buffers: BufferCache<Node>,
 
     /// Uniform buffers for view matrices associated to nodes with cameras
-    pub view_buffers: BufferCache,
+    pub view_buffers: BufferCache<Node>,
+
+    // Uniform buffers for proj matrices associated to cameras
+    pub proj_buffers: BufferCache<Camera>,
 
     pub pipeline_cache: PipelineCache,
     pub command_buffer: vk::CommandBuffer,
@@ -132,8 +135,9 @@ impl FrameCache {
         let fence = Fence::signaled(&dev.device);
 
         Self {
-            model_buffers: HashMap::new(),
-            view_buffers: HashMap::new(),
+            model_buffers: BufferCache::new(),
+            view_buffers: BufferCache::new(),
+            proj_buffers: BufferCache::new(),
             pipeline_cache: PipelineCache::new(&dev.device),
             command_buffer,
             fence,
@@ -155,7 +159,7 @@ pub struct Frame {
     pub res: FrameCache,
     /// A frame should be able to allocate a uniform buffer on draw
     allocator: Rc<RefCell<vk_mem::Allocator>>,
-    pub device: Rc<ash::Device>,
+    pub device: Rc<Device>,
 }
 
 impl Frame {
@@ -172,7 +176,7 @@ impl Frame {
     }
 
     pub fn begin(&self, pass: &Pass, width: u32, height: u32) {
-        let begin_info = ash::vk::CommandBufferBeginInfo::builder().build();
+        let begin_info = vk::CommandBufferBeginInfo::builder().build();
         unsafe {
             self.device
                 .begin_command_buffer(self.res.command_buffer, &begin_info)
@@ -180,38 +184,33 @@ impl Frame {
         .expect("Failed to begin Vulkan command buffer");
 
         // Needed by cmd_begin_render_pass
-        let area = ash::vk::Rect2D::builder()
-            .offset(ash::vk::Offset2D::builder().x(0).y(0).build())
-            .extent(
-                ash::vk::Extent2D::builder()
-                    .width(width)
-                    .height(height)
-                    .build(),
-            )
+        let area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::builder().x(0).y(0).build())
+            .extent(vk::Extent2D::builder().width(width).height(height).build())
             .build();
 
-        let mut color_clear = ash::vk::ClearValue::default();
+        let mut color_clear = vk::ClearValue::default();
         color_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
 
-        let mut depth_clear = ash::vk::ClearValue::default();
+        let mut depth_clear = vk::ClearValue::default();
         depth_clear.depth_stencil.depth = 1.0;
         depth_clear.depth_stencil.stencil = 0;
 
         let clear_values = [color_clear, depth_clear];
-        let create_info = ash::vk::RenderPassBeginInfo::builder()
+        let create_info = vk::RenderPassBeginInfo::builder()
             .framebuffer(self.buffer.framebuffer)
             .render_pass(pass.render)
             .render_area(area)
             .clear_values(&clear_values)
             .build();
         // Record it in the main command buffer
-        let contents = ash::vk::SubpassContents::INLINE;
+        let contents = vk::SubpassContents::INLINE;
         unsafe {
             self.device
                 .cmd_begin_render_pass(self.res.command_buffer, &create_info, contents)
         };
 
-        let viewports = [ash::vk::Viewport::builder()
+        let viewports = [vk::Viewport::builder()
             .width(width as f32)
             .height(height as f32)
             .build()];
@@ -220,13 +219,8 @@ impl Frame {
                 .cmd_set_viewport(self.res.command_buffer, 0, &viewports)
         };
 
-        let scissors = [ash::vk::Rect2D::builder()
-            .extent(
-                ash::vk::Extent2D::builder()
-                    .width(width)
-                    .height(height)
-                    .build(),
-            )
+        let scissors = [vk::Rect2D::builder()
+            .extent(vk::Extent2D::builder().width(width).height(height).build())
             .build()];
         unsafe {
             self.device
@@ -235,7 +229,7 @@ impl Frame {
     }
 
     pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
-        let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
+        let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.res.command_buffer,
@@ -268,6 +262,10 @@ impl Frame {
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
             view_buffer.upload(&node.trs.get_view_matrix());
+
+            let camera = model.cameras.get(node.camera).unwrap();
+            let proj_buffer = self.res.proj_buffers.get_mut(&node.camera).unwrap();
+            proj_buffer.upload(&camera.proj);
         } else {
             // Allocate and write desc set for camera view
             // Camera set layout is at index 1 (use a constant?)
@@ -279,16 +277,31 @@ impl Frame {
 
             if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
                 // Buffer already there, just make the set pointing to it
-                Camera::write_set(&self.device, sets[0], &view_buffer);
+                Camera::write_set_view(&self.device, sets[0], &view_buffer);
             } else {
                 // Create a new buffer for this node's view matrix
                 let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
                     &self.allocator,
-                    ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    vk::BufferUsageFlags::UNIFORM_BUFFER,
                 );
                 view_buffer.upload(&node.trs.get_view_matrix());
-                Camera::write_set(&self.device, sets[0], &view_buffer);
+                Camera::write_set_view(&self.device, sets[0], &view_buffer);
                 self.res.view_buffers.insert(camera_node, view_buffer);
+            }
+
+            if let Some(proj_buffer) = self.res.proj_buffers.get_mut(&node.camera) {
+                // Buffer already there, just make the set pointing to it
+                Camera::write_set_proj(&self.device, sets[0], &proj_buffer);
+            } else {
+                // Create a new buffer for this camera proj matrix
+                let mut proj_buffer = Buffer::new::<na::Matrix4<f32>>(
+                    &self.allocator,
+                    vk::BufferUsageFlags::UNIFORM_BUFFER,
+                );
+                let camera = model.cameras.get(node.camera).unwrap();
+                proj_buffer.upload(&camera.proj);
+                Camera::write_set_proj(&self.device, sets[0], &proj_buffer);
+                self.res.proj_buffers.insert(node.camera, proj_buffer);
             }
 
             unsafe {
@@ -318,7 +331,7 @@ impl Frame {
         node: Handle<Node>,
         texture: Handle<Texture>,
     ) {
-        let graphics_bind_point = ash::vk::PipelineBindPoint::GRAPHICS;
+        let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.res.command_buffer,
@@ -353,7 +366,7 @@ impl Frame {
             // Create a new uniform buffer for this node's model matrix
             let mut model_buffer = Buffer::new::<na::Matrix4<f32>>(
                 &self.allocator,
-                ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
             );
             model_buffer.upload(&cnode.trs.get_matrix());
 
@@ -396,7 +409,7 @@ impl Frame {
 
         let first_binding = 0;
         let buffers = [primitive.vertices.buffer];
-        let offsets = [ash::vk::DeviceSize::default()];
+        let offsets = [vk::DeviceSize::default()];
         unsafe {
             self.device.cmd_bind_vertex_buffers(
                 self.res.command_buffer,
@@ -413,7 +426,7 @@ impl Frame {
                     self.res.command_buffer,
                     indices.buffer,
                     0,
-                    ash::vk::IndexType::UINT16,
+                    vk::IndexType::UINT16,
                 );
             }
             let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
@@ -444,7 +457,7 @@ impl Frame {
         dev: &Dev,
         swapchain: &Swapchain,
         image_index: u32,
-    ) -> Result<(), ash::vk::Result> {
+    ) -> Result<(), vk::Result> {
         dev.graphics_queue.submit_draw(
             &self.res.command_buffer,
             &self.res.image_ready,

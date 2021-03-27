@@ -32,7 +32,7 @@ impl Descriptors {
     pub fn new(device: &Rc<Device>) -> Self {
         let pool = unsafe {
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(4) // Support 1 model matrix and 1 view matrix for 2 pipelines
+                .descriptor_count(3 * 2) // Support model, view and proj matrix for 2 pipelines
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
             let sampler_pool_size = vk::DescriptorPoolSize::builder()

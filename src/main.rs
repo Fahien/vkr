@@ -92,19 +92,19 @@ pub fn main() {
 
     let mut model = Model::new();
 
-    let camera = Camera::orthographic(-1.0, 1.0, -1.0, 1.0, 0.0, 1.0);
+    let camera = Camera::orthographic(-1.0, 1.0, -1.0, 1.0, 0.1, 1.0);
     let camera = model.cameras.push(camera);
     let mut camera_node = Node::new();
     camera_node.camera = camera;
-    camera_node.trs.translate(&na::Vector3::new(0.5, 0.0, 0.0));
+    camera_node.trs.translate(&na::Vector3::new(0.3, 0.3, 0.0));
     let camera_node = model.nodes.push(camera_node);
 
     let mut rect = Node::new();
-    rect.trs.translate(&na::Vector3::new(0.0, 0.0, 0.6));
+    rect.trs.translate(&na::Vector3::new(0.0, 0.3, -0.2));
     let rect = model.nodes.push(rect);
 
     let mut lines = Node::new();
-    lines.trs.scale(&na::Vector3::new(0.5, 0.5, 0.5));
+    lines.trs.translate(&na::Vector3::new(0.0, 0.0, -0.5));
     let lines = model.nodes.push(lines);
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
@@ -149,9 +149,9 @@ pub fn main() {
 
         let delta = timer.get_delta().as_secs_f32();
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+        //model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
-        model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+        //model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
         if resized {
             dev.wait();
