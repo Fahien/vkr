@@ -6,6 +6,7 @@ use ash::{version::DeviceV1_0, *};
 use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::*;
+use imgui as im;
 
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
@@ -101,6 +102,9 @@ type BufferCache<T> = HashMap<Handle<T>, Buffer>;
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
+    pub gui_vertex_buffer: Buffer,
+    pub gui_index_buffer: Buffer,
+
     /// Uniform buffers for model matrices associated to nodes
     pub model_buffers: BufferCache<Node>,
 
@@ -125,7 +129,14 @@ impl Frameres {
         // Fence (device)
         let fence = Fence::signaled(&dev.device);
 
+        let gui_vertex_buffer =
+            Buffer::new::<im::DrawVert>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
+        let gui_index_buffer =
+            Buffer::new::<u16>(&dev.allocator, vk::BufferUsageFlags::INDEX_BUFFER);
+
         Self {
+            gui_vertex_buffer,
+            gui_index_buffer,
             model_buffers: BufferCache::new(),
             view_buffers: BufferCache::new(),
             proj_buffers: BufferCache::new(),
@@ -294,19 +305,20 @@ impl Frame {
             );
             model_buffer.upload(&cnode.trs.get_matrix());
 
-            let texture = model.textures.get(texture);
-            let (view, sampler) = match texture {
-                Some(texture) => (
-                    model.views.get(texture.view),
-                    model.samplers.get(texture.sampler),
-                ),
-                _ => (None, None),
-            };
-
             // Allocate and write descriptors
-            // Model set layout is at index 0 (use a constant?)
             let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[0]]);
-            T::write_set(self.device.borrow(), sets[0], &model_buffer, view, sampler);
+            T::write_set_model(self.device.borrow(), sets[0], &model_buffer);
+
+            if let Some(texture) = model.textures.get(texture) {
+                let view = model.views.get(texture.view);
+                let sampler = model.samplers.get(texture.sampler);
+                T::write_set_image(
+                    self.device.borrow(),
+                    sets[0],
+                    view.unwrap(),
+                    sampler.unwrap(),
+                );
+            }
 
             self.res
                 .command_buffer
