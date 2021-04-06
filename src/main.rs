@@ -39,6 +39,9 @@ use primitive::*;
 mod sync;
 use sync::*;
 
+mod gui;
+use gui::*;
+
 mod frame;
 use frame::*;
 
@@ -57,7 +60,9 @@ pub fn main() {
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
-    let line_pipeline = Pipeline::line(&mut dev, &pass, width, height);
+    let mut gui = Gui::new(&win, &dev, &pass);
+
+    let line_pipeline = Pipeline::line(&dev, &pass, width, height);
 
     let lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
@@ -86,7 +91,7 @@ pub fn main() {
         Primitive::new(&dev.allocator, &lines_vertices)
     };
 
-    let triangle_pipeline = Pipeline::main(&mut dev, &pass, width, height);
+    let triangle_pipeline = Pipeline::main(&dev, &pass, width, height);
 
     let rect_primitive = Primitive::quad(&dev.allocator);
 
@@ -147,11 +152,13 @@ pub fn main() {
             }
         }
 
+        gui.set_mouse_state(&events.mouse_state());
+
         let delta = timer.get_delta().as_secs_f32();
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        //model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+        model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
-        //model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+        model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
         if resized {
             dev.wait();
@@ -206,6 +213,9 @@ pub fn main() {
         );
         frame.bind(&triangle_pipeline, &model, camera_node);
         frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
+
+        gui.update(&mut frame.res, delta);
+
         frame.end();
 
         match sfs.present(&dev) {
