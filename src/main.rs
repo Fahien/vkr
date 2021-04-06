@@ -42,6 +42,9 @@ use primitive::*;
 mod sync;
 use sync::*;
 
+mod gui;
+use gui::*;
+
 mod frame;
 use frame::*;
 
@@ -59,6 +62,8 @@ pub fn main() {
     let pass = Pass::new(&mut dev);
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
+
+    let mut gui = Gui::new(&win, &dev, &pass);
 
     let mut line_pipeline = Pipeline::line(&dev.device, &pass, width, height);
 
@@ -150,11 +155,13 @@ pub fn main() {
             }
         }
 
+        gui.set_mouse_state(&events.mouse_state());
+
         let delta = timer.get_delta().as_secs_f32();
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        //model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+        model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
         let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
-        //model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+        model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
         if resized {
             dev.wait();
@@ -208,13 +215,10 @@ pub fn main() {
             Handle::none(),
         );
         frame.bind(&mut triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(
-            &mut triangle_pipeline,
-            &model,
-            &rect_primitive,
-            rect,
-            texture,
-        );
+        frame.draw::<Vertex>(&mut triangle_pipeline, &model, &rect_primitive, rect, texture);
+
+        gui.update(&mut frame.res, delta);
+
         frame.end();
 
         match sfs.present(&dev) {

@@ -6,6 +6,7 @@ use ash::{vk, Device};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::*;
+use imgui as im;
 
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
@@ -101,7 +102,9 @@ type BufferCache<T> = HashMap<Handle<T>, Buffer>;
 /// The frame cache contains resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct FrameCache {
-    /// Uniform buffers for model matrices associated to nodes
+    pub gui_vertex_buffer: Buffer,
+    pub gui_index_buffer: Buffer,
+
     pub model_buffers: BufferCache<Node>,
 
     /// Uniform buffers for view matrices associated to nodes with cameras
@@ -125,7 +128,14 @@ impl FrameCache {
         // Fence (device)
         let fence = Fence::signaled(&dev.device);
 
+        let gui_vertex_buffer =
+            Buffer::new::<im::DrawVert>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
+        let gui_index_buffer =
+            Buffer::new::<u16>(&dev.allocator, vk::BufferUsageFlags::INDEX_BUFFER);
+
         Self {
+            gui_vertex_buffer,
+            gui_index_buffer,
             model_buffers: BufferCache::new(),
             view_buffers: BufferCache::new(),
             proj_buffers: BufferCache::new(),
@@ -199,16 +209,18 @@ impl Frame {
         let node = model.nodes.get(camera_node).unwrap();
         assert!(model.cameras.get(node.camera).is_some());
 
+        let pipeline_layout = pipeline.layout;
+
         if let Some(sets) = self
             .res
             .pipeline_cache
             .descriptors
             .view_sets
-            .get(&(pipeline.layout, camera_node))
+            .get(&(pipeline_layout, camera_node))
         {
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline.layout, sets, 1);
+                .bind_descriptor_sets(pipeline_layout, sets, 1);
 
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
@@ -220,11 +232,8 @@ impl Frame {
         } else {
             // Allocate and write desc set for camera view
             // Camera set layout is at index 1 (use a constant?)
-            let sets = self
-                .res
-                .pipeline_cache
-                .descriptors
-                .allocate(&[pipeline.set_layouts[1]]);
+            let set_layouts = [pipeline.set_layouts[1]];
+            let sets = self.res.pipeline_cache.descriptors.allocate(&set_layouts);
 
             if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
                 // Buffer already there, just make the set pointing to it
@@ -263,7 +272,7 @@ impl Frame {
                 .pipeline_cache
                 .descriptors
                 .view_sets
-                .insert((pipeline.layout, camera_node), sets);
+                .insert((pipeline_layout, camera_node), sets);
         }
     }
 
@@ -278,16 +287,18 @@ impl Frame {
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let cnode = model.nodes.get(node).unwrap();
+
+        let pipeline_layout = pipeline.layout;
         if let Some(sets) = self
             .res
             .pipeline_cache
             .descriptors
             .model_sets
-            .get(&(pipeline.layout, node))
+            .get(&(pipeline_layout, node))
         {
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline.layout, sets, 0);
+                .bind_descriptor_sets(pipeline_layout, sets, 0);
 
             // If there is a descriptor set, there must be a uniform buffer
             let ubo = self.res.model_buffers.get_mut(&node).unwrap();
@@ -300,23 +311,16 @@ impl Frame {
             );
             model_buffer.upload(&cnode.trs.get_matrix());
 
-            let texture = model.textures.get(texture);
-            let (view, sampler) = match texture {
-                Some(texture) => (
-                    model.views.get(texture.view),
-                    model.samplers.get(texture.sampler),
-                ),
-                _ => (None, None),
-            };
-
             // Allocate and write descriptors
-            // Model set layout is at index 0 (use a constant?)
-            let sets = self
-                .res
-                .pipeline_cache
-                .descriptors
-                .allocate(&[pipeline.set_layouts[0]]);
-            T::write_set(&self.device, sets[0], &model_buffer, view, sampler);
+            let set_layouts = [pipeline.set_layouts[0]];
+            let sets = self.res.pipeline_cache.descriptors.allocate(&set_layouts);
+            T::write_set_model(&self.device, sets[0], &model_buffer);
+
+            if let Some(texture) = model.textures.get(texture) {
+                let view = model.views.get(texture.view);
+                let sampler = model.samplers.get(texture.sampler);
+                T::write_set_image(&self.device, sets[0], view.unwrap(), sampler.unwrap());
+            }
 
             self.res
                 .command_buffer
@@ -327,7 +331,7 @@ impl Frame {
                 .pipeline_cache
                 .descriptors
                 .model_sets
-                .insert((pipeline.layout, node), sets);
+                .insert((pipeline_layout, node), sets);
         }
 
         self.res
