@@ -157,7 +157,7 @@ impl Pipeline {
     }
 
     pub fn line(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::new(device);
+        let shader = ShaderModule::main(device);
         let vs = CString::new("line_vs").expect("Failed to create entrypoint");
         let fs = CString::new("line_fs").expect("Failed to create entrypoint");
         Self::new::<Line>(
@@ -172,7 +172,7 @@ impl Pipeline {
     }
 
     pub fn main(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::new(device);
+        let shader = ShaderModule::main(device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
         Self::new::<Vertex>(
