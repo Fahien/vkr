@@ -10,15 +10,41 @@ use nalgebra as na;
 
 pub trait VertexInput {
     fn get_bindings() -> ash::vk::VertexInputBindingDescription;
+
     fn get_attributes() -> Vec<ash::vk::VertexInputAttributeDescription>;
+
     fn get_set_layout_bindings() -> Vec<ash::vk::DescriptorSetLayoutBinding>;
-    fn write_set(
+
+    fn get_constants() -> Vec<vk::PushConstantRange> {
+        vec![]
+    }
+
+    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {}
+
+    fn write_set_image(
         device: &Device,
         set: vk::DescriptorSet,
-        ubo: &Buffer,
-        view: Option<&ImageView>,
-        sampler: Option<&Sampler>,
-    );
+        view: &ImageView,
+        sampler: &Sampler,
+    ) {
+    }
+
+    fn get_depth_state() -> vk::PipelineDepthStencilStateCreateInfo {
+        vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(ash::vk::CompareOp::LESS)
+            .depth_bounds_test_enable(false)
+            .stencil_test_enable(false)
+            .build()
+    }
+
+    fn get_color_blend() -> Vec<vk::PipelineColorBlendAttachmentState> {
+        vec![ash::vk::PipelineColorBlendAttachmentState::builder()
+            .blend_enable(false)
+            .color_write_mask(ash::vk::ColorComponentFlags::all())
+            .build()]
+    }
 }
 
 #[repr(C)]
@@ -86,13 +112,7 @@ impl VertexInput for Point {
             .build()]
     }
 
-    fn write_set(
-        device: &Device,
-        set: vk::DescriptorSet,
-        ubo: &Buffer,
-        _view: Option<&ImageView>,
-        _sampler: Option<&Sampler>,
-    ) {
+    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
         // Update immediately the descriptor sets
         let buffer_info = ash::vk::DescriptorBufferInfo::builder()
             .range(std::mem::size_of::<na::Matrix4<f32>>() as ash::vk::DeviceSize)
@@ -139,14 +159,8 @@ impl VertexInput for Line {
         Point::get_set_layout_bindings()
     }
 
-    fn write_set(
-        device: &Device,
-        set: vk::DescriptorSet,
-        ubo: &Buffer,
-        view: Option<&ImageView>,
-        sampler: Option<&Sampler>,
-    ) {
-        Point::write_set(device, set, ubo, view, sampler);
+    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
+        Point::write_set_model(device, set, ubo);
     }
 }
 
@@ -217,23 +231,11 @@ impl VertexInput for Vertex {
         vec![uniform, sampler]
     }
 
-    fn write_set(
-        device: &Device,
-        set: vk::DescriptorSet,
-        ubo: &Buffer,
-        view: Option<&ImageView>,
-        sampler: Option<&Sampler>,
-    ) {
+    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
         // Update immediately the descriptor sets
         let buffer_info = ash::vk::DescriptorBufferInfo::builder()
             .range(std::mem::size_of::<na::Matrix4<f32>>() as ash::vk::DeviceSize)
             .buffer(ubo.buffer)
-            .build();
-
-        let image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .sampler(sampler.unwrap().sampler)
-            .image_view(view.unwrap().view)
             .build();
 
         let buffer_write = ash::vk::WriteDescriptorSet::builder()
@@ -244,6 +246,25 @@ impl VertexInput for Vertex {
             .buffer_info(&[buffer_info])
             .build();
 
+        let writes = vec![buffer_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
+
+    fn write_set_image(
+        device: &Device,
+        set: vk::DescriptorSet,
+        view: &ImageView,
+        sampler: &Sampler,
+    ) {
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .sampler(sampler.sampler)
+            .image_view(view.view)
+            .build();
+
         let image_write = vk::WriteDescriptorSet::builder()
             .dst_set(set)
             .dst_binding(1)
@@ -252,7 +273,7 @@ impl VertexInput for Vertex {
             .image_info(&[image_info])
             .build();
 
-        let writes = vec![buffer_write, image_write];
+        let writes = vec![image_write];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
