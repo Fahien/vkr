@@ -39,6 +39,9 @@ use primitive::*;
 mod sync;
 use sync::*;
 
+mod gui;
+use gui::*;
+
 mod frame;
 use frame::*;
 

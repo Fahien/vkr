@@ -13,6 +13,7 @@ memoffset = "0.6.1"
 vk-mem = { git = "https://github.com/gwihlidal/vk-mem-rs", version = "0.2.3" }
 nalgebra = "0.25.3"
 png = "0.16.8"
+imgui = "0.7.0"
 
 [build-dependencies]
 spirv-builder = { path = "dep/rust-gpu/crates/spirv-builder" }
