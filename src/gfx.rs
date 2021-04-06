@@ -13,7 +13,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{image::{Image, Png}, queue::Queue};
+use crate::{image::{Image, Png}, queue::Queue, commands::CommandPool};
 
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
@@ -245,7 +245,7 @@ impl Drop for Swapchain {
 
 pub struct Dev {
     pub surface_format: ash::vk::SurfaceFormatKHR,
-    pub graphics_command_pool: ash::vk::CommandPool,
+    pub graphics_command_pool: CommandPool,
     pub graphics_queue: Queue,
     /// Needs to be public if we want to create buffers outside this module.
     /// The allocator is shared between the various buffers to release resources on drop.
@@ -345,16 +345,7 @@ impl Dev {
         let graphics_queue = Queue::new(&device, graphics_queue_index);
 
         // Command pool
-        let create_info = ash::vk::CommandPoolCreateInfo::builder()
-            .flags(ash::vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(graphics_queue_index);
-        let graphics_command_pool = {
-            unsafe {
-                device
-                    .create_command_pool(&create_info, None)
-                    .expect("Failed to create Vulkan command pool")
-            }
-        };
+        let graphics_command_pool = CommandPool::new(&device, graphics_queue_index);
 
         // Surface format
         let surface_format = {
@@ -403,9 +394,8 @@ impl Drop for Dev {
     fn drop(&mut self) {
         self.wait();
         self.allocator.deref().borrow_mut().destroy();
+        self.graphics_command_pool.destroy();
         unsafe {
-            self.device
-                .destroy_command_pool(self.graphics_command_pool, None);
             self.device.destroy_device(None);
         }
     }

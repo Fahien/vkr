@@ -111,7 +111,7 @@ pub struct FrameCache {
     pub proj_buffers: BufferCache<Camera>,
 
     pub pipeline_cache: PipelineCache,
-    pub command_buffer: vk::CommandBuffer,
+    pub command_buffer: CommandBuffer,
     pub fence: Fence,
     pub image_ready: Semaphore,
     pub image_drawn: Semaphore,
@@ -120,16 +120,7 @@ pub struct FrameCache {
 impl FrameCache {
     pub fn new(dev: &mut Dev) -> Self {
         // Graphics command buffer (device, command pool)
-        let command_buffer = {
-            let alloc_info = vk::CommandBufferAllocateInfo::builder()
-                .command_pool(dev.graphics_command_pool)
-                .level(vk::CommandBufferLevel::PRIMARY)
-                .command_buffer_count(1);
-
-            let buffers = unsafe { dev.device.allocate_command_buffers(&alloc_info) }
-                .expect("Failed to allocate command buffer");
-            buffers[0]
-        };
+        let command_buffer = CommandBuffer::new(&mut dev.graphics_command_pool);
 
         // Fence (device)
         let fence = Fence::signaled(&dev.device);
@@ -176,12 +167,9 @@ impl Frame {
     }
 
     pub fn begin(&self, pass: &Pass, width: u32, height: u32) {
-        let begin_info = vk::CommandBufferBeginInfo::builder().build();
-        unsafe {
-            self.device
-                .begin_command_buffer(self.res.command_buffer, &begin_info)
-        }
-        .expect("Failed to begin Vulkan command buffer");
+        self.res
+            .command_buffer
+            .begin(vk::CommandBufferUsageFlags::default());
 
         // Needed by cmd_begin_render_pass
         let area = vk::Rect2D::builder()
@@ -189,54 +177,24 @@ impl Frame {
             .extent(vk::Extent2D::builder().width(width).height(height).build())
             .build();
 
-        let mut color_clear = vk::ClearValue::default();
-        color_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
+        self.res
+            .command_buffer
+            .begin_render_pass(pass, &self.buffer, area);
 
-        let mut depth_clear = vk::ClearValue::default();
-        depth_clear.depth_stencil.depth = 1.0;
-        depth_clear.depth_stencil.stencil = 0;
-
-        let clear_values = [color_clear, depth_clear];
-        let create_info = vk::RenderPassBeginInfo::builder()
-            .framebuffer(self.buffer.framebuffer)
-            .render_pass(pass.render)
-            .render_area(area)
-            .clear_values(&clear_values)
-            .build();
-        // Record it in the main command buffer
-        let contents = vk::SubpassContents::INLINE;
-        unsafe {
-            self.device
-                .cmd_begin_render_pass(self.res.command_buffer, &create_info, contents)
-        };
-
-        let viewports = [vk::Viewport::builder()
+        let viewport = vk::Viewport::builder()
             .width(width as f32)
             .height(height as f32)
-            .build()];
-        unsafe {
-            self.device
-                .cmd_set_viewport(self.res.command_buffer, 0, &viewports)
-        };
+            .build();
+        self.res.command_buffer.set_viewport(&viewport);
 
-        let scissors = [vk::Rect2D::builder()
+        let scissor = vk::Rect2D::builder()
             .extent(vk::Extent2D::builder().width(width).height(height).build())
-            .build()];
-        unsafe {
-            self.device
-                .cmd_set_scissor(self.res.command_buffer, 0, &scissors)
-        }
+            .build();
+        self.res.command_buffer.set_scissor(&scissor);
     }
 
     pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
-        let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
-        unsafe {
-            self.device.cmd_bind_pipeline(
-                self.res.command_buffer,
-                graphics_bind_point,
-                pipeline.graphics,
-            );
-        }
+        self.res.command_buffer.bind_pipeline(pipeline);
 
         let node = model.nodes.get(camera_node).unwrap();
         assert!(model.cameras.get(node.camera).is_some());
@@ -248,16 +206,9 @@ impl Frame {
             .view_sets
             .get(&(pipeline.layout, camera_node))
         {
-            unsafe {
-                self.device.cmd_bind_descriptor_sets(
-                    self.res.command_buffer,
-                    graphics_bind_point,
-                    pipeline.layout,
-                    1,
-                    sets,
-                    &[],
-                )
-            };
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline.layout, sets, 1);
 
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
@@ -304,16 +255,9 @@ impl Frame {
                 self.res.proj_buffers.insert(node.camera, proj_buffer);
             }
 
-            unsafe {
-                self.device.cmd_bind_descriptor_sets(
-                    self.res.command_buffer,
-                    graphics_bind_point,
-                    pipeline.layout,
-                    1,
-                    &sets,
-                    &[],
-                );
-            }
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline.layout, &sets, 1);
 
             self.res
                 .pipeline_cache
@@ -331,14 +275,7 @@ impl Frame {
         node: Handle<Node>,
         texture: Handle<Texture>,
     ) {
-        let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
-        unsafe {
-            self.device.cmd_bind_pipeline(
-                self.res.command_buffer,
-                graphics_bind_point,
-                pipeline.graphics,
-            );
-        }
+        self.res.command_buffer.bind_pipeline(pipeline);
 
         let cnode = model.nodes.get(node).unwrap();
         if let Some(sets) = self
@@ -348,16 +285,9 @@ impl Frame {
             .model_sets
             .get(&(pipeline.layout, node))
         {
-            unsafe {
-                self.device.cmd_bind_descriptor_sets(
-                    self.res.command_buffer,
-                    graphics_bind_point,
-                    pipeline.layout,
-                    0,
-                    sets,
-                    &[],
-                );
-            }
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline.layout, sets, 0);
 
             // If there is a descriptor set, there must be a uniform buffer
             let ubo = self.res.model_buffers.get_mut(&node).unwrap();
@@ -388,16 +318,9 @@ impl Frame {
                 .allocate(&[pipeline.set_layouts[0]]);
             T::write_set(&self.device, sets[0], &model_buffer, view, sampler);
 
-            unsafe {
-                self.device.cmd_bind_descriptor_sets(
-                    self.res.command_buffer,
-                    graphics_bind_point,
-                    pipeline.layout,
-                    0,
-                    &sets,
-                    &[],
-                );
-            }
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline.layout, &sets, 0);
 
             self.res.model_buffers.insert(node, model_buffer);
             self.res
@@ -407,49 +330,25 @@ impl Frame {
                 .insert((pipeline.layout, node), sets);
         }
 
-        let first_binding = 0;
-        let buffers = [primitive.vertices.buffer];
-        let offsets = [vk::DeviceSize::default()];
-        unsafe {
-            self.device.cmd_bind_vertex_buffers(
-                self.res.command_buffer,
-                first_binding,
-                &buffers,
-                &offsets,
-            );
-        }
+        self.res
+            .command_buffer
+            .bind_vertex_buffer(&primitive.vertices);
 
         if let Some(indices) = &primitive.indices {
             // Draw indexed if primitive has indices
-            unsafe {
-                self.device.cmd_bind_index_buffer(
-                    self.res.command_buffer,
-                    indices.buffer,
-                    0,
-                    vk::IndexType::UINT16,
-                );
-            }
+            self.res.command_buffer.bind_index_buffer(indices);
+
             let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
-            unsafe {
-                self.device
-                    .cmd_draw_indexed(self.res.command_buffer, index_count, 1, 0, 0, 0);
-            }
+            self.res.command_buffer.draw_indexed(index_count, 0, 0);
         } else {
             // Draw without indices
-            unsafe {
-                self.device
-                    .cmd_draw(self.res.command_buffer, primitive.vertex_count, 1, 0, 0);
-            }
+            self.res.command_buffer.draw(primitive.vertex_count);
         }
     }
 
     pub fn end(&self) {
-        unsafe {
-            self.device.cmd_end_render_pass(self.res.command_buffer);
-            self.device
-                .end_command_buffer(self.res.command_buffer)
-                .expect("Failed to end command buffer");
-        }
+        self.res.command_buffer.end_render_pass();
+        self.res.command_buffer.end()
     }
 
     pub fn present(
