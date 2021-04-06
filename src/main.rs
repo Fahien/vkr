@@ -15,6 +15,9 @@ use model::*;
 mod pipeline;
 use pipeline::*;
 
+mod commands;
+use commands::*;
+
 mod image;
 use image::*;
 
