@@ -13,6 +13,9 @@ type SetCache = HashMap<(vk::PipelineLayout, Handle<Node>), Vec<vk::DescriptorSe
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
 pub struct Descriptors {
+    /// Descriptor sets for the GUI
+    pub gui_sets: Vec<vk::DescriptorSet>,
+
     /// These descriptor sets are for camera view and proj uniform, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the number of nodes with cameras
     pub view_sets: SetCache,
@@ -25,18 +28,18 @@ pub struct Descriptors {
     /// Or can we provide sufficient descriptors for all supported pipeline layouts? Trying this approach.
     pool: vk::DescriptorPool,
 
-    device: Rc<Device>,
+    pub device: Rc<Device>,
 }
 
 impl Descriptors {
     pub fn new(device: &Rc<Device>) -> Self {
         let pool = unsafe {
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(3 * 2) // Support model, view and proj matrix for 2 pipelines
+                .descriptor_count(3 * 3) // Support model, view and proj matrix for 3 pipelines
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
             let sampler_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(2) // Support 1 material for 2 pipelines
+                .descriptor_count(2 * 3) // Support 1 material and 1 gui font texture for 3 pipelines
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
@@ -44,13 +47,14 @@ impl Descriptors {
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 // @todo Use a parameter instead of 2 for frame count
-                .max_sets(2 * 2) // Support 2 frames with 2 pipelines
+                .max_sets(2 * 3) // Support 2 frames with 3 pipelines
                 .build();
             device.create_descriptor_pool(&create_info, None)
         }
         .expect("Failed to create Vulkan descriptor pool");
 
         Self {
+            gui_sets: vec![],
             view_sets: HashMap::new(),
             model_sets: HashMap::new(),
             pool,
