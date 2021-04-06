@@ -502,7 +502,7 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new<T: VertexInput>(
-        dev: &mut Dev,
+        dev: &Dev,
         vert: ash::vk::PipelineShaderStageCreateInfo,
         frag: ash::vk::PipelineShaderStageCreateInfo,
         topology: ash::vk::PrimitiveTopology,
@@ -632,8 +632,8 @@ impl Pipeline {
         }
     }
 
-    pub fn line(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::new(&dev.device);
+    pub fn line(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(&dev.device);
         let vs = CString::new("line_vs").expect("Failed to create entrypoint");
         let fs = CString::new("line_fs").expect("Failed to create entrypoint");
         Self::new::<Line>(
@@ -647,8 +647,8 @@ impl Pipeline {
         )
     }
 
-    pub fn main(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::new(&dev.device);
+    pub fn main(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(&dev.device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
         Self::new::<Vertex>(
