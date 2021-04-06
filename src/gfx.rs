@@ -511,11 +511,13 @@ impl Pipeline {
         height: u32,
     ) -> Self {
         let set_layouts = T::get_set_layouts(&dev.device);
+        let constants = T::get_constants();
 
         // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
             let create_info = ash::vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&set_layouts)
+                .push_constant_ranges(&constants)
                 .build();
             unsafe { dev.device.create_pipeline_layout(&create_info, None) }
                 .expect("Failed to create Vulkan pipeline layout")
@@ -579,22 +581,18 @@ impl Pipeline {
                 .alpha_to_one_enable(false)
                 .build();
 
-            let depth_state = ash::vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
-                .depth_compare_op(ash::vk::CompareOp::LESS)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .build();
+            let depth_state = T::get_depth_state();
 
-            let blend_attachment = [ash::vk::PipelineColorBlendAttachmentState::builder()
-                .blend_enable(false)
-                .color_write_mask(ash::vk::ColorComponentFlags::all())
-                .build()];
+            let blend_attachment = T::get_color_blend();
 
             let blend_state = ash::vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op_enable(false)
                 .attachments(&blend_attachment)
+                .build();
+
+            let states = vec![ash::vk::DynamicState::SCISSOR];
+            let dynamic_state = ash::vk::PipelineDynamicStateCreateInfo::builder()
+                .dynamic_states(&states)
                 .build();
 
             let stages = [vert, frag];
@@ -608,6 +606,7 @@ impl Pipeline {
                 .multisample_state(&multisample_state)
                 .depth_stencil_state(&depth_state)
                 .color_blend_state(&blend_state)
+                .dynamic_state(&dynamic_state)
                 .render_pass(pass.render)
                 .subpass(0)
                 .layout(layout)
