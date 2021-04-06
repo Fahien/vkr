@@ -36,7 +36,7 @@ impl Queue {
 
     pub fn submit_draw(
         &self,
-        command_buffer: &vk::CommandBuffer,
+        command_buffer: &CommandBuffer,
         wait: &Semaphore,
         signal: &Semaphore,
         fence: Option<&mut Fence>,
@@ -45,7 +45,7 @@ impl Queue {
         let waits = [wait.semaphore];
         // .. at color attachment output stage
         let wait_dst_stage_mask = [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [*command_buffer];
+        let command_buffers = [command_buffer.command_buffer];
         let signals = [signal.semaphore];
 
         let submits = [ash::vk::SubmitInfo::builder()

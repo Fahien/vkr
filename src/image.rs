@@ -30,7 +30,7 @@ pub struct Image {
     /// Whether this image is manages and should be freed, or not (like swapchain images)
     managed: bool,
     pub image: ash::vk::Image,
-    layout: ash::vk::ImageLayout,
+    pub layout: ash::vk::ImageLayout,
     pub extent: ash::vk::Extent3D,
     pub format: ash::vk::Format,
     pub color_space: ash::vk::ColorSpaceKHR,
@@ -150,217 +150,140 @@ impl Image {
 
     pub fn transition(&mut self, dev: &Dev, new_layout: vk::ImageLayout) {
         // @todo Use TRANSFER pool and transfer queue?
-        let command_buffer = unsafe {
-            let alloc_info = ash::vk::CommandBufferAllocateInfo::builder()
-                .command_pool(dev.graphics_command_pool)
-                .level(ash::vk::CommandBufferLevel::PRIMARY)
-                .command_buffer_count(1)
-                .build();
-            let buffers = dev
-                .device
-                .allocate_command_buffers(&alloc_info)
-                .expect("Failed to allocate Vulkan command buffer");
-            buffers[0]
-        };
+        let command_buffer = CommandBuffer::new(&dev.graphics_command_pool);
 
-        unsafe {
-            let begin_info = ash::vk::CommandBufferBeginInfo::builder()
-                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build();
-            dev.device.begin_command_buffer(command_buffer, &begin_info)
-        }
-        .expect("Failed to begin Vulkan command buffer");
+        command_buffer.begin(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         // Old layout -> New layout
-        unsafe {
-            let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
-            let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
-            let dependency_flags = ash::vk::DependencyFlags::default();
-            let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
-                .old_layout(self.layout)
-                .new_layout(new_layout)
-                .image(self.image)
-                .subresource_range(
-                    ash::vk::ImageSubresourceRange::builder()
-                        .aspect_mask(Image::get_aspect_from_format(self.format))
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build(),
-                )
-                .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
-                .build()];
-            dev.device.cmd_pipeline_barrier(
-                command_buffer,
-                src_stage_mask,
-                dst_stage_mask,
-                dependency_flags,
-                &[],
-                &[],
-                &image_memory_barriers,
-            );
+        let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
+        let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
+        let dependency_flags = ash::vk::DependencyFlags::default();
+        let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
+            .old_layout(self.layout)
+            .new_layout(new_layout)
+            .image(self.image)
+            .subresource_range(
+                ash::vk::ImageSubresourceRange::builder()
+                    .aspect_mask(Image::get_aspect_from_format(self.format))
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
+            .build()];
+        command_buffer.pipeline_barriers(
+            src_stage_mask,
+            dst_stage_mask,
+            dependency_flags,
+            &image_memory_barriers,
+        );
 
-            self.layout = new_layout;
-        }
+        self.layout = new_layout;
 
-        // End
-        unsafe {
-            dev.device
-                .end_command_buffer(command_buffer)
-                .expect("Failed to end Vulkan command buffer");
-        }
+        command_buffer.end();
 
         let mut fence = Fence::unsignaled(&dev.device);
 
         let submits = [ash::vk::SubmitInfo::builder()
-            .command_buffers(&[command_buffer])
+            .command_buffers(&[command_buffer.command_buffer])
             .build()];
         dev.graphics_queue.submit(&submits, Some(&mut fence));
 
         fence.wait();
-
-        unsafe {
-            dev.device
-                .free_command_buffers(dev.graphics_command_pool, &[command_buffer]);
-        }
     }
 
     pub fn copy_from(&mut self, staging: &Buffer, dev: &Dev) {
         // @todo Use TRANSFER pool and transfer queue
-        let command_buffer = unsafe {
-            let alloc_info = ash::vk::CommandBufferAllocateInfo::builder()
-                .command_pool(dev.graphics_command_pool)
-                .level(ash::vk::CommandBufferLevel::PRIMARY)
-                .command_buffer_count(1)
-                .build();
-            let buffers = dev
-                .device
-                .allocate_command_buffers(&alloc_info)
-                .expect("Failed to allocate Vulkan command buffer");
-            buffers[0]
-        };
+        let command_buffer = CommandBuffer::new(&dev.graphics_command_pool);
 
-        unsafe {
-            let begin_info = ash::vk::CommandBufferBeginInfo::builder()
-                .flags(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build();
-            dev.device.begin_command_buffer(command_buffer, &begin_info)
-        }
-        .expect("Failed to begin Vulkan command buffer");
+        command_buffer.begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         // Undefined -> Transfer dst optimal
-        unsafe {
-            let new_layout = ash::vk::ImageLayout::TRANSFER_DST_OPTIMAL;
+        let new_layout = ash::vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
-            let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
-            let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
-            let dependency_flags = ash::vk::DependencyFlags::default();
-            let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
-                .old_layout(self.layout)
-                .new_layout(new_layout)
-                .image(self.image)
-                .subresource_range(
-                    ash::vk::ImageSubresourceRange::builder()
-                        .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build(),
-                )
-                .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
-                .build()];
-            dev.device.cmd_pipeline_barrier(
-                command_buffer,
-                src_stage_mask,
-                dst_stage_mask,
-                dependency_flags,
-                &[],
-                &[],
-                &image_memory_barriers,
-            );
+        let src_stage_mask = ash::vk::PipelineStageFlags::TOP_OF_PIPE;
+        let dst_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
+        let dependency_flags = ash::vk::DependencyFlags::default();
+        let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
+            .old_layout(self.layout)
+            .new_layout(new_layout)
+            .image(self.image)
+            .subresource_range(
+                ash::vk::ImageSubresourceRange::builder()
+                    .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .dst_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
+            .build()];
 
-            self.layout = new_layout;
-        }
+        command_buffer.pipeline_barriers(
+            src_stage_mask,
+            dst_stage_mask,
+            dependency_flags,
+            &image_memory_barriers,
+        );
+
+        self.layout = new_layout;
 
         // Copy
-        unsafe {
-            let dst_image_layout = self.layout;
-            let regions = vec![ash::vk::BufferImageCopy::builder()
-                .image_subresource(
-                    ash::vk::ImageSubresourceLayers::builder()
-                        .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
-                        .layer_count(1)
-                        .build(),
-                )
-                .image_extent(self.extent)
-                .build()];
-            dev.device.cmd_copy_buffer_to_image(
-                command_buffer,
-                staging.buffer,
-                self.image,
-                dst_image_layout,
-                &regions,
-            );
-        }
+        let region = ash::vk::BufferImageCopy::builder()
+            .image_subresource(
+                ash::vk::ImageSubresourceLayers::builder()
+                    .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
+                    .layer_count(1)
+                    .build(),
+            )
+            .image_extent(self.extent)
+            .build();
+        command_buffer.copy_buffer_to_image(&staging, self, &region);
 
         // Transfer dst optimal -> Shader read only optimal
-        unsafe {
-            let new_layout = ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+        let new_layout = ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
 
-            let src_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
-            let dst_stage_mask = ash::vk::PipelineStageFlags::FRAGMENT_SHADER;
-            let dependency_flags = ash::vk::DependencyFlags::default();
-            let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
-                .old_layout(self.layout)
-                .new_layout(new_layout)
-                .image(self.image)
-                .subresource_range(
-                    ash::vk::ImageSubresourceRange::builder()
-                        .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build(),
-                )
-                .src_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
-                .dst_access_mask(ash::vk::AccessFlags::SHADER_READ)
-                .build()];
-            dev.device.cmd_pipeline_barrier(
-                command_buffer,
-                src_stage_mask,
-                dst_stage_mask,
-                dependency_flags,
-                &[],
-                &[],
-                &image_memory_barriers,
-            );
+        let src_stage_mask = ash::vk::PipelineStageFlags::TRANSFER;
+        let dst_stage_mask = ash::vk::PipelineStageFlags::FRAGMENT_SHADER;
+        let dependency_flags = ash::vk::DependencyFlags::default();
+        let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
+            .old_layout(self.layout)
+            .new_layout(new_layout)
+            .image(self.image)
+            .subresource_range(
+                ash::vk::ImageSubresourceRange::builder()
+                    .aspect_mask(ash::vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .src_access_mask(ash::vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(ash::vk::AccessFlags::SHADER_READ)
+            .build()];
+        command_buffer.pipeline_barriers(
+            src_stage_mask,
+            dst_stage_mask,
+            dependency_flags,
+            &image_memory_barriers,
+        );
 
-            self.layout = new_layout;
-        }
+        self.layout = new_layout;
 
-        // End
-        unsafe {
-            dev.device
-                .end_command_buffer(command_buffer)
-                .expect("Failed to end Vulkan command buffer");
-        }
+        command_buffer.end();
 
         let mut fence = Fence::unsignaled(&dev.device);
 
         let submits = [ash::vk::SubmitInfo::builder()
-            .command_buffers(&[command_buffer])
+            .command_buffers(&[command_buffer.command_buffer])
             .build()];
         dev.graphics_queue.submit(&submits, Some(&mut fence));
 
         fence.wait();
-
-        unsafe {
-            dev.device
-                .free_command_buffers(dev.graphics_command_pool, &[command_buffer]);
-        }
     }
 }
 
