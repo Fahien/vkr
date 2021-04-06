@@ -743,12 +743,11 @@ impl Buffer {
         }
     }
 
-    pub fn new<T>(
+    pub fn new_with_size(
         allocator: &Rc<RefCell<vk_mem::Allocator>>,
         usage: ash::vk::BufferUsageFlags,
+        size: ash::vk::DeviceSize,
     ) -> Self {
-        let size = std::mem::size_of::<T>() as ash::vk::DeviceSize;
-
         let (buffer, allocation) = Self::create_buffer(&allocator.deref().borrow(), size, usage);
 
         Self {
@@ -758,6 +757,24 @@ impl Buffer {
             usage,
             allocator: allocator.clone(),
         }
+    }
+
+    pub fn new<T>(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        usage: ash::vk::BufferUsageFlags,
+    ) -> Self {
+        let size = std::mem::size_of::<T>() as ash::vk::DeviceSize;
+        Self::new_with_size(allocator, usage, size)
+    }
+
+    pub fn from_data(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        data: &[u8],
+        usage: ash::vk::BufferUsageFlags,
+    ) -> Self {
+        let mut buffer = Self::new_with_size(allocator, usage, data.len() as ash::vk::DeviceSize);
+        buffer.upload_arr(data);
+        buffer
     }
 
     pub fn upload<T>(&mut self, data: &T) {
