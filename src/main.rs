@@ -12,6 +12,9 @@ use util::*;
 mod model;
 use model::*;
 
+mod commands;
+use commands::*;
+
 mod image;
 use image::*;
 
