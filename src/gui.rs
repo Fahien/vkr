@@ -22,6 +22,8 @@ pub struct Gui {
     view: ImageView,
     image: Image,
 
+    scale: [f32; 2],
+
     pub ctx: im::Context,
 
     device: Rc<Device>,
@@ -161,18 +163,27 @@ impl Gui {
         Image::from_data(dev, font.data, font.width, font.height, format)
     }
 
-    pub fn new(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+    pub fn new(win: &Win, dev: &Dev, pass: &Pass) -> Self {
         let mut ctx = im::Context::create();
 
+        let framebuffer_size = win.window.drawable_size();
+        let win_size = win.window.size();
+        let scale = [
+            framebuffer_size.0 as f32 / win_size.0 as f32,
+            framebuffer_size.1 as f32 / win_size.1 as f32,
+        ];
+
         let io = ctx.io_mut();
-        io.display_size[0] = width as f32;
-        io.display_size[1] = height as f32;
+        io.display_framebuffer_scale = scale;
+        io.font_global_scale = scale[0];
+        io.display_size[0] = framebuffer_size.0 as f32;
+        io.display_size[1] = framebuffer_size.1 as f32;
 
         let image = Self::build_font(dev, &mut ctx);
         let view = ImageView::new(&dev.device, &image);
         let sampler = Sampler::new(&dev.device);
 
-        let pipeline = Pipeline::gui(dev, pass, width, height);
+        let pipeline = Pipeline::gui(dev, pass, framebuffer_size.0, framebuffer_size.1);
 
         let set_layouts = im::DrawVert::get_set_layouts(&dev.device);
 
@@ -182,9 +193,19 @@ impl Gui {
             sampler,
             view,
             image,
+            scale,
             ctx,
             device: dev.device.clone(),
         }
+    }
+
+    pub fn set_mouse_state(&mut self, mouse_state: &sdl::mouse::MouseState) {
+        let io = self.ctx.io_mut();
+        io.mouse_pos[0] = mouse_state.x() as f32 * self.scale[0];
+        io.mouse_pos[1] = mouse_state.y() as f32 * self.scale[1];
+        io.mouse_down[0] = mouse_state.left();
+        io.mouse_down[1] = mouse_state.right();
+        io.mouse_down[2] = mouse_state.middle();
     }
 
     pub fn update(&mut self, res: &mut Frameres, delta: f32) {
