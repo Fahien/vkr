@@ -118,7 +118,10 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let states = vec![vk::DynamicState::SCISSOR];
+            let states = vec![
+                vk::DynamicState::VIEWPORT,
+                vk::DynamicState::SCISSOR,
+            ];
             let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
                 .dynamic_states(&states)
                 .build();
@@ -197,4 +200,5 @@ impl Drop for Pipeline {
         }
     }
 }
+
 
