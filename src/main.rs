@@ -131,6 +131,14 @@ pub fn main() {
             continue;
         }
 
+        if vkr.resized {
+            let node = model.nodes.get_mut(camera_node).unwrap();
+            let camera = model.cameras.get_mut(node.camera).unwrap();
+            let (width, height) = vkr.win.as_ref().unwrap().window.drawable_size();
+            let aspect = width as f32 / height as f32;
+            *camera = Camera::orthographic(-aspect, aspect, -1.0, 1.0, 0.1, 1.0);
+        }
+
         let mut frame = frame.unwrap();
 
         frame.bind(&line_pipeline, &model, camera_node);
