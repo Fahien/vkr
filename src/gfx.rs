@@ -210,6 +210,7 @@ impl Vkr {
         let win = self.win.as_ref().unwrap();
 
         if self.resized {
+            self.gui.set_drawable_size(win);
             self.sfs.recreate(win, &self.surface, &self.dev, &self.pass);
         }
 
@@ -730,7 +731,10 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let states = vec![ash::vk::DynamicState::SCISSOR];
+            let states = vec![
+                ash::vk::DynamicState::VIEWPORT,
+                ash::vk::DynamicState::SCISSOR,
+            ];
             let dynamic_state = ash::vk::PipelineDynamicStateCreateInfo::builder()
                 .dynamic_states(&states)
                 .build();
