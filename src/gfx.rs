@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use ash::{extensions::ext::DebugReport, vk::Handle};
+use sdl::{event::Event, keyboard::Keycode};
 use sdl2 as sdl;
 use std::{
     borrow::Borrow,
@@ -13,7 +14,13 @@ use std::{
     rc::Rc,
 };
 
-use crate::{image::{Image, Png}, queue::Queue, commands::CommandPool};
+use crate::{
+    commands::CommandPool,
+    frame::{Frame, Frames, SwapchainFrames},
+    gui::Gui,
+    image::{Image, Png},
+    queue::Queue,
+};
 
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
@@ -30,6 +37,7 @@ pub unsafe extern "system" fn vk_debug(
 }
 
 pub struct Win {
+    pub events: sdl::EventPump,
     pub window: sdl::video::Window,
     pub video: sdl::VideoSubsystem,
     pub ctx: sdl::Sdl,
@@ -48,7 +56,14 @@ impl Win {
             .build()
             .expect("Failed to build SDL window");
 
-        Self { window, video, ctx }
+        let events = ctx.event_pump().expect("Failed to create SDL events");
+
+        Self {
+            events,
+            window,
+            video,
+            ctx,
+        }
     }
 }
 
@@ -123,16 +138,116 @@ impl Ctx {
 }
 
 pub struct Vkr {
+    pub gui: Gui,
+    pub sfs: SwapchainFrames, // Use box of frames?
+    pub pass: Pass,           // How about multiple passes?
+    pub dev: Dev,
+    pub surface: Surface,
     pub debug: Debug,
     pub ctx: Ctx,
+    pub win: Option<Win>,
+    resized: bool, // Whether the window has been resized or not
 }
 
 impl Vkr {
-    pub fn new(win: &Win) -> Self {
-        let ctx = Ctx::new(win);
+    pub fn new(win: Win) -> Self {
+        let (width, height) = win.window.drawable_size();
+
+        let ctx = Ctx::new(&win);
         let debug = Debug::new(&ctx);
 
-        Self { ctx, debug }
+        let surface = Surface::new(&win, &ctx);
+        let mut dev = Dev::new(&ctx, &surface);
+
+        let pass = Pass::new(&mut dev);
+        let sfs = SwapchainFrames::new(&ctx, &surface, &mut dev, width, height, &pass);
+
+        let gui = Gui::new(&win, &dev, &pass);
+
+        Self {
+            gui,
+            sfs,
+            pass,
+            dev,
+            surface,
+            debug,
+            ctx,
+            win: Some(win),
+            resized: false,
+        }
+    }
+
+    pub fn handle_events(&mut self) -> bool {
+        let win = self.win.as_mut().unwrap();
+
+        self.resized = false;
+
+        // Handle events
+        for event in win.events.poll_iter() {
+            match event {
+                Event::Window {
+                    win_event: sdl::event::WindowEvent::Resized(_, _),
+                    ..
+                }
+                | Event::Window {
+                    win_event: sdl::event::WindowEvent::SizeChanged(_, _),
+                    ..
+                } => {
+                    self.resized = true;
+                }
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => return false,
+                _ => {}
+            }
+        }
+
+        self.gui.set_mouse_state(&win.events.mouse_state());
+
+        true
+    }
+
+    pub fn begin_frame(&mut self) -> Option<Frame> {
+        let win = self.win.as_ref().unwrap();
+
+        if self.resized {
+            self.sfs.recreate(win, &self.surface, &self.dev, &self.pass);
+        }
+
+        match self
+            .sfs
+            .next_frame(win, &self.surface, &self.dev, &self.pass)
+        {
+            Some(frame) => {
+                let (width, height) = self.win.as_mut().unwrap().window.drawable_size();
+                frame.begin(&self.pass, width, height);
+                Some(frame)
+            }
+            None => None,
+        }
+    }
+
+    pub fn end_frame(&mut self, mut frame: Frame, delta: f32) {
+        self.gui.update(&mut frame.res, delta);
+
+        frame.end();
+
+        self.sfs.present(
+            frame,
+            &self.win.as_ref().unwrap(),
+            &self.surface,
+            &self.dev,
+            &self.pass,
+        );
+    }
+}
+
+impl Drop for Vkr {
+    fn drop(&mut self) {
+        // Make sure device is idle before releasing Vulkan resources
+        self.dev.wait();
     }
 }
 
@@ -177,11 +292,13 @@ pub struct Swapchain {
 }
 
 impl Swapchain {
-    pub fn new(ctx: &Ctx, surface: &Surface, dev: &Dev, width: u32, height: u32) -> Self {
-        // Swapchain (instance, logical device, surface formats)
-        let device: &ash::Device = dev.device.borrow();
-        let ext = ash::extensions::khr::Swapchain::new(&ctx.instance, device);
-
+    fn create_swapchain(
+        ext: &ash::extensions::khr::Swapchain,
+        surface: &Surface,
+        dev: &Dev,
+        width: u32,
+        height: u32,
+    ) -> ash::vk::SwapchainKHR {
         // This needs to be queried to prevent validation layers complaining
         let surface_capabilities = unsafe {
             surface
@@ -190,28 +307,34 @@ impl Swapchain {
         }
         .expect("Failed to get Vulkan physical device surface capabilities");
 
-        let swapchain = {
-            let create_info = ash::vk::SwapchainCreateInfoKHR::builder()
-                .surface(surface.surface)
-                .min_image_count(2)
-                .image_format(dev.surface_format.format)
-                .image_color_space(dev.surface_format.color_space)
-                .image_extent(
-                    ash::vk::Extent2D::builder()
-                        .width(width)
-                        .height(height)
-                        .build(),
-                )
-                .image_array_layers(1)
-                .image_usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .image_sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
-                .pre_transform(surface_capabilities.current_transform)
-                .composite_alpha(ash::vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(ash::vk::PresentModeKHR::FIFO)
-                .clipped(true);
-            unsafe { ext.create_swapchain(&create_info, None) }
-                .expect("Failed to create Vulkan swapchain")
-        };
+        let create_info = ash::vk::SwapchainCreateInfoKHR::builder()
+            .surface(surface.surface)
+            .min_image_count(2)
+            .image_format(dev.surface_format.format)
+            .image_color_space(dev.surface_format.color_space)
+            .image_extent(
+                ash::vk::Extent2D::builder()
+                    .width(width)
+                    .height(height)
+                    .build(),
+            )
+            .image_array_layers(1)
+            .image_usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
+            .pre_transform(surface_capabilities.current_transform)
+            .composite_alpha(ash::vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(ash::vk::PresentModeKHR::FIFO)
+            .clipped(true);
+        unsafe { ext.create_swapchain(&create_info, None) }
+            .expect("Failed to create Vulkan swapchain")
+    }
+
+    pub fn new(ctx: &Ctx, surface: &Surface, dev: &Dev, width: u32, height: u32) -> Self {
+        // Swapchain (instance, logical device, surface formats)
+        let device: &ash::Device = dev.device.borrow();
+        let ext = ash::extensions::khr::Swapchain::new(&ctx.instance, device);
+
+        let swapchain = Self::create_swapchain(&ext, surface, dev, width, height);
 
         let swapchain_images = unsafe { ext.get_swapchain_images(swapchain) }
             .expect("Failed to get Vulkan swapchain images");
@@ -231,6 +354,30 @@ impl Swapchain {
             images,
             swapchain,
             ext,
+        }
+    }
+
+    pub fn recreate(&mut self, surface: &Surface, dev: &Dev, width: u32, height: u32) {
+        dev.wait();
+
+        unsafe {
+            self.ext.destroy_swapchain(self.swapchain, None);
+        }
+
+        self.swapchain = Self::create_swapchain(&self.ext, surface, dev, width, height);
+
+        let swapchain_images = unsafe { self.ext.get_swapchain_images(self.swapchain) }
+            .expect("Failed to get Vulkan swapchain images");
+
+        self.images.clear();
+        for image in swapchain_images.into_iter() {
+            self.images.push(Image::unmanaged(
+                image,
+                width,
+                height,
+                dev.surface_format.format,
+                dev.surface_format.color_space,
+            ));
         }
     }
 }

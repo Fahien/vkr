@@ -20,7 +20,7 @@ pub struct Framebuffer {
 }
 
 impl Framebuffer {
-    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
+    pub fn new(dev: &Dev, image: &Image, pass: &Pass) -> Self {
         // Image view into a swapchain images (device, image, format)
         let image_view = {
             let create_info = vk::ImageViewCreateInfo::builder()
@@ -384,8 +384,9 @@ impl Drop for Frame {
 }
 
 pub trait Frames {
-    fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, vk::Result>;
-    fn present(&mut self, dev: &Dev) -> Result<(), vk::Result>;
+    fn next_frame(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass)
+        -> Option<Frame>;
+    fn present(&mut self, frame: Frame, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass);
 }
 
 /// Offscreen frames work on user allocated images
@@ -395,14 +396,18 @@ struct OffscreenFrames {
 }
 
 impl Frames for OffscreenFrames {
-    fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, vk::Result> {
-        // Unimplemented
-        Err(vk::Result::ERROR_UNKNOWN)
+    fn next_frame(
+        &mut self,
+        _win: &Win,
+        _surface: &Surface,
+        _dev: &Dev,
+        _pass: &Pass,
+    ) -> Option<Frame> {
+        unimplemented!("Offscreen next frame");
     }
 
-    fn present(&mut self, _dev: &Dev) -> Result<(), vk::Result> {
-        // Unimplemented
-        Err(vk::Result::ERROR_UNKNOWN)
+    fn present(&mut self, _frame: Frame, _win: &Win, _surface: &Surface, _dev: &Dev, _pass: &Pass) {
+        unimplemented!("Offscreen present");
     }
 }
 
@@ -438,19 +443,39 @@ impl SwapchainFrames {
             swapchain,
         }
     }
+
+    pub fn recreate(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
+        dev.wait();
+        //drop(self.swapchain);
+        self.current = 0;
+        let (width, height) = win.window.drawable_size();
+        self.swapchain.recreate(&surface, &dev, width, height);
+        for i in 0..self.swapchain.images.len() {
+            let frame = &mut self.frames[i];
+            // Only this semaphore must be recreated to avoid validation errors
+            // The image drawn one is still in use at the moment
+            frame.res.image_ready = Semaphore::new(&dev.device);
+            frame.buffer = Framebuffer::new(&dev, &self.swapchain.images[i], &pass);
+        }
+    }
 }
 
 impl Frames for SwapchainFrames {
-    fn next_frame<'a>(&'a mut self) -> Result<&'a mut Frame, vk::Result> {
+    fn next_frame(
+        &mut self,
+        win: &Win,
+        surface: &Surface,
+        dev: &Dev,
+        pass: &Pass,
+    ) -> Option<Frame> {
         // Wait for this frame to be ready
-        let frame = &mut self.frames[self.current];
-        frame.res.wait();
+        self.frames[0].res.wait();
 
         let acquire_res = unsafe {
             self.swapchain.ext.acquire_next_image(
                 self.swapchain.swapchain,
                 u64::max_value(),
-                frame.res.image_ready.semaphore,
+                self.frames[0].res.image_ready.semaphore,
                 vk::Fence::null(),
             )
         };
@@ -458,30 +483,34 @@ impl Frames for SwapchainFrames {
         match acquire_res {
             Ok((image_index, false)) => {
                 self.image_index = image_index;
-                Ok(frame)
+                Some(self.frames.remove(0))
             }
             // Suboptimal
-            Ok((_, true)) => {
-                self.current = 0;
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR)
+            Ok((_, true)) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                self.recreate(win, surface, dev, pass);
+                None
             }
             Err(result) => {
-                self.current = 0;
-                Err(result)
+                panic!("{:?}", result);
             }
         }
     }
 
-    fn present(&mut self, dev: &Dev) -> Result<(), vk::Result> {
-        match self.frames[self.current].present(dev, &self.swapchain, self.image_index) {
-            Ok(()) => {
-                self.current = (self.current + 1) % self.frames.len();
-                Ok(())
+    fn present(&mut self, frame: Frame, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
+        self.frames.push(frame);
+
+        match self
+            .frames
+            .last_mut()
+            .unwrap()
+            .present(dev, &self.swapchain, self.image_index)
+        {
+            Ok(()) => (),
+            // Recreate swapchain
+            Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                self.recreate(win, surface, dev, pass);
             }
-            Err(result) => {
-                self.current = 0;
-                Err(result)
-            }
+            Err(result) => panic!("{:?}", result),
         }
     }
 }
