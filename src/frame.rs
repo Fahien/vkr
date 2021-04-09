@@ -198,6 +198,8 @@ impl Frame {
         let viewport = vk::Viewport::builder()
             .width(width as f32)
             .height(height as f32)
+            .max_depth(0.0)
+            .min_depth(1.0)
             .build();
         self.res.command_buffer.set_viewport(&viewport);
 
@@ -212,8 +214,23 @@ impl Frame {
 
         let width = self.buffer.width as f32;
         let height = self.buffer.height as f32;
-        let viewport = vk::Viewport::builder().width(width).height(height).build();
+        let viewport = vk::Viewport::builder()
+            .width(width)
+            .height(height)
+            .max_depth(0.0)
+            .min_depth(1.0)
+            .build();
         self.res.command_buffer.set_viewport(&viewport);
+
+        let scissor = vk::Rect2D::builder()
+            .extent(
+                vk::Extent2D::builder()
+                    .width(self.buffer.width)
+                    .height(self.buffer.height)
+                    .build(),
+            )
+            .build();
+        self.res.command_buffer.set_scissor(&scissor);
 
         let node = model.nodes.get(camera_node).unwrap();
         let camera = model.cameras.get(node.camera).unwrap();

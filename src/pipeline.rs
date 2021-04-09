@@ -88,8 +88,8 @@ impl Pipeline {
                 .y(0.0)
                 .width(width as f32)
                 .height(height as f32)
-                .min_depth(0.0)
-                .max_depth(1.0)
+                .min_depth(1.0)
+                .max_depth(0.0)
                 .build()];
 
             let scissor = [vk::Rect2D::builder()
@@ -118,10 +118,7 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let states = vec![
-                vk::DynamicState::VIEWPORT,
-                vk::DynamicState::SCISSOR,
-            ];
+            let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
             let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
                 .dynamic_states(&states)
                 .build();
@@ -200,5 +197,3 @@ impl Drop for Pipeline {
         }
     }
 }
-
-
