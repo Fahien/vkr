@@ -22,6 +22,8 @@ pub struct Gui {
     view: ImageView,
     _image: Image,
 
+    width: f32,
+    height: f32,
     scale: [f32; 2],
 
     pub ctx: im::Context,
@@ -168,16 +170,16 @@ impl Gui {
 
         let framebuffer_size = win.window.drawable_size();
         let win_size = win.window.size();
-        let scale = [
-            framebuffer_size.0 as f32 / win_size.0 as f32,
-            framebuffer_size.1 as f32 / win_size.1 as f32,
-        ];
+
+        let width = framebuffer_size.0 as f32;
+        let height = framebuffer_size.1 as f32;
+        let scale = [width / win_size.0 as f32, height / win_size.1 as f32];
 
         let io = ctx.io_mut();
         io.display_framebuffer_scale = scale;
         io.font_global_scale = scale[0];
-        io.display_size[0] = framebuffer_size.0 as f32;
-        io.display_size[1] = framebuffer_size.1 as f32;
+        io.display_size[0] = width;
+        io.display_size[1] = height;
 
         let image = Self::build_font(dev, &mut ctx);
         let view = ImageView::new(&dev.device, &image);
@@ -193,6 +195,8 @@ impl Gui {
             sampler,
             view,
             _image: image,
+            width,
+            height,
             scale,
             ctx,
             device: dev.device.clone(),
@@ -211,32 +215,25 @@ impl Gui {
     pub fn set_drawable_size(&mut self, win: &Win) {
         let framebuffer_size = win.window.drawable_size();
         let win_size = win.window.size();
+        self.width = framebuffer_size.0 as f32;
+        self.height = framebuffer_size.1 as f32;
         self.scale = [
-            framebuffer_size.0 as f32 / win_size.0 as f32,
-            framebuffer_size.1 as f32 / win_size.1 as f32,
+            self.width / win_size.0 as f32,
+            self.height / win_size.1 as f32,
         ];
 
         let io = self.ctx.io_mut();
         io.display_framebuffer_scale = self.scale;
         io.font_global_scale = self.scale[0];
-        io.display_size[0] = framebuffer_size.0 as f32;
-        io.display_size[1] = framebuffer_size.1 as f32
+        io.display_size[0] = self.width;
+        io.display_size[1] = self.height
     }
 
-    pub fn update(&mut self, frame_cache: &mut FrameCache, delta: f32) {
+    pub fn update<F: FnOnce(&im::Ui)>(&mut self, delta: f32, frame_cache: &mut FrameCache, draw: F) {
         self.ctx.io_mut().delta_time = delta;
-
-        self.render(frame_cache);
-    }
-
-    fn render(&mut self, frame_cache: &mut FrameCache) {
-        let width = self.ctx.io().display_size[0];
-        let height = self.ctx.io().display_size[1];
-
         let ui = self.ctx.frame();
 
-        let mut opened = true;
-        ui.show_demo_window(&mut opened);
+        draw(&ui);
 
         let data = ui.render();
 
@@ -257,13 +254,16 @@ impl Gui {
         // Bind GUI pipeline
         frame_cache.command_buffer.bind_pipeline(&self.pipeline);
 
-        let viewport = vk::Viewport::builder().width(width).height(height).build();
+        let viewport = vk::Viewport::builder()
+            .width(self.width)
+            .height(self.height)
+            .build();
         frame_cache.command_buffer.set_viewport(&viewport);
 
         // UI scale and translate via push constants
         let mut transform = na::Matrix4::<f32>::identity();
 
-        let scale = na::Vector3::new(2.0 / width, 2.0 / height, 1.0);
+        let scale = na::Vector3::new(2.0 / self.width, 2.0 / self.height, 1.0);
         transform.append_nonuniform_scaling_mut(&scale);
 
         let shift = na::Vector3::new(-1.0, -1.0, 0.0);

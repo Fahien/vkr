@@ -2,6 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use imgui as im;
 use nalgebra as na;
 use sdl2 as sdl;
 
@@ -121,10 +122,38 @@ pub fn main() {
         }
 
         let delta = timer.get_delta().as_secs_f32();
-        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
-        model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
-        let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
-        model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+
+        // Move camera
+        {
+            let node = model.nodes.get_mut(camera_node).unwrap();
+            let mut translation = na::Vector3::new(0.0, 0.0, 0.0);
+
+            let speed = 4.0;
+
+            let key = vkr.win.as_ref().unwrap().events.keyboard_state();
+            if key.is_scancode_pressed(sdl::keyboard::Scancode::A) {
+                translation.x -= speed * delta;
+            }
+            if key.is_scancode_pressed(sdl::keyboard::Scancode::D) {
+                translation.x += speed * delta;
+            }
+            if key.is_scancode_pressed(sdl::keyboard::Scancode::W) {
+                translation.y += speed * delta;
+            }
+            if key.is_scancode_pressed(sdl::keyboard::Scancode::S) {
+                translation.y -= speed * delta;
+            }
+
+            node.trs.translate(&translation);
+        }
+
+        // Move scene
+        {
+            let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), delta / 2.0);
+            model.nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+            let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::z_axis(), -delta / 2.0);
+            model.nodes.get_mut(lines).unwrap().trs.rotate(&rot);
+        }
 
         let frame = vkr.begin_frame();
         if frame.is_none() {
@@ -151,6 +180,25 @@ pub fn main() {
         );
         frame.bind(&mut triangle_pipeline, &model, camera_node);
         frame.draw::<Vertex>(&mut triangle_pipeline, &model, &rect_primitive, rect, texture);
+
+        vkr.gui.update(delta, &mut frame.res, |ui| {
+            im::Window::new(im::im_str!("Debug"))
+                .no_decoration()
+                .always_auto_resize(true)
+                .save_settings(false)
+                .focus_on_appearing(false)
+                .no_nav()
+                .position([16.0, 16.0], im::Condition::Always)
+                .bg_alpha(0.33)
+                .build(ui, || {
+                    let node = model.nodes.get_mut(camera_node).unwrap();
+                    let translation = node.trs.get_translation();
+                    ui.text(format!(
+                        "Camera: ({:.2}, {:.2}, {:.2})",
+                        translation.x, translation.y, translation.z
+                    ));
+                });
+        });
 
         vkr.end_frame(frame, delta);
     }

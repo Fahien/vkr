@@ -231,8 +231,6 @@ impl Vkr {
     }
 
     pub fn end_frame(&mut self, mut frame: Frame, delta: f32) {
-        self.gui.update(&mut frame.res, delta);
-
         frame.end();
 
         self.sfs.present(
