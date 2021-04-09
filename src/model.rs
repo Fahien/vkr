@@ -44,7 +44,7 @@ pub trait VertexInput {
         vk::PipelineDepthStencilStateCreateInfo::builder()
             .depth_test_enable(true)
             .depth_write_enable(true)
-            .depth_compare_op(vk::CompareOp::LESS)
+            .depth_compare_op(vk::CompareOp::GREATER)
             .depth_bounds_test_enable(false)
             .stencil_test_enable(false)
             .build()
@@ -335,6 +335,10 @@ impl Trs {
         matrix
     }
 
+    pub fn get_translation(&self) -> na::Vector3<f32> {
+        self.model.translation.vector
+    }
+
     pub fn translate(&mut self, trs: &na::Vector3<f32>) {
         let trs = na::Translation3::from(*trs);
         self.model.append_translation_mut(&trs);
@@ -365,13 +369,13 @@ impl Camera {
         let mid = na::Vector3::new(
             (left + right) / (right - left),
             (bottom + top) / (top - bottom),
-            near / (far - near),
+            near / (near - far),
         );
 
         let scale = na::Vector3::new(
             2.0 / (right - left),
             2.0 / (top - bottom),
-            -1.0 / (far - near),
+            1.0 / (near - far),
         );
 
         Self {
