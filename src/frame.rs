@@ -16,6 +16,8 @@ pub struct Framebuffer {
     pub depth_view: ImageView,
     pub depth_image: Image,
     pub image_view: vk::ImageView,
+    pub width: u32,
+    pub height: u32,
     device: Rc<Device>,
 }
 
@@ -80,6 +82,8 @@ impl Framebuffer {
             depth_view,
             depth_image,
             image_view,
+            width: image.extent.width,
+            height: image.extent.height,
             device: Rc::clone(&dev.device),
         }
     }
@@ -205,6 +209,11 @@ impl Frame {
 
     pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
         self.res.command_buffer.bind_pipeline(pipeline);
+
+        let width = self.buffer.width as f32;
+        let height = self.buffer.height as f32;
+        let viewport = vk::Viewport::builder().width(width).height(height).build();
+        self.res.command_buffer.set_viewport(&viewport);
 
         let node = model.nodes.get(camera_node).unwrap();
         assert!(model.cameras.get(node.camera).is_some());

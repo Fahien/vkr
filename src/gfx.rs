@@ -213,6 +213,7 @@ impl Vkr {
         let win = self.win.as_ref().unwrap();
 
         if self.resized {
+            self.gui.set_drawable_size(win);
             self.sfs.recreate(win, &self.surface, &self.dev, &self.pass);
         }
 

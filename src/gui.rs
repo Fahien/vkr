@@ -208,6 +208,21 @@ impl Gui {
         io.mouse_down[2] = mouse_state.middle();
     }
 
+    pub fn set_drawable_size(&mut self, win: &Win) {
+        let framebuffer_size = win.window.drawable_size();
+        let win_size = win.window.size();
+        self.scale = [
+            framebuffer_size.0 as f32 / win_size.0 as f32,
+            framebuffer_size.1 as f32 / win_size.1 as f32,
+        ];
+
+        let io = self.ctx.io_mut();
+        io.display_framebuffer_scale = self.scale;
+        io.font_global_scale = self.scale[0];
+        io.display_size[0] = framebuffer_size.0 as f32;
+        io.display_size[1] = framebuffer_size.1 as f32
+    }
+
     pub fn update(&mut self, frame_cache: &mut FrameCache, delta: f32) {
         self.ctx.io_mut().delta_time = delta;
 
@@ -241,6 +256,9 @@ impl Gui {
 
         // Bind GUI pipeline
         frame_cache.command_buffer.bind_pipeline(&self.pipeline);
+
+        let viewport = vk::Viewport::builder().width(width).height(height).build();
+        frame_cache.command_buffer.set_viewport(&viewport);
 
         // UI scale and translate via push constants
         let mut transform = na::Matrix4::<f32>::identity();
