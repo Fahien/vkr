@@ -143,7 +143,7 @@ pub struct Vkr {
     pub debug: Debug,
     pub ctx: Ctx,
     pub win: Option<Win>,
-    resized: bool, // Whether the window has been resized or not
+    pub resized: bool, // Whether the window has been resized or not
 }
 
 impl Vkr {

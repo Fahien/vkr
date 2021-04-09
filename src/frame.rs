@@ -217,7 +217,7 @@ impl Frame {
         self.res.command_buffer.set_viewport(&viewport);
 
         let node = model.nodes.get(camera_node).unwrap();
-        assert!(model.cameras.get(node.camera).is_some());
+        let camera = model.cameras.get(node.camera).unwrap();
 
         if let Some(sets) = self
             .res
@@ -233,7 +233,6 @@ impl Frame {
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
             view_buffer.upload(&node.trs.get_view_matrix());
 
-            let camera = model.cameras.get(node.camera).unwrap();
             let proj_buffer = self.res.proj_buffers.get_mut(&node.camera).unwrap();
             proj_buffer.upload(&camera.proj);
         } else {
@@ -264,7 +263,6 @@ impl Frame {
                     &self.allocator,
                     vk::BufferUsageFlags::UNIFORM_BUFFER,
                 );
-                let camera = model.cameras.get(node.camera).unwrap();
                 proj_buffer.upload(&camera.proj);
                 Camera::write_set_proj(self.device.borrow(), sets[0], &proj_buffer);
                 self.res.proj_buffers.insert(node.camera, proj_buffer);
