@@ -204,6 +204,44 @@ impl Vkr {
                     keycode: Some(sdl::keyboard::Keycode::Escape),
                     ..
                 } => return false,
+                sdl::event::Event::MouseButtonDown { mouse_btn, .. } => {
+                    if mouse_btn != sdl::mouse::MouseButton::Unknown {
+                        let index = match mouse_btn {
+                            sdl::mouse::MouseButton::Left => 0,
+                            sdl::mouse::MouseButton::Right => 1,
+                            sdl::mouse::MouseButton::Middle => 2,
+                            sdl::mouse::MouseButton::X1 => 3,
+                            sdl::mouse::MouseButton::X2 => 4,
+                            sdl::mouse::MouseButton::Unknown => unreachable!(),
+                        };
+                        self.gui.mouse_down[index] = true;
+                    }
+                }
+                sdl::event::Event::TextInput { ref text, .. } => {
+                    for chr in text.chars() {
+                        self.gui.ctx.io_mut().add_input_character(chr);
+                    }
+                }
+                sdl::event::Event::KeyDown {
+                    keycode: Some(code),
+                    ..
+                } => {
+                    let index = code as usize;
+                    let io = self.gui.ctx.io_mut();
+                    if index < io.keys_down.len() {
+                        io.keys_down[code as usize] = true;
+                    }
+                }
+                sdl::event::Event::KeyUp {
+                    keycode: Some(code),
+                    ..
+                } => {
+                    let index = code as usize;
+                    let keys = &mut self.gui.ctx.io_mut().keys_down;
+                    if index < keys.len() {
+                        keys[code as usize] = false;
+                    }
+                }
                 _ => {}
             }
         }
