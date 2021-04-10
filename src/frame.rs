@@ -296,17 +296,11 @@ impl Frame {
         }
     }
 
-    pub fn draw<T: VertexInput>(
-        &mut self,
-        pipeline: &Pipeline,
-        model: &Model,
-        primitive: &Primitive,
-        node: Handle<Node>,
-        texture: Handle<Texture>,
-    ) {
+    pub fn draw<T: VertexInput>(&mut self, pipeline: &Pipeline, model: &Model, node: Handle<Node>) {
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let cnode = model.nodes.get(node).unwrap();
+        let mesh = model.meshes.get(cnode.mesh).unwrap();
 
         if let Some(sets) = self
             .res
@@ -333,7 +327,7 @@ impl Frame {
             let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[0]]);
             T::write_set_model(self.device.borrow(), sets[0], &model_buffer);
 
-            if let Some(texture) = model.textures.get(texture) {
+            if let Some(texture) = model.textures.get(mesh.texture) {
                 let view = model.views.get(texture.view);
                 let sampler = model.samplers.get(texture.sampler);
                 T::write_set_image(
@@ -355,19 +349,23 @@ impl Frame {
                 .insert((pipeline.layout, node), sets);
         }
 
-        self.res
-            .command_buffer
-            .bind_vertex_buffer(&primitive.vertices);
+        for hprimitive in &mesh.primitives {
+            let primitive = model.primitives.get(*hprimitive).unwrap();
 
-        if let Some(indices) = &primitive.indices {
-            // Draw indexed if primitive has indices
-            self.res.command_buffer.bind_index_buffer(indices);
+            self.res
+                .command_buffer
+                .bind_vertex_buffer(&primitive.vertices);
 
-            let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
-            self.res.command_buffer.draw_indexed(index_count, 0, 0);
-        } else {
-            // Draw without indices
-            self.res.command_buffer.draw(primitive.vertex_count);
+            if let Some(indices) = &primitive.indices {
+                // Draw indexed if primitive has indices
+                self.res.command_buffer.bind_index_buffer(indices);
+
+                let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
+                self.res.command_buffer.draw_indexed(index_count, 0, 0);
+            } else {
+                // Draw without indices
+                self.res.command_buffer.draw(primitive.vertex_count);
+            }
         }
     }
 
