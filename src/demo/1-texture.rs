@@ -5,11 +5,14 @@
 use vkr::*;
 
 pub fn main() {
-    let win = Win::new();
+    let win = Win::new("Texture", 480, 480);
     let (width, height) = win.window.drawable_size();
     let mut vkr = Vkr::new(win);
 
     let line_pipeline = Pipeline::line(&vkr.dev, &vkr.pass, width, height);
+    let triangle_pipeline = Pipeline::main(&vkr.dev, &vkr.pass, width, height);
+
+    let mut model = Model::new();
 
     let lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
@@ -37,12 +40,29 @@ pub fn main() {
         ];
         Primitive::new(&vkr.dev.allocator, &lines_vertices)
     };
-
-    let triangle_pipeline = Pipeline::main(&vkr.dev, &vkr.pass, width, height);
+    let lines_primitive = model.primitives.push(lines_primitive);
+    let lines_mesh = Mesh::new(vec![lines_primitive], Handle::none());
+    let lines_mesh = model.meshes.push(lines_mesh);
+    let mut lines = Node::new();
+    lines.trs.translate(&na::Vector3::new(0.0, 0.0, -0.5));
+    lines.mesh = lines_mesh;
+    let lines = model.nodes.push(lines);
 
     let rect_primitive = Primitive::quad(&vkr.dev.allocator);
-
-    let mut model = Model::new();
+    let rect_primitive = model.primitives.push(rect_primitive);
+    let image = Image::load(&vkr.dev, "res/image/test.png");
+    let view = ImageView::new(&vkr.dev.device, &image);
+    model.images.push(image);
+    let view = model.views.push(view);
+    let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
+    let texture = Texture::new(view, sampler);
+    let texture = model.textures.push(texture);
+    let rect_mesh = Mesh::new(vec![rect_primitive], texture);
+    let rect_mesh = model.meshes.push(rect_mesh);
+    let mut rect = Node::new();
+    rect.trs.translate(&na::Vector3::new(0.0, 0.3, -0.2));
+    rect.mesh = rect_mesh;
+    let rect = model.nodes.push(rect);
 
     let camera = Camera::orthographic(-1.0, 1.0, -1.0, 1.0, 0.1, 1.0);
     let camera = model.cameras.push(camera);
@@ -50,27 +70,6 @@ pub fn main() {
     camera_node.camera = camera;
     camera_node.trs.translate(&na::Vector3::new(0.3, 0.3, 0.0));
     let camera_node = model.nodes.push(camera_node);
-
-    let mut rect = Node::new();
-    rect.trs.translate(&na::Vector3::new(0.0, 0.3, -0.2));
-    let rect = model.nodes.push(rect);
-
-    let mut lines = Node::new();
-    lines.trs.translate(&na::Vector3::new(0.0, 0.0, -0.5));
-    let lines = model.nodes.push(lines);
-
-    let image = Image::load(&vkr.dev, "res/image/test.png");
-
-    let view = ImageView::new(&vkr.dev.device, &image);
-
-    model.images.push(image);
-
-    let view = model.views.push(view);
-
-    let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
-
-    let texture = Texture::new(view, sampler);
-    let texture = model.textures.push(texture);
 
     'running: loop {
         if !vkr.handle_events() {
@@ -127,15 +126,9 @@ pub fn main() {
         let mut frame = frame.unwrap();
 
         frame.bind(&line_pipeline, &model, camera_node);
-        frame.draw::<Line>(
-            &line_pipeline,
-            &model,
-            &lines_primitive,
-            lines,
-            Handle::none(),
-        );
+        frame.draw::<Line>(&line_pipeline, &model, lines);
         frame.bind(&triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(&triangle_pipeline, &model, &rect_primitive, rect, texture);
+        frame.draw::<Vertex>(&triangle_pipeline, &model, rect);
 
         vkr.gui.update(delta, &mut frame.res, |ui| {
             im::Window::new(im::im_str!("Debug"))
