@@ -300,7 +300,16 @@ impl Frame {
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let cnode = model.nodes.get(node).unwrap();
-        let mesh = model.meshes.get(cnode.mesh).unwrap();
+
+        for child in &cnode.children {
+            self.draw::<T>(pipeline, model, *child);
+        }
+
+        let mesh = model.meshes.get(cnode.mesh);
+        if mesh.is_none() {
+            return ();
+        }
+        let mesh = mesh.unwrap();
 
         if let Some(sets) = self
             .res

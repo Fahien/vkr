@@ -47,7 +47,7 @@ impl Descriptors {
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 // @todo Use a parameter instead of 2 for frame count
-                .max_sets(2 * 3) // Support 2 frames with 3 pipelines
+                .max_sets(2 * 4) // Support 2 frames with 3 pipelines
                 .build();
             dev.device.create_descriptor_pool(&create_info, None)
         }
