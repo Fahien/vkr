@@ -35,8 +35,8 @@ pub use gfx::*;
 mod descriptor;
 pub use descriptor::*;
 
-mod primitive;
-pub use primitive::*;
+pub mod mesh;
+pub use mesh::*;
 
 mod sync;
 pub use sync::*;
