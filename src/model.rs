@@ -451,6 +451,7 @@ pub struct Node {
     pub trs: Trs,
     pub children: Vec<Handle<Node>>,
     pub camera: Handle<Camera>,
+    pub mesh: Handle<Mesh>,
 }
 
 impl Node {
@@ -459,6 +460,7 @@ impl Node {
             trs: Trs::new(),
             children: vec![],
             camera: Handle::none(),
+            mesh: Handle::none(),
         }
     }
 }
@@ -470,6 +472,8 @@ pub struct Model {
     pub views: Pack<ImageView>,
     pub samplers: Pack<Sampler>,
     pub textures: Pack<Texture>,
+    pub primitives: Pack<Primitive>,
+    pub meshes: Pack<Mesh>,
 }
 
 impl Model {
@@ -481,6 +485,8 @@ impl Model {
             views: Pack::new(),
             samplers: Pack::new(),
             textures: Pack::new(),
+            primitives: Pack::new(),
+            meshes: Pack::new(),
         }
     }
 }
