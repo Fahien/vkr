@@ -9,6 +9,10 @@ license = "MIT"
 name = "1-texture"
 path = "src/demo/1-texture.rs"
 
+[[bin]]
+name = "2-parallax"
+path = "src/demo/2-parallax.rs"
+
 [dependencies]
 ash = "0.33"
 sdl2 = "0.34.3"
