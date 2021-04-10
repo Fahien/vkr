@@ -19,7 +19,7 @@ use crate::{
     frame::{Frame, Frames, SwapchainFrames},
     gui::Gui,
     image::{Image, Png},
-    queue::Queue,
+    queue::Queue, util::Timer,
 };
 
 pub unsafe extern "system" fn vk_debug(
@@ -147,10 +147,13 @@ pub struct Vkr {
     pub ctx: Ctx,
     pub win: Option<Win>,
     pub resized: bool, // Whether the window has been resized or not
+    pub timer: Timer,
 }
 
 impl Vkr {
     pub fn new(win: Win) -> Self {
+        let timer = Timer::new();
+
         let (width, height) = win.window.drawable_size();
 
         let ctx = Ctx::new(&win);
@@ -174,6 +177,7 @@ impl Vkr {
             ctx,
             win: Some(win),
             resized: false,
+            timer,
         }
     }
 
@@ -185,19 +189,19 @@ impl Vkr {
         // Handle events
         for event in win.events.poll_iter() {
             match event {
-                Event::Window {
+                sdl::event::Event::Window {
                     win_event: sdl::event::WindowEvent::Resized(_, _),
                     ..
                 }
-                | Event::Window {
+                | sdl::event::Event::Window {
                     win_event: sdl::event::WindowEvent::SizeChanged(_, _),
                     ..
                 } => {
                     self.resized = true;
                 }
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
+                sdl::event::Event::Quit { .. }
+                | sdl::event::Event::KeyDown {
+                    keycode: Some(sdl::keyboard::Keycode::Escape),
                     ..
                 } => return false,
                 _ => {}
@@ -230,7 +234,7 @@ impl Vkr {
         }
     }
 
-    pub fn end_frame(&mut self, mut frame: Frame, delta: f32) {
+    pub fn end_frame(&mut self, frame: Frame) {
         frame.end();
 
         self.sfs.present(

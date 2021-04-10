@@ -5,6 +5,10 @@ authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
 
+[[bin]]
+name = "1-texture"
+path = "src/demo/1-texture.rs"
+
 [dependencies]
 ash = "0.33"
 sdl2 = "0.34.3"

@@ -2,53 +2,9 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use imgui as im;
-use nalgebra as na;
-use sdl2 as sdl;
-
-mod util;
-use util::*;
-
-mod model;
-use model::*;
-
-mod pipeline;
-use pipeline::*;
-
-mod commands;
-use commands::*;
-
-mod image;
-use image::*;
-
-mod queue;
-
-mod shader;
-use shader::*;
-
-mod sampler;
-use sampler::*;
-
-mod gfx;
-use gfx::*;
-
-mod descriptor;
-use descriptor::*;
-
-mod primitive;
-use primitive::*;
-
-mod sync;
-use sync::*;
-
-mod gui;
-
-mod frame;
-use frame::*;
+use vkr::*;
 
 pub fn main() {
-    let mut timer = Timer::new();
-
     let win = Win::new();
     let (width, height) = win.window.drawable_size();
     let mut vkr = Vkr::new(win);
@@ -121,7 +77,7 @@ pub fn main() {
             break 'running;
         }
 
-        let delta = timer.get_delta().as_secs_f32();
+        let delta = vkr.timer.get_delta().as_secs_f32();
 
         // Move camera
         {
@@ -200,7 +156,7 @@ pub fn main() {
                 });
         });
 
-        vkr.end_frame(frame, delta);
+        vkr.end_frame(frame);
     }
 
     vkr.dev.wait();
