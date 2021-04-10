@@ -26,6 +26,8 @@ pub struct Gui {
     height: f32,
     scale: [f32; 2],
 
+    pub mouse_down: [bool; 5],
+
     pub ctx: im::Context,
 
     device: Rc<Device>,
@@ -181,6 +183,27 @@ impl Gui {
         io.display_size[0] = width;
         io.display_size[1] = height;
 
+        io.key_map[im::Key::Tab as usize] = sdl::keyboard::Scancode::Tab as u32;
+        io.key_map[im::Key::LeftArrow as usize] = sdl::keyboard::Scancode::Left as u32;
+        io.key_map[im::Key::RightArrow as usize] = sdl::keyboard::Scancode::Right as u32;
+        io.key_map[im::Key::UpArrow as usize] = sdl::keyboard::Scancode::Up as u32;
+        io.key_map[im::Key::DownArrow as usize] = sdl::keyboard::Scancode::Down as u32;
+        io.key_map[im::Key::PageUp as usize] = sdl::keyboard::Scancode::PageUp as u32;
+        io.key_map[im::Key::PageDown as usize] = sdl::keyboard::Scancode::PageDown as u32;
+        io.key_map[im::Key::Home as usize] = sdl::keyboard::Scancode::Home as u32;
+        io.key_map[im::Key::End as usize] = sdl::keyboard::Scancode::End as u32;
+        io.key_map[im::Key::Delete as usize] = sdl::keyboard::Scancode::Delete as u32;
+        io.key_map[im::Key::Backspace as usize] = sdl::keyboard::Scancode::Backspace as u32;
+        io.key_map[im::Key::Enter as usize] = sdl::keyboard::Scancode::Return as u32;
+        io.key_map[im::Key::Escape as usize] = sdl::keyboard::Scancode::Escape as u32;
+        io.key_map[im::Key::Space as usize] = sdl::keyboard::Scancode::Space as u32;
+        io.key_map[im::Key::A as usize] = sdl::keyboard::Scancode::A as u32;
+        io.key_map[im::Key::C as usize] = sdl::keyboard::Scancode::C as u32;
+        io.key_map[im::Key::V as usize] = sdl::keyboard::Scancode::V as u32;
+        io.key_map[im::Key::X as usize] = sdl::keyboard::Scancode::X as u32;
+        io.key_map[im::Key::Y as usize] = sdl::keyboard::Scancode::Y as u32;
+        io.key_map[im::Key::Z as usize] = sdl::keyboard::Scancode::Z as u32;
+
         let image = Self::build_font(dev, &mut ctx);
         let view = ImageView::new(&dev.device, &image);
         let sampler = Sampler::new(&dev.device);
@@ -198,18 +221,28 @@ impl Gui {
             width,
             height,
             scale,
+            mouse_down: [false; 5],
             ctx,
             device: dev.device.clone(),
         }
     }
 
-    pub fn set_mouse_state(&mut self, mouse_state: &sdl::mouse::MouseState) {
+    pub fn set_mouse_state(&mut self, mouse_state: &sdl::mouse::MouseState) -> bool {
         let io = self.ctx.io_mut();
         io.mouse_pos[0] = mouse_state.x() as f32 * self.scale[0];
         io.mouse_pos[1] = mouse_state.y() as f32 * self.scale[1];
-        io.mouse_down[0] = mouse_state.left();
-        io.mouse_down[1] = mouse_state.right();
-        io.mouse_down[2] = mouse_state.middle();
+
+        io.mouse_down = [
+            self.mouse_down[0] || mouse_state.left(),
+            self.mouse_down[1] || mouse_state.right(),
+            self.mouse_down[2] || mouse_state.middle(),
+            self.mouse_down[3] || mouse_state.x1(),
+            self.mouse_down[4] || mouse_state.x2(),
+        ];
+        self.mouse_down = [false; 5];
+
+        let any_mouse_down = io.mouse_down.iter().any(|&b| b);
+        any_mouse_down
     }
 
     pub fn set_drawable_size(&mut self, win: &Win) {
