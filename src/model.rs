@@ -51,8 +51,14 @@ pub trait VertexInput {
 
     fn get_color_blend() -> Vec<vk::PipelineColorBlendAttachmentState> {
         vec![vk::PipelineColorBlendAttachmentState::builder()
-            .blend_enable(false)
+            .blend_enable(true)
             .color_write_mask(vk::ColorComponentFlags::all())
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ONE)
+            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .color_blend_op(vk::BlendOp::ADD)
             .build()]
     }
 }
