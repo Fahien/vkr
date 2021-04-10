@@ -41,11 +41,11 @@ pub struct Win {
 }
 
 impl Win {
-    pub fn new() -> Self {
+    pub fn new(name: &str, width: u32, height: u32) -> Self {
         let ctx = sdl::init().expect("Failed to initialize SDL");
         let video = ctx.video().expect("Failed to initialize SDL video");
         let window = video
-            .window("Test", 480, 480)
+            .window(name, width, height)
             .allow_highdpi()
             .vulkan()
             .position_centered()
