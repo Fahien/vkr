@@ -31,17 +31,20 @@ fn create_back(
     back.mesh = mesh;
     back.trs
         .translate(&na::Vector3::new(0.0, 0.0, i as f32 * 0.01));
-    back.trs.scale(&na::Vector3::new(2.0 * aspect, 2.0, 1.0));
+    let screen_width = 2.0 * aspect;
+    // A node used as a parallax background should be twice as wide of the background
+    let node_width = 2.0 * screen_width;
+    back.trs.scale(&na::Vector3::new(node_width, 2.0, 1.0));
     model.nodes.push(back)
 }
 
 fn create_scene(vkr: &Vkr, model: &mut Model) -> Handle<Node> {
-    // Use same sampler
+    // Use same sampler with repeat mode
     let sampler = Sampler::new(&vkr.dev.device);
     let sampler = model.samplers.push(sampler);
 
-    // Reuse primitives
-    let primitive = Primitive::quad(&vkr.dev.allocator);
+    // Reuse primitive with adjusted texture coordinates
+    let primitive = Primitive::quad(&vkr.dev.allocator, [2.0, 1.0]);
     let primitive = model.primitives.push(primitive);
 
     let (width, height) = vkr.win.as_ref().unwrap().window.drawable_size();
