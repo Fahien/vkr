@@ -48,7 +48,7 @@ pub fn main() {
     lines.mesh = lines_mesh;
     let lines = model.nodes.push(lines);
 
-    let rect_primitive = Primitive::quad(&vkr.dev.allocator);
+    let rect_primitive = Primitive::quad(&vkr.dev.allocator, [1.0, 1.0]);
     let rect_primitive = model.primitives.push(rect_primitive);
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = ImageView::new(&vkr.dev.device, &image);
