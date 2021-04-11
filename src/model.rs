@@ -446,11 +446,37 @@ impl Camera {
     }
 }
 
+type ScriptFn = Box<dyn Fn(f32, &mut Pack<Node>, Handle<Node>)>;
+
+pub struct Script {
+    pub update: ScriptFn,
+}
+
+impl Script {
+    pub fn new(update: ScriptFn) -> Self {
+        Self { update }
+    }
+
+    pub fn update(delta: f32, nodes: &mut Pack<Node>, scripts: &Pack<Script>, node: Handle<Node>) {
+        let hscript = nodes.get(node).unwrap().script;
+        if let Some(script) = scripts.get(hscript) {
+            let func = &script.update;
+            func(delta, nodes, node);
+        }
+
+        let children = nodes.get(node).unwrap().children.clone();
+        for child in children {
+            Self::update(delta, nodes, scripts, child);
+        }
+    }
+}
+
 pub struct Node {
     pub trs: Trs,
     pub children: Vec<Handle<Node>>,
     pub camera: Handle<Camera>,
     pub mesh: Handle<Mesh>,
+    pub script: Handle<Script>,
 }
 
 impl Node {
@@ -460,6 +486,7 @@ impl Node {
             children: vec![],
             camera: Handle::none(),
             mesh: Handle::none(),
+            script: Handle::none(),
         }
     }
 }
@@ -473,6 +500,7 @@ pub struct Model {
     pub textures: Pack<Texture>,
     pub primitives: Pack<Primitive>,
     pub meshes: Pack<Mesh>,
+    pub scripts: Pack<Script>,
 }
 
 impl Model {
@@ -486,6 +514,7 @@ impl Model {
             textures: Pack::new(),
             primitives: Pack::new(),
             meshes: Pack::new(),
+            scripts: Pack::new(),
         }
     }
 }
