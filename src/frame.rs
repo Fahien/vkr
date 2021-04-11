@@ -300,16 +300,29 @@ impl Frame {
         }
     }
 
-    pub fn draw<T: VertexInput>(&mut self, pipeline: &mut Pipeline, model: &Model, node: Handle<Node>) {
+    pub fn draw<T: VertexInput>(
+        &mut self,
+        pipeline: &mut Pipeline,
+        nodes: &Pack<Node>,
+        meshes: &Pack<Mesh>,
+        primitives: &Pack<Primitive>,
+        samplers: &Pack<Sampler>,
+        views: &Pack<ImageView>,
+        textures: &Pack<Texture>,
+        node: Handle<Node>,
+    ) {
         self.res.command_buffer.bind_pipeline(pipeline);
 
-        let cnode = model.nodes.get(node).unwrap();
-
-        for child in &cnode.children {
-            self.draw::<T>(pipeline, model, *child);
+        let children = nodes.get(node).unwrap().children.clone();
+        for child in children {
+            self.draw::<T>(
+                pipeline, nodes, meshes, primitives, samplers, views, textures, child,
+            );
         }
 
-        let mesh = model.meshes.get(cnode.mesh);
+        let cnode = nodes.get(node).unwrap();
+
+        let mesh = meshes.get(cnode.mesh);
         if mesh.is_none() {
             return ();
         }
@@ -343,10 +356,15 @@ impl Frame {
             let sets = self.res.pipeline_cache.descriptors.allocate(&set_layouts);
             T::write_set_model(&self.device, sets[0], &model_buffer);
 
-            if let Some(texture) = model.textures.get(mesh.texture) {
-                let view = model.views.get(texture.view);
-                let sampler = model.samplers.get(texture.sampler);
-                T::write_set_image(&self.device, sets[0], view.unwrap(), sampler.unwrap());
+            if let Some(texture) = textures.get(mesh.texture) {
+                let view = views.get(texture.view);
+                let sampler = samplers.get(texture.sampler);
+                T::write_set_image(
+                    &self.device,
+                    sets[0],
+                    view.unwrap(),
+                    sampler.unwrap(),
+                );
             }
 
             self.res
@@ -362,7 +380,7 @@ impl Frame {
         }
 
         for hprimitive in &mesh.primitives {
-            let primitive = model.primitives.get(*hprimitive).unwrap();
+            let primitive = primitives.get(*hprimitive).unwrap();
 
             self.res
                 .command_buffer
