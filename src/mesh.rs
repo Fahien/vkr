@@ -28,27 +28,27 @@ impl Primitive {
     }
 
     /// Returns a new primitive quad with side length 1 centered at the origin
-    pub fn quad(allocator: &Rc<RefCell<vk_mem::Allocator>>) -> Self {
+    pub fn quad(allocator: &Rc<RefCell<vk_mem::Allocator>>, uv_scale: [f32; 2]) -> Self {
         let vertices = vec![
             Vertex {
                 pos: na::Vector3::new(-0.5, -0.5, 0.0),
                 color: Color::white(),
-                uv: na::Vector2::new(0.0, 1.0),
+                uv: na::Vector2::new(0.0 * uv_scale[0], 1.0 * uv_scale[1]),
             },
             Vertex {
                 pos: na::Vector3::new(0.5, -0.5, 0.0),
                 color: Color::white(),
-                uv: na::Vector2::new(1.0, 1.0),
+                uv: na::Vector2::new(1.0 * uv_scale[0], 1.0 * uv_scale[1]),
             },
             Vertex {
                 pos: na::Vector3::new(0.5, 0.5, 0.0),
                 color: Color::white(),
-                uv: na::Vector2::new(1.0, 0.0),
+                uv: na::Vector2::new(1.0 * uv_scale[0], 0.0 * uv_scale[1]),
             },
             Vertex {
                 pos: na::Vector3::new(-0.5, 0.5, 0.0),
                 color: Color::white(),
-                uv: na::Vector2::new(0.0, 0.0),
+                uv: na::Vector2::new(0.0 * uv_scale[0], 0.0 * uv_scale[1]),
             },
         ];
         let indices = vec![0, 1, 2, 2, 3, 0];
