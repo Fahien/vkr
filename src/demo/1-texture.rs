@@ -126,9 +126,27 @@ pub fn main() {
         let mut frame = frame.unwrap();
 
         frame.bind(&line_pipeline, &model, camera_node);
-        frame.draw::<Line>(&line_pipeline, &model, lines);
+        frame.draw::<Line>(
+            &line_pipeline,
+            &model.nodes,
+            &model.meshes,
+            &model.primitives,
+            &model.samplers,
+            &model.views,
+            &model.textures,
+            lines,
+        );
         frame.bind(&triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(&triangle_pipeline, &model, rect);
+        frame.draw::<Vertex>(
+            &triangle_pipeline,
+            &model.nodes,
+            &model.meshes,
+            &model.primitives,
+            &model.samplers,
+            &model.views,
+            &model.textures,
+            rect,
+        );
 
         vkr.gui.update(delta, &mut frame.res, |ui| {
             im::Window::new(im::im_str!("Debug"))
