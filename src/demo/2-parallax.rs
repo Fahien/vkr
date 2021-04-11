@@ -35,6 +35,21 @@ fn create_back(
     // A node used as a parallax background should be twice as wide of the background
     let node_width = 2.0 * screen_width;
     back.trs.scale(&na::Vector3::new(node_width, 2.0, 1.0));
+
+    let script = Script::new(Box::new(move |delta, nodes: &mut Pack<Node>, hnode| {
+        let speed = 0.0125 * i as f32;
+        let x = -speed * delta;
+        let node = nodes.get_mut(hnode).unwrap();
+        node.trs.translate(&na::Vector3::new(x, 0.0, 0.0));
+
+        let trs = node.trs.get_translation();
+        if trs.x < -0.25 {
+            node.trs
+                .translate(&na::Vector3::new(-trs.x + 0.25, 0.0, 0.0));
+        }
+    }));
+
+    back.script = model.scripts.push(script);
     model.nodes.push(back)
 }
 
@@ -90,11 +105,22 @@ fn main() {
     let camera_node = model.nodes.push(camera_node);
 
     while vkr.handle_events() {
+        let delta = vkr.timer.get_delta().as_secs_f32();
+
+        Script::update(delta, &mut model.nodes, &model.scripts, scene);
+
         if let Some(mut frame) = vkr.begin_frame() {
             frame.bind(&pipeline, &model, camera_node);
-            frame.draw::<Vertex>(&pipeline, &model, scene);
-
-            let delta = vkr.timer.get_delta().as_secs_f32();
+            frame.draw::<Vertex>(
+                &pipeline,
+                &model.nodes,
+                &model.meshes,
+                &model.primitives,
+                &model.samplers,
+                &model.views,
+                &model.textures,
+                scene,
+            );
 
             vkr.gui.update(delta, &mut frame.res, |ui| {
                 im::Window::new(im::im_str!("Debug"))
