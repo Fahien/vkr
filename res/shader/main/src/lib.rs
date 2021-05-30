@@ -8,7 +8,7 @@
 
 use spirv_std::storage_class::{Input, Output, Uniform, UniformConstant};
 use spirv_std::{
-    glam::{vec4, Mat4, Vec2, Vec3, Vec4},
+    glam::{vec4, Mat3, Mat4, Vec2, Vec3, Vec4},
     Image2d, SampledImage,
 };
 
@@ -43,6 +43,7 @@ pub fn line_vs(
 pub fn main_fs(
     #[spirv(descriptor_set = 0, binding = 1)] image: UniformConstant<SampledImage<Image2d>>,
     color: Input<Vec4>,
+    normal: Input<Vec3>,
     uv: Input<Vec2>,
     mut out_color: Output<Vec4>,
 ) {
@@ -58,13 +59,19 @@ pub fn main_vs(
     #[spirv(descriptor_set = 1, binding = 1)] proj: Uniform<Mat>,
     in_pos: Input<Vec3>,
     in_color: Input<Vec4>,
+    in_normal: Input<Vec3>,
     in_uv: Input<Vec2>,
     mut color: Output<Vec4>,
+    mut normal: Output<Vec3>,
     mut uv: Output<Vec2>,
     #[spirv(position)] mut out_pos: Output<Vec4>,
 ) {
     *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+
     *color = *in_color;
+
+    *normal = Mat3::from(model.matrix.inverse().transpose()) * in_normal;
+
     uv.x = in_uv.x;
     // UV coords system in Vulkan has inverted Y
     uv.y = in_uv.y;
