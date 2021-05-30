@@ -190,6 +190,7 @@ impl VertexInput for Line {
 pub struct Vertex {
     pub pos: na::Vector3<f32>,
     pub color: Color,
+    pub normal: na::Vector3<f32>,
     pub uv: na::Vector2<f32>,
 }
 
@@ -197,7 +198,9 @@ impl Vertex {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             pos: na::Vector3::new(x, y, z),
-            color: Color::new(1.0, 1.0, 1.0, 1.0),
+            color: Color::white(),
+            // From the screen towards the viewer
+            normal: na::Vector3::new(0.0, 0.0, 1.0),
             uv: na::Vector2::new(0.0, 0.0),
         }
     }
@@ -214,21 +217,31 @@ impl VertexInput for Vertex {
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
         vec![
+            // position
             vk::VertexInputAttributeDescription::builder()
                 .binding(0)
                 .location(0)
                 .format(vk::Format::R32G32B32_SFLOAT)
                 .offset(offset_of!(Vertex, pos) as u32)
                 .build(),
+            // color
             vk::VertexInputAttributeDescription::builder()
                 .binding(0)
                 .location(1)
                 .format(vk::Format::R32G32B32A32_SFLOAT)
                 .offset(offset_of!(Vertex, color) as u32)
                 .build(),
+            // normal
             vk::VertexInputAttributeDescription::builder()
                 .binding(0)
                 .location(2)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Vertex, normal) as u32)
+                .build(),
+            // texture coordinates
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(3)
                 .format(vk::Format::R32G32_SFLOAT)
                 .offset(offset_of!(Vertex, uv) as u32)
                 .build(),
