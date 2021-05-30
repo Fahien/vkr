@@ -11,7 +11,7 @@
 #![deny(warnings)]
 
 use spirv_std::{
-    glam::{vec4, Mat4, Vec2, Vec3, Vec4},
+    glam::{vec4, Mat3, Mat4, Vec2, Vec3, Vec4},
     image::{Image2d, SampledImage},
 };
 
@@ -41,6 +41,7 @@ pub fn line_vs(
 pub fn main_fs(
     #[spirv(descriptor_set = 0, binding = 1)] image: &SampledImage<Image2d>,
     color: Vec4,
+    _normal: Vec3,
     uv: Vec2,
     out_color: &mut Vec4,
 ) {
@@ -55,8 +56,10 @@ pub fn main_vs(
     #[spirv(uniform, descriptor_set = 1, binding = 1)] proj_from_view: &Mat4,
     in_pos: Vec3,
     in_color: Vec4,
+    in_normal: Vec3,
     in_uv: Vec2,
     color: &mut Vec4,
+    normal: &mut Vec3,
     uv: &mut Vec2,
     #[spirv(position)] out_pos: &mut Vec4,
 ) {
@@ -64,8 +67,10 @@ pub fn main_vs(
         * *view_from_world
         * *world_from_model
         * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+
     *color = in_color;
-    uv.x = in_uv.x;
-    // UV coords system in Vulkan has inverted Y
-    uv.y = 1.0 - in_uv.y;
+
+    *normal = Mat3::from_mat4(*world_from_model) * in_normal;
+
+    *uv = in_uv;
 }
