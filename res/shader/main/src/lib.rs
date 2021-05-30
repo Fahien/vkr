@@ -43,6 +43,7 @@ pub fn line_vs(
 pub fn main_fs(
     #[spirv(descriptor_set = 0, binding = 1)] image: UniformConstant<SampledImage<Image2d>>,
     color: Input<Vec4>,
+    normal: Input<Vec3>,
     uv: Input<Vec2>,
     mut out_color: Output<Vec4>,
 ) {
@@ -58,13 +59,22 @@ pub fn main_vs(
     #[spirv(descriptor_set = 1, binding = 1)] proj: Uniform<Mat>,
     in_pos: Input<Vec3>,
     in_color: Input<Vec4>,
+    in_normal: Input<Vec3>,
     in_uv: Input<Vec2>,
     mut color: Output<Vec4>,
+    mut normal: Output<Vec3>,
     mut uv: Output<Vec2>,
     #[spirv(position)] mut out_pos: Output<Vec4>,
 ) {
     *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+
     *color = *in_color;
+
+    let temp_normal = model.matrix * vec4(in_normal.x, in_normal.y, in_normal.z, 1.0);
+    normal.x = temp_normal.x;
+    normal.y = temp_normal.y;
+    normal.z = temp_normal.z;
+
     uv.x = in_uv.x;
     // UV coords system in Vulkan has inverted Y
     uv.y = in_uv.y;
