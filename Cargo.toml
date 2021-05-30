@@ -13,6 +13,10 @@ path = "src/demo/1-texture.rs"
 name = "2-parallax"
 path = "src/demo/2-parallax.rs"
 
+[[bin]]
+name = "3-cube"
+path = "src/demo/3-cube.rs"
+
 [dependencies]
 ash = "0.31.0"
 sdl2 = "0.34.3"
