@@ -101,6 +101,31 @@ impl Drop for Framebuffer {
     }
 }
 
+/// Container of fallback resources for a frame such as
+/// A white 1x1 pixel texture (image, view, and sampler)
+pub struct Fallback {
+    _white_image: Image,
+    white_view: ImageView,
+    white_sampler: Sampler,
+}
+
+impl Fallback {
+    fn new(dev: &Dev) -> Self {
+        let white = [255, 255, 255, 255];
+        let white_image = Image::from_data(&dev, &white, 1, 1, vk::Format::R8G8B8A8_SRGB);
+
+        let white_view = ImageView::new(&dev.device, &white_image);
+
+        let white_sampler = Sampler::new(&dev.device);
+
+        Self {
+            _white_image: white_image,
+            white_view,
+            white_sampler,
+        }
+    }
+}
+
 type BufferCache<T> = HashMap<Handle<T>, Buffer>;
 
 /// Frame resources that do not need to be recreated
@@ -123,6 +148,8 @@ pub struct Frameres {
     pub fence: Fence,
     pub image_ready: Semaphore,
     pub image_drawn: Semaphore,
+
+    pub fallback: Fallback,
 }
 
 impl Frameres {
@@ -149,6 +176,7 @@ impl Frameres {
             fence,
             image_ready: Semaphore::new(&dev.device),
             image_drawn: Semaphore::new(&dev.device),
+            fallback: Fallback::new(&dev),
         }
     }
 
@@ -358,6 +386,11 @@ impl Frame {
                     view.unwrap(),
                     sampler.unwrap(),
                 );
+            } else {
+                // Bind a white 1x1 pixel texture
+                let view = &self.res.fallback.white_view;
+                let sampler = &self.res.fallback.white_sampler;
+                T::write_set_image(self.device.borrow(), sets[0], view, sampler);
             }
 
             self.res
