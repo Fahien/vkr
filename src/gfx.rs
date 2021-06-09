@@ -136,6 +136,7 @@ impl Ctx {
 
 pub struct Vkr {
     pub gui: Gui,
+    pub ofs: OffscreenFrames,
     pub sfs: SwapchainFrames, // Use box of frames?
     pub pass: Pass,           // How about multiple passes?
     pub dev: Dev,
@@ -161,11 +162,13 @@ impl Vkr {
 
         let pass = Pass::new(&mut dev);
         let sfs = SwapchainFrames::new(&ctx, &surface, &mut dev, width, height, &pass);
+        let ofs = OffscreenFrames::new(&mut dev, width, height, sfs.frames.len(), &pass);
 
         let gui = Gui::new(&win, &dev, &pass);
 
         Self {
             gui,
+            ofs,
             sfs,
             pass,
             dev,
@@ -592,8 +595,11 @@ pub struct Pass {
 }
 
 impl Pass {
+    /// @todo The idea here is to have a working deferred renderer as outlined by Sascha Willems in this
+    /// blog post: https://www.saschawillems.de/blog/2018/07/19/vulkan-input-attachments-and-sub-passes/
     pub fn new(dev: &mut Dev) -> Self {
         // Render pass (swapchain surface format, device)
+
         let color_attachment = ash::vk::AttachmentDescription::builder()
             // @todo This format should come from a "framebuffer" object
             .format(dev.surface_format.format)
@@ -618,10 +624,49 @@ impl Pass {
             .final_layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
             .build();
 
-        let attachments = [color_attachment, depth_attachment];
+        let albedo_attachment = ash::vk::AttachmentDescription::builder()
+            // @todo This format should come from a "framebuffer" object
+            .format(dev.surface_format.format)
+            .samples(ash::vk::SampleCountFlags::TYPE_1)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(ash::vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(ash::vk::ImageLayout::UNDEFINED)
+            .final_layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
 
+        let normals_attachment = ash::vk::AttachmentDescription::builder()
+            .format(ash::vk::Format::A2B10G10R10_UNORM_PACK32)
+            .samples(ash::vk::SampleCountFlags::TYPE_1)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(ash::vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(ash::vk::ImageLayout::UNDEFINED)
+            .final_layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let attachments = [
+            color_attachment,
+            depth_attachment,
+            albedo_attachment,
+            normals_attachment,
+        ];
+
+        // Swapchain, albedo, normals
         let color_ref = ash::vk::AttachmentReference::builder()
             .attachment(0)
+            .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let albedo_color_ref = ash::vk::AttachmentReference::builder()
+            .attachment(2)
+            .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let normal_color_ref = ash::vk::AttachmentReference::builder()
+            .attachment(3)
             .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
@@ -630,16 +675,49 @@ impl Pass {
             .layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
             .build();
 
-        let color_refs = [color_ref];
+        let off_color_refs = [albedo_color_ref, normal_color_ref];
+
+        // position, depth, normal
+        let present_position_input_ref = ash::vk::AttachmentReference::builder()
+            .attachment(2)
+            .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+        let present_depth_input_ref = ash::vk::AttachmentReference::builder()
+            .attachment(1)
+            .layout(ash::vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
+            .build();
+        let present_normal_input_ref = ash::vk::AttachmentReference::builder()
+            .attachment(3)
+            .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        // The present pass does not write depth
+
+        let present_input_refs = [
+            present_position_input_ref,
+            present_depth_input_ref,
+            present_normal_input_ref,
+        ];
+
+        let present_color_refs = [color_ref];
 
         // Just one subpass
-        let subpasses = [ash::vk::SubpassDescription::builder()
-            .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&color_refs)
-            .depth_stencil_attachment(&depth_ref)
-            .build()];
+        let subpasses = [
+            // First pass (offscreen)
+            ash::vk::SubpassDescription::builder()
+                .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
+                .color_attachments(&off_color_refs)
+                .depth_stencil_attachment(&depth_ref)
+                .build(),
+            // Second pass (present)
+            ash::vk::SubpassDescription::builder()
+                .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
+                .input_attachments(&present_input_refs)
+                .color_attachments(&present_color_refs)
+                .build(),
+        ];
 
-        let present_dependency = ash::vk::SubpassDependency::builder()
+        let first_dependency = ash::vk::SubpassDependency::builder()
             .src_subpass(ash::vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
             .src_stage_mask(ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
@@ -648,7 +726,17 @@ impl Pass {
             .dst_access_mask(ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
             .build();
 
-        let dependencies = [present_dependency];
+        let present_dependency = ash::vk::SubpassDependency::builder()
+            .src_subpass(0)
+            .dst_subpass(1)
+            .src_stage_mask(ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_stage_mask(ash::vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .dst_access_mask(ash::vk::AccessFlags::INPUT_ATTACHMENT_READ)
+            .dependency_flags(ash::vk::DependencyFlags::BY_REGION)
+            .build();
+
+        let dependencies = [first_dependency, present_dependency];
 
         // Build the render pass
         let create_info = ash::vk::RenderPassCreateInfo::builder()
@@ -765,7 +853,7 @@ impl Pipeline {
             let depth_state = T::get_depth_state();
 
             let blend_attachment = T::get_color_blend();
-
+            assert!(blend_attachment.len() == 2);
             let blend_state = ash::vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op_enable(false)
                 .attachments(&blend_attachment)

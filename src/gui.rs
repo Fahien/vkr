@@ -117,7 +117,7 @@ impl VertexInput for im::DrawVert {
     }
 
     fn get_color_blend() -> Vec<vk::PipelineColorBlendAttachmentState> {
-        vec![vk::PipelineColorBlendAttachmentState::builder()
+        let blend_state = vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
             .color_write_mask(
                 vk::ColorComponentFlags::R
@@ -127,7 +127,10 @@ impl VertexInput for im::DrawVert {
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .src_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            .build()]
+            .build();
+        // @todo Do we need 2 blend state for the GUI? This is not going to be drawn in the first subpass with
+        // 3 output attachments, but in the second with just one output attachment.
+        vec![blend_state, blend_state]
     }
 }
 

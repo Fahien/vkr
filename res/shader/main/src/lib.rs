@@ -8,7 +8,7 @@
 
 use spirv_std::storage_class::{Input, Output, Uniform, UniformConstant};
 use spirv_std::{
-    glam::{vec4, Mat4, Vec2, Vec3, Vec4},
+    glam::{vec2, vec4, Mat4, Vec2, Vec3, Vec4},
     Image2d, SampledImage,
 };
 
@@ -46,9 +46,16 @@ pub fn main_fs(
     normal: Input<Vec3>,
     uv: Input<Vec2>,
     mut out_color: Output<Vec4>,
+    mut out_normal: Output<Vec4>
 ) {
     let frag = Vec4::from(image.sample(*uv));
     *out_color = *color * frag;
+
+    let normal = normal.normalize();
+    out_normal.x = normal.x;
+    out_normal.y = normal.y;
+    out_normal.z = normal.z;
+    out_normal.w = 1.0;
 }
 
 #[allow(unused_attributes)]
@@ -78,4 +85,28 @@ pub fn main_vs(
     uv.x = in_uv.x;
     // UV coords system in Vulkan has inverted Y
     uv.y = in_uv.y;
+}
+
+#[allow(unused_attributes)]
+#[spirv(fragment)]
+pub fn present_fs(
+    // @todo Input attachments
+    #[spirv(descriptor_set = 0, binding = 0)] inv_view_proj: Uniform<Mat>,
+    #[spirv(descriptor_set = 1, binding = 0)] inv_resolution: Uniform<Vec2>,
+    uv: Input<Vec2>,
+    mut out_color: Output<Vec4>,
+) {
+    *out_color = image.read_subpass(*uv);
+    out_color.x = 0.5;
+}
+
+#[allow(unused_attributes)]
+#[spirv(vertex)]
+pub fn present_vs(
+    in_uv: Input<Vec2>,
+    mut out_uv: Output<Vec2>,
+    #[spirv(position)] mut out_pos: Output<Vec4>,
+) {
+    *out_uv = *in_uv;
+    *out_pos = vec4(in_uv.x * 2.0 - 1.0, in_uv.y * 2.0 - 1.0, 0.0, 1.0);
 }

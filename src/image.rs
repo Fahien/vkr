@@ -80,12 +80,23 @@ impl Image {
         }
     }
 
+    pub fn sampled(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        width: u32,
+        height: u32,
+        format: vk::Format,
+    ) -> Self {
+        let usage = vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED;
+        Self::new(allocator, width, height, format, usage)
+    }
+
     /// Creates a new empty image
     pub fn new(
         allocator: &Rc<RefCell<vk_mem::Allocator>>,
         width: u32,
         height: u32,
         format: ash::vk::Format,
+        usage: vk::ImageUsageFlags
     ) -> Self {
         let allocator = allocator.clone();
 
@@ -94,13 +105,6 @@ impl Image {
             .height(height)
             .depth(1)
             .build();
-
-        let usage = if Image::is_depth_format(format) {
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-        } else {
-            // Default usage is as a texture
-            ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED
-        };
 
         let image_info = ash::vk::ImageCreateInfo::builder()
             .image_type(ash::vk::ImageType::TYPE_2D)
@@ -136,7 +140,7 @@ impl Image {
     }
 
     pub fn from_data(dev: &Dev, data: &[u8], width: u32, height: u32, format: vk::Format) -> Self {
-        let mut image = Self::new(&dev.allocator, width, height, format);
+        let mut image = Self::sampled(&dev.allocator, width, height, format);
 
         let usage = ash::vk::BufferUsageFlags::TRANSFER_SRC;
         let staging = Buffer::from_data(&dev.allocator, data, usage);
@@ -147,7 +151,7 @@ impl Image {
     pub fn load(dev: &Dev, path: &str) -> Self {
         let mut png = Png::open(path);
         let staging = Buffer::load(&dev.allocator, &mut png);
-        let mut image = Image::new(
+        let mut image = Self::sampled(
             &dev.allocator,
             png.info.width,
             png.info.height,

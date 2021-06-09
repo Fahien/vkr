@@ -50,7 +50,13 @@ impl CommandBuffer {
         depth_clear.depth_stencil.depth = 0.0;
         depth_clear.depth_stencil.stencil = 0;
 
-        let clear_values = [color_clear, depth_clear];
+        let mut albedo_clear = vk::ClearValue::default();
+        albedo_clear.color.float32 = [0.0, 0.0, 0.0, 0.0];
+
+        let mut normal_clear = vk::ClearValue::default();
+        normal_clear.color.float32 = [0.0, 0.0, 0.0, 0.0];
+
+        let clear_values = [color_clear, depth_clear, albedo_clear, normal_clear];
         let create_info = vk::RenderPassBeginInfo::builder()
             .framebuffer(framebuffer.framebuffer)
             .render_pass(pass.render)

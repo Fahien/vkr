@@ -13,6 +13,10 @@ use imgui as im;
 pub struct Framebuffer {
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: vk::Framebuffer,
+    pub normals_view: ImageView,
+    pub normals_image: Image,
+    pub albedo_view: ImageView,
+    pub albedo_image: Image,
     pub depth_view: ImageView,
     pub depth_image: Image,
     pub image_view: vk::ImageView,
@@ -22,6 +26,8 @@ pub struct Framebuffer {
 }
 
 impl Framebuffer {
+    /// @todo A framebuffer for our deferred render pass needs to take into account that we have 4 attachments
+    /// color, depth, albedo, and normals
     pub fn new(dev: &Dev, image: &Image, pass: &Pass) -> Self {
         // Image view into a swapchain images (device, image, format)
         let image_view = {
@@ -50,20 +56,53 @@ impl Framebuffer {
                 .expect("Failed to create Vulkan image view")
         };
 
+        // Depth image and view
         let depth_format = vk::Format::D32_SFLOAT;
         let mut depth_image = Image::new(
             &dev.allocator,
             image.extent.width,
             image.extent.height,
             depth_format,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
         );
         depth_image.transition(&dev, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
         let depth_view = ImageView::new(&dev.device, &depth_image);
 
+        // Albedo image and view
+        let albedo_format = vk::Format::B8G8R8A8_SRGB;
+        let mut albedo_image = Image::new(
+            &dev.allocator,
+            image.extent.width,
+            image.extent.height,
+            albedo_format,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
+        );
+        albedo_image.transition(&dev, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        let albedo_view = ImageView::new(&dev.device, &albedo_image);
+
+        // Normals image and view
+        let normals_format = vk::Format::A2B10G10R10_UNORM_PACK32;
+        let mut normals_image = Image::new(
+            &dev.allocator,
+            image.extent.width,
+            image.extent.height,
+            normals_format,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
+        );
+        normals_image.transition(&dev, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        let normals_view = ImageView::new(&dev.device, &normals_image);
+
         // Framebuffers (image_view, renderpass)
         let framebuffer = {
-            let attachments = [image_view, depth_view.view];
+            let attachments = [
+                image_view,
+                depth_view.view,
+                albedo_view.view,
+                normals_view.view,
+            ];
 
             let create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
@@ -79,6 +118,10 @@ impl Framebuffer {
 
         Self {
             framebuffer,
+            normals_view,
+            normals_image,
+            albedo_view,
+            albedo_image,
             depth_view,
             depth_image,
             image_view,
@@ -104,7 +147,7 @@ impl Drop for Framebuffer {
 /// Container of fallback resources for a frame such as
 /// A white 1x1 pixel texture (image, view, and sampler)
 pub struct Fallback {
-    white_image: Image,
+    _white_image: Image,
     white_view: ImageView,
     white_sampler: Sampler,
 }
@@ -119,7 +162,7 @@ impl Fallback {
         let white_sampler = Sampler::new(&dev.device);
 
         Self {
-            white_image,
+            _white_image: white_image,
             white_view,
             white_sampler,
         }
@@ -464,12 +507,39 @@ pub trait Frames {
 }
 
 /// Offscreen frames work on user allocated images
-struct OffscreenFrames {
-    _frames: Vec<Frame>,
-    _images: Vec<vk::Image>,
+pub struct OffscreenFrames {
+    frames: Vec<Frame>,
+    images: Vec<Image>,
+}
+
+impl OffscreenFrames {
+    pub fn new(dev: &mut Dev, width: u32, height: u32, count: usize, pass: &Pass) -> Self {
+        let mut images = Vec::new();
+        for i in 0..count {
+            // @todo Use a different format?
+            let image = Image::new(
+                &dev.allocator,
+                width,
+                height,
+                vk::Format::B8G8R8A8_SRGB,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            );
+            images.push(image);
+        }
+
+        let mut frames = Vec::new();
+        for image in images.iter() {
+            let frame = Frame::new(dev, image, pass);
+            frames.push(frame);
+        }
+
+        Self { frames, images }
+    }
 }
 
 impl Frames for OffscreenFrames {
+    /// There is no sinchronization happening here
+    /// Synchronization should be done via the Swapchain frames if needed
     fn next_frame(
         &mut self,
         _win: &Win,
@@ -477,17 +547,16 @@ impl Frames for OffscreenFrames {
         _dev: &Dev,
         _pass: &Pass,
     ) -> Option<Frame> {
-        unimplemented!("Offscreen next frame");
+        Some(self.frames.remove(0))
     }
 
-    fn present(&mut self, _frame: Frame, _win: &Win, _surface: &Surface, _dev: &Dev, _pass: &Pass) {
-        unimplemented!("Offscreen present");
+    fn present(&mut self, frame: Frame, _win: &Win, _surface: &Surface, _dev: &Dev, _pass: &Pass) {
+        self.frames.push(frame);
     }
 }
 
 /// Swapchain frames work on swapchain images
 pub struct SwapchainFrames {
-    pub current: usize,
     image_index: u32,
     pub frames: Vec<Frame>,
     pub swapchain: Swapchain,
@@ -511,7 +580,6 @@ impl SwapchainFrames {
         }
 
         Self {
-            current: 0,
             image_index: 0,
             frames: frames,
             swapchain,
@@ -521,7 +589,6 @@ impl SwapchainFrames {
     pub fn recreate(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
         dev.wait();
         //drop(self.swapchain);
-        self.current = 0;
         let (width, height) = win.window.drawable_size();
         self.swapchain.recreate(&surface, &dev, width, height);
         for i in 0..self.swapchain.images.len() {
@@ -543,6 +610,8 @@ impl Frames for SwapchainFrames {
         pass: &Pass,
     ) -> Option<Frame> {
         // Wait for this frame to be ready
+        // Frame at position zero should be the one soon to be available as
+        // we manage the frames vector like a circular buffer.
         self.frames[0].res.wait();
 
         let acquire_res = unsafe {
