@@ -6,9 +6,9 @@ use std::{collections::HashMap, rc::Rc};
 
 use ash::{vk, Device};
 
-use crate::{model::Node, util::Handle};
+use crate::{model::Node, util::Handle, Material};
 
-type SetCache = HashMap<(vk::PipelineLayout, Handle<Node>), Vec<vk::DescriptorSet>>;
+type SetCache<T> = HashMap<(vk::PipelineLayout, Handle<T>), Vec<vk::DescriptorSet>>;
 
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
@@ -18,11 +18,15 @@ pub struct Descriptors {
 
     /// These descriptor sets are for camera view and proj uniform, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the number of nodes with cameras
-    pub view_sets: SetCache,
+    pub view_sets: SetCache<Node>,
 
     /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the node with the model matrix
-    pub model_sets: SetCache,
+    pub model_sets: SetCache<Node>,
+
+    /// These descriptor sets are for material uniforms, therefore we need NxM descriptor sets
+    /// where N is the number of pipeline layouts, and M is the number of materials
+    pub material_sets: SetCache<Material>,
 
     /// Descriptor pools should be per-pipeline layout as weel as they could differ in terms of uniforms and samplers?
     /// Or can we provide sufficient descriptors for all supported pipeline layouts? Trying this approach.
@@ -35,7 +39,7 @@ impl Descriptors {
     pub fn new(device: &Rc<Device>) -> Self {
         let pool = unsafe {
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(3 * 3) // Support model, view and proj matrix for 3 pipelines
+                .descriptor_count(4 * 3) // Support model, view, proj matrix and material color for 3 pipelines
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
             let sampler_pool_size = vk::DescriptorPoolSize::builder()
@@ -47,7 +51,7 @@ impl Descriptors {
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 // @todo Use a parameter instead of 2 for frame count
-                .max_sets(2 * 4) // Support 2 frames with 3 pipelines
+                .max_sets(2 * 4) // Support 2 frames with 4 pipelines?
                 .build();
             device.create_descriptor_pool(&create_info, None)
         }
@@ -55,8 +59,9 @@ impl Descriptors {
 
         Self {
             gui_sets: vec![],
-            view_sets: HashMap::new(),
-            model_sets: HashMap::new(),
+            view_sets: SetCache::new(),
+            model_sets: SetCache::new(),
+            material_sets: SetCache::new(),
             pool,
             device: device.clone(),
         }
