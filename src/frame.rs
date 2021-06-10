@@ -107,6 +107,7 @@ pub struct Fallback {
     white_image: Image,
     white_view: ImageView,
     white_sampler: Sampler,
+    white_material: Material,
 }
 
 impl Fallback {
@@ -118,10 +119,13 @@ impl Fallback {
 
         let white_sampler = Sampler::new(&dev.device);
 
+        let white_material = Material::new(Color::white());
+
         Self {
             white_image,
             white_view,
             white_sampler,
+            white_material,
         }
     }
 }
@@ -142,6 +146,9 @@ pub struct Frameres {
 
     // Uniform buffers for proj matrices associated to cameras
     pub proj_buffers: BufferCache<Camera>,
+
+    // Uniform buffers for materials
+    pub material_buffers: BufferCache<Material>,
 
     pub descriptors: Descriptors,
     pub command_buffer: CommandBuffer,
@@ -171,6 +178,7 @@ impl Frameres {
             model_buffers: BufferCache::new(),
             view_buffers: BufferCache::new(),
             proj_buffers: BufferCache::new(),
+            material_buffers: BufferCache::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
@@ -330,6 +338,7 @@ impl Frame {
         nodes: &Pack<Node>,
         meshes: &Pack<Mesh>,
         primitives: &Pack<Primitive>,
+        materials: &Pack<Material>,
         samplers: &Pack<Sampler>,
         views: &Pack<ImageView>,
         textures: &Pack<Texture>,
@@ -340,7 +349,7 @@ impl Frame {
         let children = nodes.get(node).unwrap().children.clone();
         for child in children {
             self.draw::<T>(
-                pipeline, nodes, meshes, primitives, samplers, views, textures, child,
+                pipeline, nodes, meshes, primitives, materials, samplers, views, textures, child,
             );
         }
 
@@ -406,6 +415,55 @@ impl Frame {
 
         for hprimitive in &mesh.primitives {
             let primitive = primitives.get(*hprimitive).unwrap();
+
+            // How about grouping by material?
+            let material = match materials.get(primitive.material) {
+                Some(m) => m,
+                None => &self.res.fallback.white_material,
+            };
+
+            if let Some(sets) = self
+                .res
+                .descriptors
+                .material_sets
+                .get(&(pipeline.layout, primitive.material))
+            {
+                // @todo Use a constant or something that is not a magic number (2)
+                self.res
+                    .command_buffer
+                    .bind_descriptor_sets(pipeline, sets, 2);
+
+                // If there is a descriptor set, there must be a uniform buffer
+                let ubo = self
+                    .res
+                    .material_buffers
+                    .get_mut(&primitive.material)
+                    .unwrap();
+                ubo.upload(material);
+            } else {
+                // Create a new uniform buffer for this material
+                let mut material_buffer =
+                    Buffer::new::<Material>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+                material_buffer.upload(material);
+
+                // Bind a default material
+                //   let material = &self.res.fallback.white_material;
+
+                let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[2]]); // 2 is for material
+                Material::write_set(&self.device, sets[0], &material_buffer);
+
+                self.res
+                    .command_buffer
+                    .bind_descriptor_sets(pipeline, &sets, 2);
+
+                self.res
+                    .material_buffers
+                    .insert(primitive.material, material_buffer);
+                self.res
+                    .descriptors
+                    .material_sets
+                    .insert((pipeline.layout, primitive.material), sets);
+            }
 
             self.res
                 .command_buffer

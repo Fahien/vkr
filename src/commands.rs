@@ -90,6 +90,7 @@ impl CommandBuffer {
         }
     }
 
+    /// Set index here corresponds to the descriptor_set index in the shader
     pub fn bind_descriptor_sets(
         &self,
         pipeline: &Pipeline,
