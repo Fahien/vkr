@@ -14,7 +14,11 @@ pub fn main() {
 
     let mut model = Model::new();
 
-    let cube_primitive = Primitive::cube(&vkr.dev.allocator);
+    let green_material = Material::new(Color::new(0.0, 0.6, 0.1, 1.0));
+    let green_material = model.materials.push(green_material);
+
+    let mut cube_primitive = Primitive::cube(&vkr.dev.allocator);
+    cube_primitive.material = green_material;
     let cube_primitive = model.primitives.push(cube_primitive);
 
     let cube_mesh = Mesh::new(vec![cube_primitive], Handle::none());
@@ -58,6 +62,7 @@ pub fn main() {
             &model.nodes,
             &model.meshes,
             &model.primitives,
+            &model.materials,
             &model.samplers,
             &model.views,
             &model.textures,
