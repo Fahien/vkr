@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::vk;
+use ash::{vk, Device};
 use std::{cell::RefCell, rc::Rc};
 
 use super::*;
@@ -11,6 +11,7 @@ pub struct Primitive {
     pub vertex_count: u32,
     pub vertices: Buffer,
     pub indices: Option<Buffer>,
+    pub material: Handle<Material>,
 }
 
 impl Primitive {
@@ -24,6 +25,7 @@ impl Primitive {
             vertex_count,
             vertices,
             indices: None,
+            material: Handle::none(), // default material
         }
     }
 

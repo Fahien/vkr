@@ -82,6 +82,49 @@ impl Color {
 }
 
 #[repr(C)]
+pub struct Material {
+    color: Color,
+}
+
+impl Material {
+    pub fn new(color: Color) -> Self {
+        Self { color }
+    }
+
+    pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
+        let material = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // color
+            .descriptor_count(1) // Referring the shader?
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        vec![material]
+    }
+
+    pub fn write_set(device: &Device, set: vk::DescriptorSet, material: &Buffer) {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<Self>() as vk::DeviceSize)
+            .buffer(material.buffer)
+            .build();
+
+        let buffer_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let writes = vec![buffer_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
+}
+
+#[repr(C)]
 pub struct Point {
     pos: na::Vector3<f32>,
     color: Color,
@@ -268,7 +311,10 @@ impl VertexInput for Vertex {
         let camera_bindings = Camera::get_set_layout_bindings();
         let camera = create_set_layout(device, &camera_bindings);
 
-        vec![model, camera]
+        let material_bindings = Material::get_set_layout_bindings();
+        let material = create_set_layout(device, &material_bindings);
+
+        vec![model, camera, material]
     }
 
     fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
@@ -517,6 +563,7 @@ pub struct Model {
     pub views: Pack<ImageView>,
     pub samplers: Pack<Sampler>,
     pub textures: Pack<Texture>,
+    pub materials: Pack<Material>,
     pub primitives: Pack<Primitive>,
     pub meshes: Pack<Mesh>,
     pub scripts: Pack<Script>,
@@ -531,6 +578,7 @@ impl Model {
             views: Pack::new(),
             samplers: Pack::new(),
             textures: Pack::new(),
+            materials: Pack::new(),
             primitives: Pack::new(),
             meshes: Pack::new(),
             scripts: Pack::new(),
