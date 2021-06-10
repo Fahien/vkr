@@ -23,6 +23,14 @@ pub struct Mat {
     matrix: Mat4,
 }
 
+#[spirv(block)]
+pub struct Material {
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+}
+
 #[allow(unused_attributes)]
 #[spirv(vertex)]
 pub fn line_vs(
@@ -42,6 +50,7 @@ pub fn line_vs(
 #[spirv(fragment)]
 pub fn main_fs(
     #[spirv(descriptor_set = 0, binding = 1)] image: UniformConstant<SampledImage<Image2d>>,
+    #[spirv(descriptor_set = 2, binding = 0)] material: Uniform<Material>,
     color: Input<Vec4>,
     normal: Input<Vec3>,
     uv: Input<Vec2>,
@@ -49,6 +58,10 @@ pub fn main_fs(
 ) {
     let frag = Vec4::from(image.sample(*uv));
     *out_color = *color * frag;
+    out_color.x *= material.r;
+    out_color.y *= material.g;
+    out_color.z *= material.b;
+    out_color.w *= material.a;
 }
 
 #[allow(unused_attributes)]
