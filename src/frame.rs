@@ -386,22 +386,6 @@ impl Frame {
             let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[0]]);
             T::write_set_model(self.device.borrow(), sets[0], &model_buffer);
 
-            if let Some(texture) = textures.get(mesh.texture) {
-                let view = views.get(texture.view);
-                let sampler = samplers.get(texture.sampler);
-                T::write_set_image(
-                    self.device.borrow(),
-                    sets[0],
-                    view.unwrap(),
-                    sampler.unwrap(),
-                );
-            } else {
-                // Bind a white 1x1 pixel texture
-                let view = &self.res.fallback.white_view;
-                let sampler = &self.res.fallback.white_sampler;
-                T::write_set_image(self.device.borrow(), sets[0], view, sampler);
-            }
-
             self.res
                 .command_buffer
                 .bind_descriptor_sets(pipeline, &sets, 0);
@@ -416,53 +400,72 @@ impl Frame {
         for hprimitive in &mesh.primitives {
             let primitive = primitives.get(*hprimitive).unwrap();
 
-            // How about grouping by material?
-            let material = match materials.get(primitive.material) {
-                Some(m) => m,
-                None => &self.res.fallback.white_material,
-            };
+            // Does this pipeline support materials at all?
+            if pipeline.set_layouts.len() > 2 {
+                // How about grouping by material?
+                let material = match materials.get(primitive.material) {
+                    Some(m) => m,
+                    None => &self.res.fallback.white_material,
+                };
 
-            if let Some(sets) = self
-                .res
-                .descriptors
-                .material_sets
-                .get(&(pipeline.layout, primitive.material))
-            {
-                // @todo Use a constant or something that is not a magic number (2)
-                self.res
-                    .command_buffer
-                    .bind_descriptor_sets(pipeline, sets, 2);
-
-                // If there is a descriptor set, there must be a uniform buffer
-                let ubo = self
+                if let Some(sets) = self
                     .res
-                    .material_buffers
-                    .get_mut(&primitive.material)
-                    .unwrap();
-                ubo.upload(material);
-            } else {
-                // Create a new uniform buffer for this material
-                let mut material_buffer =
-                    Buffer::new::<Material>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-                material_buffer.upload(material);
-
-                // Bind a default material
-                //   let material = &self.res.fallback.white_material;
-
-                let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[2]]); // 2 is for material
-                Material::write_set(&self.device, sets[0], &material_buffer);
-
-                self.res
-                    .command_buffer
-                    .bind_descriptor_sets(pipeline, &sets, 2);
-
-                self.res
-                    .material_buffers
-                    .insert(primitive.material, material_buffer);
-                self.res
                     .descriptors
                     .material_sets
-                    .insert((pipeline.layout, primitive.material), sets);
+                    .get(&(pipeline.layout, primitive.material))
+                {
+                    // @todo Use a constant or something that is not a magic number (2)
+                    self.res
+                        .command_buffer
+                        .bind_descriptor_sets(pipeline, sets, 2);
+
+                    // If there is a descriptor set, there must be a uniform buffer
+                    let ubo = self
+                        .res
+                        .material_buffers
+                        .get_mut(&primitive.material)
+                        .unwrap();
+                    ubo.upload(material);
+                } else {
+                    // Create a new uniform buffer for this material
+                    let mut material_buffer =
+                        Buffer::new::<Color>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+                    material_buffer.upload(&material.color);
+
+                    let (albedo_view, albedo_sampler) = match textures.get(material.albedo) {
+                        Some(texture) => {
+                            let view = views.get(texture.view).unwrap();
+                            let sampler = samplers.get(texture.sampler).unwrap();
+                            (view, sampler)
+                        }
+                        _ => (
+                            // Bind a default white albedo
+                            &self.res.fallback.white_view,
+                            &self.res.fallback.white_sampler,
+                        ),
+                    };
+
+                    let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[2]]); // 1 is for material
+                    Material::write_set(
+                        &self.device,
+                        sets[0],
+                        &material_buffer,
+                        albedo_view,
+                        albedo_sampler,
+                    );
+
+                    self.res
+                        .command_buffer
+                        .bind_descriptor_sets(pipeline, &sets, 2);
+
+                    self.res
+                        .material_buffers
+                        .insert(primitive.material, material_buffer);
+                    self.res
+                        .descriptors
+                        .material_sets
+                        .insert((pipeline.layout, primitive.material), sets);
+                }
             }
 
             self.res
