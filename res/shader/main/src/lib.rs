@@ -24,7 +24,7 @@ pub struct Mat {
 }
 
 #[spirv(block)]
-pub struct Material {
+pub struct Color {
     r: f32,
     g: f32,
     b: f32,
@@ -49,19 +49,19 @@ pub fn line_vs(
 #[allow(unused_attributes)]
 #[spirv(fragment)]
 pub fn main_fs(
-    #[spirv(descriptor_set = 0, binding = 1)] image: UniformConstant<SampledImage<Image2d>>,
-    #[spirv(descriptor_set = 2, binding = 0)] material: Uniform<Material>,
+    #[spirv(descriptor_set = 2, binding = 0)] material_color: Uniform<Color>,
+    #[spirv(descriptor_set = 2, binding = 1)] material_albedo: UniformConstant<SampledImage<Image2d>>,
     color: Input<Vec4>,
     normal: Input<Vec3>,
     uv: Input<Vec2>,
     mut out_color: Output<Vec4>,
 ) {
-    let frag = Vec4::from(image.sample(*uv));
+    let frag = Vec4::from(material_albedo.sample(*uv));
     *out_color = *color * frag;
-    out_color.x *= material.r;
-    out_color.y *= material.g;
-    out_color.z *= material.b;
-    out_color.w *= material.a;
+    out_color.x *= material_color.r;
+    out_color.y *= material_color.g;
+    out_color.z *= material_color.b;
+    out_color.w *= material_color.a;
 }
 
 #[allow(unused_attributes)]

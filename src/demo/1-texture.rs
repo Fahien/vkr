@@ -41,15 +41,13 @@ pub fn main() {
         Primitive::new(&vkr.dev.allocator, &lines_vertices)
     };
     let lines_primitive = model.primitives.push(lines_primitive);
-    let lines_mesh = Mesh::new(vec![lines_primitive], Handle::none());
+    let lines_mesh = Mesh::new(vec![lines_primitive]);
     let lines_mesh = model.meshes.push(lines_mesh);
     let mut lines = Node::new();
     lines.trs.translate(&na::Vector3::new(0.0, 0.0, -0.5));
     lines.mesh = lines_mesh;
     let lines = model.nodes.push(lines);
-
-    let rect_primitive = Primitive::quad(&vkr.dev.allocator, [1.0, 1.0]);
-    let rect_primitive = model.primitives.push(rect_primitive);
+    
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = ImageView::new(&vkr.dev.device, &image);
     model.images.push(image);
@@ -57,7 +55,12 @@ pub fn main() {
     let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
     let texture = Texture::new(view, sampler);
     let texture = model.textures.push(texture);
-    let rect_mesh = Mesh::new(vec![rect_primitive], texture);
+    let material = Material::textured(texture);
+    let material = model.materials.push(material);
+    let mut rect_primitive = Primitive::quad(&vkr.dev.allocator, [1.0, 1.0]);
+    rect_primitive.material = material;
+    let rect_primitive = model.primitives.push(rect_primitive);
+    let rect_mesh = Mesh::new(vec![rect_primitive]);
     let rect_mesh = model.meshes.push(rect_mesh);
     let mut rect = Node::new();
     rect.trs.translate(&na::Vector3::new(0.0, 0.3, -0.2));
@@ -131,6 +134,7 @@ pub fn main() {
             &model.nodes,
             &model.meshes,
             &model.primitives,
+            &model.materials,
             &model.samplers,
             &model.views,
             &model.textures,
@@ -142,6 +146,7 @@ pub fn main() {
             &model.nodes,
             &model.meshes,
             &model.primitives,
+            &model.materials,
             &model.samplers,
             &model.views,
             &model.textures,

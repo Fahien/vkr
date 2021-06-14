@@ -14,14 +14,21 @@ pub fn main() {
 
     let mut model = Model::new();
 
-    let green_material = Material::new(Color::new(0.0, 0.6, 0.1, 1.0));
+    let image = Image::load(&vkr.dev, "res/image/test.png");
+    let view = model.views.push(ImageView::new(&vkr.dev.device, &image));
+    let image = model.images.push(image);
+    let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
+    let lena_texture = model.textures.push(Texture::new(view, sampler));
+
+    let mut green_material = Material::textured(lena_texture);
+    green_material.color = Color::new(0.8, 0.6, 0.7, 0.3);
     let green_material = model.materials.push(green_material);
 
     let mut cube_primitive = Primitive::cube(&vkr.dev.allocator);
     cube_primitive.material = green_material;
     let cube_primitive = model.primitives.push(cube_primitive);
 
-    let cube_mesh = Mesh::new(vec![cube_primitive], Handle::none());
+    let cube_mesh = Mesh::new(vec![cube_primitive]);
     let cube_mesh = model.meshes.push(cube_mesh);
 
     let mut cube_node = Node::new();
