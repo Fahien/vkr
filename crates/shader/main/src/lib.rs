@@ -39,14 +39,14 @@ pub fn line_vs(
 
 #[spirv(fragment)]
 pub fn main_fs(
-    #[spirv(descriptor_set = 0, binding = 1)] image: &SampledImage<Image2d>,
     #[spirv(uniform, descriptor_set = 2, binding = 0)] material_color: &Vec4,
+    #[spirv(descriptor_set = 2, binding = 1)] material_albedo: &SampledImage<Image2d>,
     color: Vec4,
     _normal: Vec3,
     uv: Vec2,
     out_color: &mut Vec4,
 ) {
-    let sample: Vec4 = unsafe { image.sample(uv) };
+    let sample: Vec4 = unsafe { material_albedo.sample(uv) };
     *out_color = *material_color * color * sample;
 }
 

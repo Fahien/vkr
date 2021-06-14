@@ -242,14 +242,10 @@ impl Primitive {
 
 pub struct Mesh {
     pub primitives: Vec<Handle<Primitive>>,
-    pub texture: Handle<Texture>,
 }
 
 impl Mesh {
-    pub fn new(primitives: Vec<Handle<Primitive>>, texture: Handle<Texture>) -> Self {
-        Self {
-            primitives,
-            texture,
-        }
+    pub fn new(primitives: Vec<Handle<Primitive>>) -> Self {
+        Self { primitives }
     }
 }

@@ -23,6 +23,7 @@ pub trait VertexInput {
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription>;
 
+    /// @todo Would it be useful to follow a convention where we know exactly which set layout is at a certain index?
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout>;
 
     fn get_constants() -> Vec<vk::PushConstantRange> {
@@ -83,28 +84,48 @@ impl Color {
 
 #[repr(C)]
 pub struct Material {
-    color: Color,
+    pub color: Color,
+    pub albedo: Handle<Texture>,
 }
 
 impl Material {
     pub fn new(color: Color) -> Self {
-        Self { color }
+        let albedo = Handle::none();
+        Self { color, albedo }
+    }
+
+    pub fn textured(albedo: Handle<Texture>) -> Self {
+        let color = Color::white();
+        Self { color, albedo }
     }
 
     pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
-        let material = vk::DescriptorSetLayoutBinding::builder()
+        let color = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // color
             .descriptor_count(1) // Referring the shader?
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        vec![material]
+        let albedo = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        vec![color, albedo]
     }
 
-    pub fn write_set(device: &Device, set: vk::DescriptorSet, material: &Buffer) {
+    pub fn write_set(
+        device: &Device,
+        set: vk::DescriptorSet,
+        material: &Buffer,
+        albedo: &ImageView,
+        sampler: &Sampler,
+    ) {
         let buffer_info = vk::DescriptorBufferInfo::builder()
-            .range(std::mem::size_of::<Self>() as vk::DeviceSize)
+            .range(std::mem::size_of::<Color>() as vk::DeviceSize)
             .buffer(material.buffer)
             .build();
 
@@ -116,7 +137,21 @@ impl Material {
             .buffer_info(&[buffer_info])
             .build();
 
-        let writes = vec![buffer_write];
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(albedo.view)
+            .sampler(sampler.sampler)
+            .build();
+
+        let image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&[image_info])
+            .build();
+
+        let writes = vec![buffer_write, image_write];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
@@ -292,20 +327,12 @@ impl VertexInput for Vertex {
     }
 
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
-        let model_bindings = vec![
-            vk::DescriptorSetLayoutBinding::builder()
-                .binding(0)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::VERTEX)
-                .build(),
-            vk::DescriptorSetLayoutBinding::builder()
-                .binding(1)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-                .build(),
-        ];
+        let model_bindings = vec![vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build()];
         let model = create_set_layout(device, &model_bindings);
 
         let camera_bindings = Camera::get_set_layout_bindings();
@@ -333,33 +360,6 @@ impl VertexInput for Vertex {
             .build();
 
         let writes = vec![buffer_write];
-
-        unsafe {
-            device.update_descriptor_sets(&writes, &[]);
-        }
-    }
-
-    fn write_set_image(
-        device: &Device,
-        set: vk::DescriptorSet,
-        view: &ImageView,
-        sampler: &Sampler,
-    ) {
-        let image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .sampler(sampler.sampler)
-            .image_view(view.view)
-            .build();
-
-        let image_write = vk::WriteDescriptorSet::builder()
-            .dst_set(set)
-            .dst_binding(1)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&[image_info])
-            .build();
-
-        let writes = vec![image_write];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
