@@ -38,20 +38,26 @@ pub struct Descriptors {
 impl Descriptors {
     pub fn new(device: &Rc<Device>) -> Self {
         let pool = unsafe {
+            // Support model, view, proj matrix and material color for 3 pipelines
+            let uniform_count = 4 * 3;
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(4 * 3) // Support model, view, proj matrix and material color for 3 pipelines
+                .descriptor_count(uniform_count)
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
+
+            // Support 1 material and 1 gui font texture for 3 pipelines
+            let sampler_count = 2 * 3;
             let sampler_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(2 * 3) // Support 1 material and 1 gui font texture for 3 pipelines
+                .descriptor_count(sampler_count) // Support materials and gui font texture?
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
+            let set_count = 12; // 5 nodes, 1 camera, 5 materials, 1 gui?
             let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 // @todo Use a parameter instead of 2 for frame count
-                .max_sets(2 * 4) // Support 2 frames with 4 pipelines?
+                .max_sets(set_count) // Support 2 frames with n different pipelines?
                 .build();
             device.create_descriptor_pool(&create_info, None)
         }

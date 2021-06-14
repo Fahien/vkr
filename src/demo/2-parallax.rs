@@ -24,12 +24,17 @@ fn create_back(
     model: &mut Model,
     sampler: Handle<Sampler>,
     path: &str,
-    primitive: Handle<Primitive>,
     aspect: f32,
     i: i32,
 ) -> Handle<Node> {
     let texture = create_texture(vkr, model, sampler, path);
-    let mesh = Mesh::new(vec![primitive], texture);
+    let material = Material::textured(texture);
+    let material = model.materials.push(material);
+    let mut primitive = Primitive::quad(&vkr.dev.allocator, [2.0, 1.0]);
+    primitive.material = material;
+    let primitive = model.primitives.push(primitive);
+
+    let mesh = Mesh::new(vec![primitive]);
     let mesh = model.meshes.push(mesh);
     let mut back = Node::new();
     back.mesh = mesh;
@@ -62,10 +67,6 @@ fn create_scene(vkr: &Vkr, model: &mut Model) -> Handle<Node> {
     let sampler = Sampler::new(&vkr.dev.device);
     let sampler = model.samplers.push(sampler);
 
-    // Reuse primitive with adjusted texture coordinates
-    let primitive = Primitive::quad(&vkr.dev.allocator, [2.0, 1.0]);
-    let primitive = model.primitives.push(primitive);
-
     let (width, height) = vkr.win.as_ref().unwrap().window.drawable_size();
     let aspect = width as f32 / height as f32;
 
@@ -77,7 +78,6 @@ fn create_scene(vkr: &Vkr, model: &mut Model) -> Handle<Node> {
             model,
             sampler,
             &format!("res/image/city/back{}.png", i),
-            primitive,
             aspect,
             i,
         );
@@ -120,6 +120,7 @@ fn main() {
                 &model.nodes,
                 &model.meshes,
                 &model.primitives,
+                &model.materials,
                 &model.samplers,
                 &model.views,
                 &model.textures,
