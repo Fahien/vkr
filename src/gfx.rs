@@ -844,6 +844,21 @@ impl Pipeline {
             height,
         )
     }
+
+    pub fn normal(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(&dev.device);
+        let vs = CString::new("main_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
+        Self::new::<Vertex>(
+            dev,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            ash::vk::PrimitiveTopology::TRIANGLE_LIST,
+            pass,
+            width,
+            height,
+        )
+    }
 }
 
 impl Drop for Pipeline {

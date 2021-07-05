@@ -48,6 +48,24 @@ pub fn line_vs(
 
 #[allow(unused_attributes)]
 #[spirv(fragment)]
+pub fn normal_fs(
+    #[spirv(descriptor_set = 2, binding = 0)] material_color: Uniform<Color>,
+    #[spirv(descriptor_set = 2, binding = 1)] material_albedo: UniformConstant<SampledImage<Image2d>>,
+    color: Input<Vec4>,
+    normal: Input<Vec3>,
+    uv: Input<Vec2>,
+    mut out_color: Output<Vec4>,
+) {
+    let frag = Vec4::from(material_albedo.sample(*uv));
+    *out_color = *color * frag;
+    out_color.x *= normal.x * material_color.r;
+    out_color.y *= normal.y * material_color.g;
+    out_color.z *= normal.z * material_color.b;
+    out_color.w *= material_color.a;
+}
+
+#[allow(unused_attributes)]
+#[spirv(fragment)]
 pub fn main_fs(
     #[spirv(descriptor_set = 2, binding = 0)] material_color: Uniform<Color>,
     #[spirv(descriptor_set = 2, binding = 1)] material_albedo: UniformConstant<SampledImage<Image2d>>,
@@ -89,6 +107,5 @@ pub fn main_vs(
     normal.z = temp_normal.z;
 
     uv.x = in_uv.x;
-    // UV coords system in Vulkan has inverted Y
     uv.y = in_uv.y;
 }
