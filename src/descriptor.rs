@@ -48,16 +48,15 @@ impl Descriptors {
             // Support 1 material and 1 gui font texture for 3 pipelines
             let sampler_count = 2 * 3;
             let sampler_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(sampler_count) // Support materials and gui font texture?
+                .descriptor_count(sampler_count)
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
-            let set_count = 12; // 5 nodes, 1 camera, 5 materials, 1 gui?
+            let set_count = 16; // 5 nodes, 1 camera, 5 materials, 1 gui?
             let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
-                // @todo Use a parameter instead of 2 for frame count
-                .max_sets(set_count) // Support 2 frames with n different pipelines?
+                .max_sets(set_count)
                 .build();
             device.create_descriptor_pool(&create_info, None)
         }

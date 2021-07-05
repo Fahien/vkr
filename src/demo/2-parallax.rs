@@ -94,7 +94,7 @@ fn main() {
 
     let mut vkr = Vkr::new(win);
 
-    let mut pipeline = Pipeline::main(&vkr.dev, &vkr.pass, width, height);
+    let mut pipeline = Pipeline::main(&vkr.dev.device, &vkr.pass, width, height);
 
     let mut model = Model::new();
 
