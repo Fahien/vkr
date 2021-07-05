@@ -39,25 +39,24 @@ impl Descriptors {
     pub fn new(dev: &mut Dev) -> Self {
         let pool = unsafe {
             // Support 1 model matrix, 1 view matrix, 1 proj matrix?
-            let uniform_count = 3;
+            let uniform_count = 16;
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
                 .descriptor_count(uniform_count) 
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
 
             // Support 1 material and a gui texture?
-            let sampler_count = 2;
+            let sampler_count = 16;
             let sampler_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(sampler_count) // Support materials and gui font texture?
+                .descriptor_count(sampler_count)
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
-            let set_count = 12; // 5 nodes, 1 camera, 5 materials, 1 gui?
+            let set_count = 16; // 5 nodes, 1 camera, 5 materials, 1 gui?
             let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
-                // @todo Use a parameter instead of 2 for frame count
-                .max_sets(set_count) // Support 2 frames with n different pipelines?
+                .max_sets(set_count)
                 .build();
             dev.device.create_descriptor_pool(&create_info, None)
         }
