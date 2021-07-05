@@ -37,12 +37,12 @@ impl Queue {
     pub fn submit_draw(
         &self,
         command_buffer: &CommandBuffer,
-        wait: &Semaphore,
+        wait: vk::Semaphore,
         signal: &Semaphore,
         fence: Option<&mut Fence>,
     ) {
         // Wait for the image to be available ..
-        let waits = [wait.semaphore];
+        let waits = [wait];
         // .. at color attachment output stage
         let wait_dst_stage_mask = [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [command_buffer.command_buffer];
