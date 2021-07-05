@@ -21,7 +21,7 @@ pub struct PipelineCache {
 impl PipelineCache {
     pub fn new(device: &Rc<Device>) -> Self {
         Self {
-            descriptors: Descriptors::new(device)
+            descriptors: Descriptors::new(device),
         }
     }
 }
@@ -174,6 +174,21 @@ impl Pipeline {
         let shader = ShaderModule::main(device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
+        Self::new::<Vertex>(
+            device,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            pass,
+            width,
+            height,
+        )
+    }
+
+    pub fn normal(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(device);
+        let vs = CString::new("main_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
         Self::new::<Vertex>(
             device,
             shader.get_vert(&vs),
