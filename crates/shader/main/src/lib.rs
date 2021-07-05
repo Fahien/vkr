@@ -38,6 +38,20 @@ pub fn line_vs(
 }
 
 #[spirv(fragment)]
+pub fn normal_fs(
+    #[spirv(uniform, descriptor_set = 2, binding = 0)] material_color: &Vec4,
+    #[spirv(descriptor_set = 2, binding = 1)] material_albedo: &SampledImage<Image2d>,
+    color: Vec4,
+    normal: Vec3,
+    uv: Vec2,
+    out_color: &mut Vec4,
+) {
+    let sample: Vec4 = unsafe { material_albedo.sample(uv) };
+    let normal4 = normal.extend(1.0);
+    *out_color = *material_color * color * sample * normal4;
+}
+
+#[spirv(fragment)]
 pub fn main_fs(
     #[spirv(uniform, descriptor_set = 2, binding = 0)] material_color: &Vec4,
     #[spirv(descriptor_set = 2, binding = 1)] material_albedo: &SampledImage<Image2d>,
