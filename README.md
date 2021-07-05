@@ -4,7 +4,7 @@ VKR is a Vulkan experiment written in Rust to explore [ash](https://github.com/M
 
 ## Requirements
 
-Download and install [Vulkan SDK 1.2.162.1](https://vulkan.lunarg.com/sdk/home) for your platform.
+Download and install [Vulkan SDK 1.2.182.0](https://vulkan.lunarg.com/sdk/home) for your platform.
 
 ## Build
 
