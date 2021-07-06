@@ -50,21 +50,8 @@ pub fn main() {
         }
 
         let mut frame = frame.unwrap();
-
-        frame.bind(&&triangle_pipeline, &model, camera_node);
-
-        frame.draw::<Vertex>(
-            &triangle_pipeline,
-            &model.nodes,
-            &model.meshes,
-            &model.primitives,
-            &model.materials,
-            &model.samplers,
-            &model.views,
-            &model.textures,
-            cube_node,
-        );
-
+        frame.bind(&triangle_pipeline, &model, camera_node);
+        frame.draw::<Vertex>(&triangle_pipeline, &model, cube_node);
         vkr.end_frame(frame);
     }
 
