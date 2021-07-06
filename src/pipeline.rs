@@ -185,6 +185,7 @@ impl Pipeline {
         )
     }
 
+    /// Returns a graphics pipeline which draws the normals of primitive's surfaces as a color
     pub fn normal(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
         let shader = ShaderModule::main(device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");

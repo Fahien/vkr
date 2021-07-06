@@ -345,27 +345,21 @@ impl Frame {
     pub fn draw<T: VertexInput>(
         &mut self,
         pipeline: &mut Pipeline,
-        nodes: &Pack<Node>,
-        meshes: &Pack<Mesh>,
-        primitives: &Pack<Primitive>,
-        materials: &Pack<Material>,
-        samplers: &Pack<Sampler>,
-        views: &Pack<ImageView>,
-        textures: &Pack<Texture>,
+        model: &Model,
         node: Handle<Node>,
     ) {
         self.res.command_buffer.bind_pipeline(pipeline);
 
-        let children = nodes.get(node).unwrap().children.clone();
+        let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
             self.draw::<T>(
-                pipeline, nodes, meshes, primitives, materials, samplers, views, textures, child,
+                pipeline, model, child,
             );
         }
 
-        let cnode = nodes.get(node).unwrap();
+        let cnode = model.nodes.get(node).unwrap();
 
-        let mesh = meshes.get(cnode.mesh);
+        let mesh = model.meshes.get(cnode.mesh);
         if mesh.is_none() {
             return ();
         }
@@ -412,12 +406,12 @@ impl Frame {
         }
 
         for hprimitive in &mesh.primitives {
-            let primitive = primitives.get(*hprimitive).unwrap();
+            let primitive = model.primitives.get(*hprimitive).unwrap();
 
             // Does this pipeline support materials at all?
             if pipeline.set_layouts.len() > 2 {
                 // How about grouping by material?
-                let material = match materials.get(primitive.material) {
+                let material = match model.materials.get(primitive.material) {
                     Some(m) => m,
                     None => &self.res.fallback.white_material,
                 };
@@ -447,10 +441,10 @@ impl Frame {
                         Buffer::new::<Color>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
                     material_buffer.upload(&material.color);
 
-                    let (albedo_view, albedo_sampler) = match textures.get(material.albedo) {
+                    let (albedo_view, albedo_sampler) = match model.textures.get(material.albedo) {
                         Some(texture) => {
-                            let view = views.get(texture.view).unwrap();
-                            let sampler = samplers.get(texture.sampler).unwrap();
+                            let view = model.views.get(texture.view).unwrap();
+                            let sampler = model.samplers.get(texture.sampler).unwrap();
                             (view, sampler)
                         }
                         _ => (

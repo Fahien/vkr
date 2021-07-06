@@ -251,6 +251,8 @@ impl Vkr {
         true
     }
 
+    /// Returns a frame if available. When not available None is returned and drawing should be skipped
+    /// TODO: Another option would be to wait until the frame is available and then return it.
     pub fn begin_frame(&mut self) -> Option<Frame> {
         let win = self.win.as_ref().unwrap();
 
