@@ -16,7 +16,7 @@ pub fn main() {
 
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = model.views.push(ImageView::new(&vkr.dev.device, &image));
-    let image = model.images.push(image);
+    let _image = model.images.push(image);
     let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
     let lena_texture = model.textures.push(Texture::new(view, sampler));
 
@@ -64,17 +64,7 @@ pub fn main() {
 
         frame.bind(&mut triangle_pipeline, &model, camera_node);
 
-        frame.draw::<Vertex>(
-            &mut triangle_pipeline,
-            &model.nodes,
-            &model.meshes,
-            &model.primitives,
-            &model.materials,
-            &model.samplers,
-            &model.views,
-            &model.textures,
-            cube_node,
-        );
+        frame.draw::<Vertex>(&mut triangle_pipeline, &model, cube_node);
 
         vkr.end_frame(frame);
     }
