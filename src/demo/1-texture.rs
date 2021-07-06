@@ -47,7 +47,7 @@ pub fn main() {
     lines.trs.translate(&na::Vector3::new(0.0, 0.0, -0.5));
     lines.mesh = lines_mesh;
     let lines = model.nodes.push(lines);
-    
+
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = ImageView::new(&vkr.dev.device, &image);
     model.images.push(image);
@@ -129,29 +129,9 @@ pub fn main() {
         let mut frame = frame.unwrap();
 
         frame.bind(&line_pipeline, &model, camera_node);
-        frame.draw::<Line>(
-            &line_pipeline,
-            &model.nodes,
-            &model.meshes,
-            &model.primitives,
-            &model.materials,
-            &model.samplers,
-            &model.views,
-            &model.textures,
-            lines,
-        );
+        frame.draw::<Line>(&line_pipeline, &model, lines);
         frame.bind(&triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(
-            &triangle_pipeline,
-            &model.nodes,
-            &model.meshes,
-            &model.primitives,
-            &model.materials,
-            &model.samplers,
-            &model.views,
-            &model.textures,
-            rect,
-        );
+        frame.draw::<Vertex>(&triangle_pipeline, &model, rect);
 
         vkr.gui.update(delta, &mut frame.res, |ui| {
             im::Window::new(im::im_str!("Debug"))
