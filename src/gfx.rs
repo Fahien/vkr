@@ -281,6 +281,18 @@ impl Vkr {
             &self.pass,
         );
     }
+
+    /// This function can be called before binding the camera to update it.
+    /// Internally it checks if a resize happened before doing anything.
+    pub fn update_camera(&self, model: &mut Model, camera_node: util::Handle<Node>) {
+        if self.resized {
+            let camera_node = model.nodes.get(camera_node).unwrap();
+            let camera = model.cameras.get_mut(camera_node.camera).unwrap();
+            if let Some(win) = self.win.as_ref() {
+                camera.update(win);
+            }
+        }
+    }
 }
 
 impl Drop for Vkr {
