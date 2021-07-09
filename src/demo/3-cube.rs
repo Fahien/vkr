@@ -35,7 +35,7 @@ pub fn main() {
     cube_node.mesh = cube_mesh;
     let cube_node = model.nodes.push(cube_node);
 
-    let camera = Camera::perspective(1.0, 3.14 / 4.0, 0.1, 100.0);
+    let camera = Camera::perspective(1.0);
     let camera = model.cameras.push(camera);
 
     let mut camera_node = Node::new();
@@ -60,12 +60,11 @@ pub fn main() {
             continue;
         }
 
+        vkr.update_camera(&mut model, camera_node);
+
         let mut frame = frame.unwrap();
-
         frame.bind(&&triangle_pipeline, &model, camera_node);
-
         frame.draw::<Vertex>(&triangle_pipeline, &model, cube_node);
-
         vkr.end_frame(frame);
     }
 
