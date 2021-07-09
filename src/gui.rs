@@ -12,15 +12,15 @@ use imgui as im;
 use memoffset::offset_of;
 
 pub struct Gui {
-    // Not common as camera and model, therefore we store it here
+    /// Not common as camera and model, therefore we store it here
     set_layouts: Vec<vk::DescriptorSetLayout>,
 
     pipeline: Pipeline,
 
-    // No need to cache this image
     sampler: Sampler,
     view: ImageView,
-    image: Image,
+    /// This is the font bitmap image, no need to cache it
+    _image: Image,
 
     width: f32,
     height: f32,
@@ -217,7 +217,7 @@ impl Gui {
             pipeline,
             sampler,
             view,
-            image,
+            _image: image,
             width,
             height,
             scale,
@@ -316,6 +316,7 @@ impl Gui {
         );
 
         // Bind descriptors
+        // TODO can we create this descriptor upfront?
         if res.descriptors.gui_sets.is_empty() {
             res.descriptors.gui_sets = res.descriptors.allocate(&self.set_layouts);
 
@@ -381,6 +382,41 @@ impl Gui {
             vertex_offset += cmd_list.vtx_buffer().len() as i32;
             index_offset += cmd_list.idx_buffer().len() as u32;
         }
+    }
+
+    /// Helper function to be called before ending a frame
+    pub fn draw_debug_window(
+        &mut self,
+        delta: f32,
+        frame: &mut Frame,
+        model: &Model,
+        camera: Handle<Node>,
+    ) {
+        self.update(delta, &mut frame.res, |ui| {
+            im::Window::new(im::im_str!("Debug"))
+                .no_decoration()
+                .always_auto_resize(true)
+                .save_settings(false)
+                .focus_on_appearing(false)
+                .no_nav()
+                .position([16.0, 16.0], im::Condition::Always)
+                .bg_alpha(0.33)
+                .build(ui, || {
+                    let camera_node = model.nodes.get(camera).unwrap();
+                    let translation = camera_node.trs.get_translation();
+                    let rotation = camera_node.trs.get_rotation();
+                    ui.text(format!(
+                        "Camera\n · trs ({:.2}, {:.2}, {:.2})\n · rot ({:.2}, {:.2}, {:.2}, {:.2})",
+                        translation.x,
+                        translation.y,
+                        translation.z,
+                        rotation.i,
+                        rotation.j,
+                        rotation.k,
+                        rotation.w
+                    ));
+                });
+        });
     }
 }
 
