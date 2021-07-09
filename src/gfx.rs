@@ -134,7 +134,25 @@ impl Ctx {
     }
 }
 
+// Collection of default pipelines
+pub struct DefaultPipelines {
+    pub line: Pipeline,
+    pub main: Pipeline,
+    pub normal: Pipeline,
+}
+
+impl DefaultPipelines {
+    pub fn new(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let line = Pipeline::line(dev, pass, width, height);
+        let main = Pipeline::main(dev, pass, width, height);
+        let normal = Pipeline::normal(dev, pass, width, height);
+
+        Self { line, main, normal }
+    }
+}
+
 pub struct Vkr {
+    pub pipelines: DefaultPipelines,
     pub gui: Gui,
     pub sfs: SwapchainFrames, // Use box of frames?
     pub pass: Pass,           // How about multiple passes?
@@ -164,7 +182,10 @@ impl Vkr {
 
         let gui = Gui::new(&win, &dev, &pass);
 
+        let pipelines = DefaultPipelines::new(&dev, &pass, width, height);
+
         Self {
+            pipelines,
             gui,
             sfs,
             pass,
