@@ -133,24 +133,8 @@ pub fn main() {
         frame.bind(&mut triangle_pipeline, &model, camera_node);
         frame.draw::<Vertex>(&mut triangle_pipeline, &model, rect);
 
-        vkr.gui.update(delta, &mut frame.res, |ui| {
-            im::Window::new(im::im_str!("Debug"))
-                .no_decoration()
-                .always_auto_resize(true)
-                .save_settings(false)
-                .focus_on_appearing(false)
-                .no_nav()
-                .position([16.0, 16.0], im::Condition::Always)
-                .bg_alpha(0.33)
-                .build(ui, || {
-                    let node = model.nodes.get_mut(camera_node).unwrap();
-                    let translation = node.trs.get_translation();
-                    ui.text(format!(
-                        "Camera: ({:.2}, {:.2}, {:.2})",
-                        translation.x, translation.y, translation.z
-                    ));
-                });
-        });
+        vkr.gui
+            .draw_debug_window(delta, &mut frame, &model, camera_node);
 
         vkr.end_frame(frame);
     }
