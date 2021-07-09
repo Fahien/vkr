@@ -6,12 +6,7 @@ use vkr::*;
 
 pub fn main() {
     let win = Win::new("Texture", 480, 480);
-    let (width, height) = win.window.drawable_size();
     let mut vkr = Vkr::new(win);
-
-    let mut line_pipeline = Pipeline::line(&vkr.dev.device, &vkr.pass, width, height);
-    let mut triangle_pipeline = Pipeline::main(&vkr.dev.device, &vkr.pass, width, height);
-
     let mut model = Model::new();
 
     let lines_primitive = {
@@ -122,10 +117,10 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
 
-        frame.bind(&mut line_pipeline, &model, camera_node);
-        frame.draw::<Line>(&mut line_pipeline, &model, lines);
-        frame.bind(&mut triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(&mut triangle_pipeline, &model, rect);
+        frame.bind(&mut vkr.pipelines.line, &model, camera_node);
+        frame.draw::<Line>(&mut vkr.pipelines.line, &model, lines);
+        frame.bind(&mut vkr.pipelines.main, &model, camera_node);
+        frame.draw::<Vertex>(&mut vkr.pipelines.main, &model, rect);
 
         vkr.gui
             .draw_debug_window(delta, &mut frame, &model, camera_node);

@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{extensions::ext::DebugReport, vk::Handle};
+use ash::{extensions::ext::DebugReport, vk::Handle, Device};
 use sdl2 as sdl;
 use std::{
     borrow::Borrow,
@@ -20,7 +20,7 @@ use crate::{
     image::{Image, Png},
     queue::Queue,
     util::{self, Timer},
-    Model, Node,
+    Model, Node, Pipeline,
 };
 
 pub unsafe extern "system" fn vk_debug(
@@ -138,7 +138,25 @@ impl Ctx {
     }
 }
 
+// Collection of default pipelines
+pub struct DefaultPipelines {
+    pub line: Pipeline,
+    pub main: Pipeline,
+    pub normal: Pipeline,
+}
+
+impl DefaultPipelines {
+    pub fn new(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
+        let line = Pipeline::line(device, pass, width, height);
+        let main = Pipeline::main(device, pass, width, height);
+        let normal = Pipeline::normal(device, pass, width, height);
+
+        Self { line, main, normal }
+    }
+}
+
 pub struct Vkr {
+    pub pipelines: DefaultPipelines,
     pub gui: Gui,
     pub sfs: SwapchainFrames, // Use box of frames?
     pub pass: Pass,           // How about multiple passes?
@@ -168,7 +186,10 @@ impl Vkr {
 
         let gui = Gui::new(&win, &dev, &pass);
 
+        let pipelines = DefaultPipelines::new(&dev.device, &pass, width, height);
+
         Self {
+            pipelines,
             gui,
             sfs,
             pass,
