@@ -113,6 +113,8 @@ fn main() {
 
         Script::update(delta, &mut model.nodes, &model.scripts, scene);
 
+        vkr.update_camera(&mut model, camera_node);
+
         if let Some(mut frame) = vkr.begin_frame() {
             frame.bind(&mut pipeline, &model, camera_node);
             frame.draw::<Vertex>(&mut pipeline, &model, scene);
