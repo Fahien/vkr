@@ -6,12 +6,7 @@ use vkr::*;
 
 pub fn main() {
     let win = Win::new("Normal", 480, 480);
-    let (width, height) = win.window.drawable_size();
-
     let mut vkr = Vkr::new(win);
-
-    let triangle_pipeline = Pipeline::normal(&vkr.dev, &vkr.pass, width, height);
-
     let mut model = Model::new();
 
     let cube_primitive = Primitive::cube(&vkr.dev.allocator);
@@ -53,8 +48,8 @@ pub fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         let mut frame = frame.unwrap();
-        frame.bind(&triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(&triangle_pipeline, &model, cube_node);
+        frame.bind(&vkr.pipelines.normal, &model, camera_node);
+        frame.draw::<Vertex>(&vkr.pipelines.normal, &model, cube_node);
         vkr.gui
             .draw_debug_window(delta, &mut frame, &model, camera_node);
         vkr.end_frame(frame);
