@@ -39,9 +39,10 @@ pub fn main() {
 
         let delta = vkr.timer.get_delta().as_secs_f32();
 
-        if let Some(cube_node) = model.nodes.get_mut(cube_node) {
+        if let Some(camera_node) = model.nodes.get_mut(camera_node) {
             let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), delta / 2.0);
-            cube_node.trs.rotate(&rot);
+            let rot = rot * camera_node.trs.get_rotation();
+            camera_node.trs.set_rotation(&rot);
         }
 
         let frame = vkr.begin_frame();
@@ -52,6 +53,8 @@ pub fn main() {
         let mut frame = frame.unwrap();
         frame.bind(&triangle_pipeline, &model, camera_node);
         frame.draw::<Vertex>(&triangle_pipeline, &model, cube_node);
+        vkr.gui
+            .draw_debug_window(delta, &mut frame, &model, camera_node);
         vkr.end_frame(frame);
     }
 
