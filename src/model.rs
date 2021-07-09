@@ -404,11 +404,21 @@ impl Trs {
         self.model.translation.vector
     }
 
+    pub fn get_rotation(&self) -> na::UnitQuaternion<f32> {
+        self.model.rotation
+    }
+
+    /// Rotates around the origin
+    pub fn set_rotation(&mut self, rot: &na::UnitQuaternion<f32>) {
+        self.model.rotation = *rot;
+    }
+
     pub fn translate(&mut self, trs: &na::Vector3<f32>) {
         let trs = na::Translation3::from(*trs);
         self.model.append_translation_mut(&trs);
     }
 
+    /// Rotates around the current position
     pub fn rotate(&mut self, rot: &na::UnitQuaternion<f32>) {
         self.model.append_rotation_mut(rot);
     }
