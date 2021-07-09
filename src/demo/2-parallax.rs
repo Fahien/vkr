@@ -93,9 +93,6 @@ fn main() {
     let aspect = width as f32 / height as f32;
 
     let mut vkr = Vkr::new(win);
-
-    let mut pipeline = Pipeline::main(&vkr.dev.device, &vkr.pass, width, height);
-
     let mut model = Model::new();
 
     let scene = create_scene(&vkr, &mut model);
@@ -116,8 +113,8 @@ fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         if let Some(mut frame) = vkr.begin_frame() {
-            frame.bind(&mut pipeline, &model, camera_node);
-            frame.draw::<Vertex>(&mut pipeline, &model, scene);
+            frame.bind(&mut vkr.pipelines.main, &model, camera_node);
+            frame.draw::<Vertex>(&mut vkr.pipelines.main, &model, scene);
 
             vkr.gui.update(delta, &mut frame.res, |ui| {
                 im::Window::new(im::im_str!("Debug"))
