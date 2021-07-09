@@ -6,17 +6,12 @@ use vkr::*;
 
 pub fn main() {
     let win = Win::new("Cube", 480, 480);
-    let (width, height) = win.window.drawable_size();
-
     let mut vkr = Vkr::new(win);
-
-    let triangle_pipeline = Pipeline::main(&vkr.dev, &vkr.pass, width, height);
-
     let mut model = Model::new();
 
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = model.views.push(ImageView::new(&vkr.dev.device, &image));
-    let image = model.images.push(image);
+    model.images.push(image);
     let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
     let lena_texture = model.textures.push(Texture::new(view, sampler));
 
@@ -63,8 +58,8 @@ pub fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         let mut frame = frame.unwrap();
-        frame.bind(&&triangle_pipeline, &model, camera_node);
-        frame.draw::<Vertex>(&triangle_pipeline, &model, cube_node);
+        frame.bind(&vkr.pipelines.main, &model, camera_node);
+        frame.draw::<Vertex>(&vkr.pipelines.main, &model, cube_node);
         vkr.end_frame(frame);
     }
 
