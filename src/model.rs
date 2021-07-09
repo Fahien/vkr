@@ -428,19 +428,39 @@ impl Trs {
     }
 }
 
+pub enum CameraType {
+    ORTHOGRAPHIC,
+    PERSPECTIVE,
+}
+
 pub struct Camera {
+    typ: CameraType,
     pub proj: na::Matrix4<f32>,
 }
 
 impl Camera {
-    pub fn perspective(aspect: f32, fovy: f32, znear: f32, zfar: f32) -> Self {
+    fn perspective_matrix(aspect: f32) -> na::Matrix4<f32> {
+        let fovy = 3.14 / 4.0;
+        let znear = 0.1;
+        let zfar = 100.0;
+        na::Perspective3::new(aspect, fovy, znear, zfar).to_homogeneous()
+    }
+
+    pub fn perspective(aspect: f32) -> Self {
         Self {
-            proj: na::Perspective3::new(aspect, fovy, znear, zfar).to_homogeneous(),
+            typ: CameraType::PERSPECTIVE,
+            proj: Camera::perspective_matrix(aspect),
         }
     }
 
-    /// Parameters here are referred to the camera, where towards direction is positive.
-    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+    fn orthographic_matrix(
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near: f32,
+        far: f32,
+    ) -> na::Matrix4<f32> {
         let mid = na::Vector3::new(
             (left + right) / (right - left),
             (bottom + top) / (top - bottom),
@@ -453,12 +473,29 @@ impl Camera {
             1.0 / (near - far),
         );
 
+        na::Matrix4::new(
+            scale.x, 0.0, 0.0, mid.x, 0.0, -scale.y, 0.0, mid.y, 0.0, 0.0, scale.z, mid.z, 0.0,
+            0.0, 0.0, 1.0,
+        )
+    }
+
+    /// Parameters here are referred to the camera, where towards direction is positive.
+    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         Self {
-            proj: na::Matrix4::new(
-                scale.x, 0.0, 0.0, mid.x, 0.0, -scale.y, 0.0, mid.y, 0.0, 0.0, scale.z, mid.z, 0.0,
-                0.0, 0.0, 1.0,
-            ),
+            typ: CameraType::ORTHOGRAPHIC,
+            proj: Camera::orthographic_matrix(left, right, bottom, top, near, far),
         }
+    }
+
+    pub fn update(&mut self, win: &Win) {
+        let (width, height) = win.window.drawable_size();
+        let aspect = width as f32 / height as f32;
+        self.proj = match self.typ {
+            CameraType::ORTHOGRAPHIC => {
+                Camera::orthographic_matrix(-aspect, aspect, -1.0, 1.0, 0.1, 1.0)
+            }
+            CameraType::PERSPECTIVE => Camera::perspective_matrix(aspect),
+        };
     }
 
     pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
