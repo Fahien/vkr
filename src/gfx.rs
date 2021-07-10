@@ -19,6 +19,9 @@ use std::{
 
 use super::*;
 
+use enum_ordinalize::*;
+use variant_count::*;
+
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
     _: ash::vk::DebugReportObjectTypeEXT,
@@ -134,11 +137,18 @@ impl Ctx {
     }
 }
 
-// Collection of default pipelines
+#[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
+pub enum Pipelines {
+    LINE,
+    MAIN,
+    NORMAL,
+}
+
+/// Collection of built-in pipelines
 pub struct DefaultPipelines {
-    pub line: Pipeline,
-    pub main: Pipeline,
-    pub normal: Pipeline,
+    /// When debug is set, it is used instead of the one requested by a mesh
+    pub debug: Option<Pipelines>,
+    pub pipelines: [Pipeline; Pipelines::VARIANT_COUNT],
 }
 
 impl DefaultPipelines {
@@ -146,8 +156,18 @@ impl DefaultPipelines {
         let line = Pipeline::line(dev, pass, width, height);
         let main = Pipeline::main(dev, pass, width, height);
         let normal = Pipeline::normal(dev, pass, width, height);
+        let debug = None;
 
-        Self { line, main, normal }
+        let pipelines = [line, main, normal];
+
+        Self { debug, pipelines }
+    }
+
+    pub fn get(&self) -> &Pipeline {
+        match self.debug {
+            Some(index) => &self.pipelines[index as usize],
+            None => &self.pipelines[Pipelines::MAIN as usize],
+        }
     }
 }
 
@@ -710,7 +730,9 @@ impl Drop for Pass {
 
 pub struct Pipeline {
     pub graphics: ash::vk::Pipeline,
+    /// A pipeline layout depends on set layouts, constants, etc, to be created.
     pub layout: ash::vk::PipelineLayout,
+    /// Set layouts do not really depend on anything
     pub set_layouts: Vec<ash::vk::DescriptorSetLayout>,
     device: Rc<ash::Device>,
 }

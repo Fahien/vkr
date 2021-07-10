@@ -48,10 +48,10 @@ pub fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         let mut frame = frame.unwrap();
-        frame.bind(&vkr.pipelines.normal, &model, camera_node);
-        frame.draw::<Vertex>(&vkr.pipelines.normal, &model, cube_node);
+        frame.bind(&vkr.pipelines, &model, camera_node);
+        frame.draw::<Vertex>(&vkr.pipelines, &model, cube_node);
         vkr.gui
-            .draw_debug_window(delta, &mut frame, &model, camera_node);
+            .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
         vkr.end_frame(frame);
     }
 
