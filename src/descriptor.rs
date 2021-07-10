@@ -8,7 +8,7 @@ use ash::{version::DeviceV1_0, *};
 
 use super::*;
 
-type SetCache<T> = HashMap<(vk::PipelineLayout, Handle<T>), Vec<vk::DescriptorSet>>;
+type SetCache<T> = HashMap<(vk::DescriptorSetLayout, Handle<T>), Vec<vk::DescriptorSet>>;
 
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
@@ -41,7 +41,7 @@ impl Descriptors {
             // Support 1 model matrix, 1 view matrix, 1 proj matrix?
             let uniform_count = 16;
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
-                .descriptor_count(uniform_count) 
+                .descriptor_count(uniform_count)
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
                 .build();
 
