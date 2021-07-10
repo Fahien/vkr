@@ -398,6 +398,7 @@ impl Gui {
         &mut self,
         delta: f32,
         frame: &mut Frame,
+        pipelines: &mut DefaultPipelines,
         model: &Model,
         camera: Handle<Node>,
     ) {
@@ -411,6 +412,35 @@ impl Gui {
                 .position([16.0, 16.0], im::Condition::Always)
                 .bg_alpha(0.33)
                 .build(ui, || {
+                    // Pipeline
+                    let mut current = if pipelines.debug.is_none() {
+                        0
+                    } else {
+                        pipelines.debug.unwrap() as usize
+                    };
+                    ui.text("Pipeline:");
+
+                    let items = [
+                        im::im_str!("None"),
+                        im::im_str!("Main"),
+                        im::im_str!("Normal"),
+                    ];
+                    ui.text(" · ");
+                    ui.same_line(0.0);
+                    if im::ComboBox::new(im::im_str!("")).build_simple(
+                        &ui,
+                        &mut current,
+                        &items,
+                        &|&s| s.into(),
+                    ) {
+                        if current == 0 {
+                            pipelines.debug = None;
+                        } else {
+                            pipelines.debug = Pipelines::from_ordinal(current as i8);
+                        }
+                    }
+
+                    // Camera
                     let camera_node = model.nodes.get(camera).unwrap();
                     let translation = camera_node.trs.get_translation();
                     let rotation = camera_node.trs.get_rotation();
