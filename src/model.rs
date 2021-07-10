@@ -24,7 +24,8 @@ pub trait VertexInput {
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription>;
 
-    /// @todo Would it be useful to follow a convention where we know exactly which set layout is at a certain index?
+    /// @TODO Would it be useful to follow a convention where we know exactly which set layout is at a certain index?
+    /// The answer is definitely yes: 0 model, 1 camera, 2 material
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout>;
 
     fn get_constants() -> Vec<vk::PushConstantRange> {
