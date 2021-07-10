@@ -117,13 +117,13 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
 
-        frame.bind(&vkr.pipelines.line, &model, camera_node);
-        frame.draw::<Line>(&vkr.pipelines.line, &model, lines);
-        frame.bind(&vkr.pipelines.main, &model, camera_node);
-        frame.draw::<Vertex>(&vkr.pipelines.main, &model, rect);
+        frame.bind(&vkr.pipelines, &model, camera_node);
+        frame.draw::<Line>(&vkr.pipelines, &model, lines);
+        frame.bind(&vkr.pipelines, &model, camera_node);
+        frame.draw::<Vertex>(&vkr.pipelines, &model, rect);
 
         vkr.gui
-            .draw_debug_window(delta, &mut frame, &model, camera_node);
+            .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
 
         vkr.end_frame(frame);
     }

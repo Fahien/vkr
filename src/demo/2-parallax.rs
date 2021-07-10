@@ -109,8 +109,8 @@ fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         if let Some(mut frame) = vkr.begin_frame() {
-            frame.bind(&vkr.pipelines.main, &model, camera_node);
-            frame.draw::<Vertex>(&vkr.pipelines.main, &model, scene);
+            frame.bind(&vkr.pipelines, &model, camera_node);
+            frame.draw::<Vertex>(&vkr.pipelines, &model, scene);
 
             vkr.gui.update(delta, &mut frame.res, |ui| {
                 im::Window::new(im::im_str!("Debug"))

@@ -252,7 +252,8 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
     }
 
-    pub fn bind(&mut self, pipeline: &Pipeline, model: &Model, camera_node: Handle<Node>) {
+    pub fn bind(&mut self, pipelines: &DefaultPipelines, model: &Model, camera_node: Handle<Node>) {
+        let pipeline = pipelines.get();
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let width = self.buffer.width as f32;
@@ -282,7 +283,7 @@ impl Frame {
             .res
             .descriptors
             .view_sets
-            .get(&(pipeline.layout, camera_node))
+            .get(&(pipeline.set_layouts[1], camera_node))
         {
             self.res
                 .command_buffer
@@ -334,23 +335,22 @@ impl Frame {
             self.res
                 .descriptors
                 .view_sets
-                .insert((pipeline.layout, camera_node), sets);
+                .insert((pipeline.set_layouts[1], camera_node), sets);
         }
     }
 
     pub fn draw<T: VertexInput>(
         &mut self,
-        pipeline: &Pipeline,
+        pipelines: &DefaultPipelines,
         model: &Model,
         node: Handle<Node>,
     ) {
+        let pipeline = pipelines.get();
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
-            self.draw::<T>(
-                pipeline, model, child,
-            );
+            self.draw::<T>(pipelines, model, child);
         }
 
         let cnode = model.nodes.get(node).unwrap();
@@ -365,21 +365,29 @@ impl Frame {
             .res
             .descriptors
             .model_sets
-            .get(&(pipeline.layout, node))
+            .get(&(pipeline.set_layouts[0], node))
         {
-            self.res
-                .command_buffer
-                .bind_descriptor_sets(pipeline, sets, 0);
-
             // If there is a descriptor set, there must be a uniform buffer
             let ubo = self.res.model_buffers.get_mut(&node).unwrap();
             ubo.upload(&cnode.trs.get_matrix());
+
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline, sets, 0);
         } else {
-            // Create a new uniform buffer for this node's model matrix
-            let mut model_buffer = Buffer::new::<na::Matrix4<f32>>(
-                &self.allocator,
-                vk::BufferUsageFlags::UNIFORM_BUFFER,
-            );
+            // Check the model buffer already exists
+            let model_buffer = match self.res.model_buffers.get_mut(&node) {
+                Some(b) => b,
+                None => {
+                    // Create a new uniform buffer for this node's model matrix
+                    let buffer = Buffer::new::<na::Matrix4<f32>>(
+                        &self.allocator,
+                        vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    );
+                    self.res.model_buffers.insert(node, buffer);
+                    self.res.model_buffers.get_mut(&node).unwrap()
+                }
+            };
             model_buffer.upload(&cnode.trs.get_matrix());
 
             // Allocate and write descriptors
@@ -390,11 +398,10 @@ impl Frame {
                 .command_buffer
                 .bind_descriptor_sets(pipeline, &sets, 0);
 
-            self.res.model_buffers.insert(node, model_buffer);
             self.res
                 .descriptors
                 .model_sets
-                .insert((pipeline.layout, node), sets);
+                .insert((pipeline.set_layouts[0], node), sets);
         }
 
         for hprimitive in &mesh.primitives {
@@ -412,13 +419,8 @@ impl Frame {
                     .res
                     .descriptors
                     .material_sets
-                    .get(&(pipeline.layout, primitive.material))
+                    .get(&(pipeline.set_layouts[2], primitive.material))
                 {
-                    // @todo Use a constant or something that is not a magic number (2)
-                    self.res
-                        .command_buffer
-                        .bind_descriptor_sets(pipeline, sets, 2);
-
                     // If there is a descriptor set, there must be a uniform buffer
                     let ubo = self
                         .res
@@ -426,11 +428,35 @@ impl Frame {
                         .get_mut(&primitive.material)
                         .unwrap();
                     ubo.upload(material);
+
+                    // @todo Use a constant or something that is not a magic number (2)
+                    self.res
+                        .command_buffer
+                        .bind_descriptor_sets(pipeline, sets, 2);
                 } else {
-                    // Create a new uniform buffer for this material
-                    let mut material_buffer =
-                        Buffer::new::<Color>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-                    material_buffer.upload(&material.color);
+                    // Check if material uniform buffer already exists
+                    let material_buffer =
+                        match self.res.material_buffers.get_mut(&primitive.material) {
+                            Some(buffer) => buffer,
+                            None => {
+                                // Create a new uniform buffer for this material
+                                let material_buffer = Buffer::new::<Color>(
+                                    &self.allocator,
+                                    vk::BufferUsageFlags::UNIFORM_BUFFER,
+                                );
+
+                                self.res
+                                    .material_buffers
+                                    .insert(primitive.material, material_buffer);
+
+                                self.res
+                                    .material_buffers
+                                    .get_mut(&primitive.material)
+                                    .unwrap()
+                            }
+                        };
+
+                    material_buffer.upload(material);
 
                     let (albedo_view, albedo_sampler) = match model.textures.get(material.albedo) {
                         Some(texture) => {
@@ -459,12 +485,9 @@ impl Frame {
                         .bind_descriptor_sets(pipeline, &sets, 2);
 
                     self.res
-                        .material_buffers
-                        .insert(primitive.material, material_buffer);
-                    self.res
                         .descriptors
                         .material_sets
-                        .insert((pipeline.layout, primitive.material), sets);
+                        .insert((pipeline.set_layouts[2], primitive.material), sets);
                 }
             }
 
@@ -500,7 +523,7 @@ impl Frame {
             // Something went wrong, just skip this frame
             return Ok(());
         }
-        
+
         self.res.image_drawn = Semaphore::new(&dev.device);
 
         dev.graphics_queue.submit_draw(
