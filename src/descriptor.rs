@@ -8,7 +8,7 @@ use ash::{vk, Device};
 
 use crate::{model::Node, util::Handle, Material};
 
-type SetCache<T> = HashMap<(vk::PipelineLayout, Handle<T>), Vec<vk::DescriptorSet>>;
+type SetCache<T> = HashMap<(vk::DescriptorSetLayout, Handle<T>), Vec<vk::DescriptorSet>>;
 
 /// Per-frame resource which contains a descriptor pool and a vector
 /// of descriptor sets of each pipeline layout used for rendering.
