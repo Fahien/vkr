@@ -38,8 +38,8 @@ pub struct Descriptors {
 impl Descriptors {
     pub fn new(device: &Rc<Device>) -> Self {
         let pool = unsafe {
-            // Support model, view, proj matrix and material color for 3 pipelines
-            let uniform_count = 4 * 3;
+            // Support multiple matrices and material color for 3 pipelines
+            let uniform_count = 10 * 3;
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
                 .descriptor_count(uniform_count)
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)

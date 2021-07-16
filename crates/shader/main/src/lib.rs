@@ -23,10 +23,12 @@ pub fn line_fs(color: Vec4, out_color: &mut Vec4) {
 #[spirv(vertex)]
 pub fn line_vs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] world_from_model: &Mat4,
+    #[spirv(uniform, descriptor_set = 0, binding = 1)] _view_from_model: &Mat4,
     #[spirv(uniform, descriptor_set = 1, binding = 0)] view_from_world: &Mat4,
     #[spirv(uniform, descriptor_set = 1, binding = 1)] proj_from_view: &Mat4,
     in_pos: Vec3,
     in_color: Vec4,
+    _in_normal: Vec3,
     color: &mut Vec4,
     #[spirv(position)] out_pos: &mut Vec4,
 ) {
@@ -67,6 +69,7 @@ pub fn main_fs(
 #[spirv(vertex)]
 pub fn main_vs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] world_from_model: &Mat4,
+    #[spirv(uniform, descriptor_set = 0, binding = 1)] view_from_model: &Mat4,
     #[spirv(uniform, descriptor_set = 1, binding = 0)] view_from_world: &Mat4,
     #[spirv(uniform, descriptor_set = 1, binding = 1)] proj_from_view: &Mat4,
     in_pos: Vec3,
@@ -85,7 +88,7 @@ pub fn main_vs(
 
     *color = in_color;
 
-    *normal = Mat3::from_mat4(*world_from_model) * in_normal;
+    *normal = Mat3::from_mat4(*view_from_model) * in_normal;
 
     *uv = in_uv;
 }

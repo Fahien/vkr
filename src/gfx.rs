@@ -20,7 +20,7 @@ use crate::{
     image::{Image, Png},
     queue::Queue,
     util::{self, Timer},
-    Model, Node, Pipeline,
+    Model, Node, Pipeline, VertexInput,
 };
 
 use enum_ordinalize::*;
@@ -167,17 +167,17 @@ impl DefaultPipelines {
         Self { debug, pipelines }
     }
 
-    pub fn get(&self) -> &Pipeline {
+    pub fn get<T: VertexInput>(&self) -> &Pipeline {
         match self.debug {
             Some(index) => &self.pipelines[index as usize],
-            None => &self.pipelines[Pipelines::MAIN as usize],
+            None => &self.pipelines[T::get_pipeline() as usize],
         }
     }
 
-    pub fn get_mut(&mut self) -> &mut Pipeline {
+    pub fn get_mut<T: VertexInput>(&mut self) -> &mut Pipeline {
         match self.debug {
             Some(index) => &mut self.pipelines[index as usize],
-            None => &mut self.pipelines[Pipelines::MAIN as usize],
+            None => &mut self.pipelines[T::get_pipeline() as usize],
         }
     }
 }

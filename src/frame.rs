@@ -140,6 +140,9 @@ pub struct FrameCache {
 
     pub model_buffers: BufferCache<Node>,
 
+    /// Uniform buffers for model-view matrices associated to nodes
+    pub model_view_buffers: BufferCache<Node>,
+
     /// Uniform buffers for view matrices associated to nodes with cameras
     pub view_buffers: BufferCache<Node>,
 
@@ -181,6 +184,7 @@ impl FrameCache {
             gui_vertex_buffer,
             gui_index_buffer,
             model_buffers: BufferCache::new(),
+            model_view_buffers: BufferCache::new(),
             view_buffers: BufferCache::new(),
             proj_buffers: BufferCache::new(),
             material_buffers: BufferCache::new(),
@@ -202,6 +206,8 @@ impl FrameCache {
 }
 
 pub struct Frame {
+    /// Used to compute the model-view matrix when rendering a mesh
+    pub current_view: na::Matrix4<f32>,
     pub buffer: Framebuffer,
     pub res: FrameCache,
     /// A frame should be able to allocate a uniform buffer on draw
@@ -215,6 +221,7 @@ impl Frame {
         let res = FrameCache::new(dev);
 
         Frame {
+            current_view: na::Matrix4::identity(),
             buffer,
             res,
             allocator: dev.allocator.clone(),
@@ -251,13 +258,7 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
     }
 
-    pub fn bind(
-        &mut self,
-        pipelines: &mut DefaultPipelines,
-        model: &Model,
-        camera_node: Handle<Node>,
-    ) {
-        let pipeline = pipelines.get_mut();
+    pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let width = self.buffer.width as f32;
@@ -281,6 +282,7 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
 
         let node = model.nodes.get(camera_node).unwrap();
+        self.current_view = node.trs.get_view_matrix();
         let camera = model.cameras.get(node.camera).unwrap();
 
         let pipeline_layout = pipeline.layout;
@@ -299,7 +301,7 @@ impl Frame {
 
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
-            view_buffer.upload(&node.trs.get_view_matrix());
+            view_buffer.upload(&self.current_view);
 
             let proj_buffer = self.res.proj_buffers.get_mut(&node.camera).unwrap();
             proj_buffer.upload(&camera.proj);
@@ -318,7 +320,7 @@ impl Frame {
                     &self.allocator,
                     vk::BufferUsageFlags::UNIFORM_BUFFER,
                 );
-                view_buffer.upload(&node.trs.get_view_matrix());
+                view_buffer.upload(&self.current_view);
                 Camera::write_set_view(&self.device, sets[0], &view_buffer);
                 self.res.view_buffers.insert(camera_node, view_buffer);
             }
@@ -373,6 +375,11 @@ impl Frame {
         let pipeline_layout = pipeline.layout;
         let model_set_layouts = pipeline.set_layouts[0];
 
+        let model_view_matrix = (self.current_view * cnode.trs.get_matrix())
+            .try_inverse()
+            .unwrap()
+            .transpose();
+
         if let Some(sets) = self
             .res
             .pipeline_cache
@@ -383,6 +390,9 @@ impl Frame {
             // If there is a descriptor set, there must be a uniform buffer
             let ubo = self.res.model_buffers.get_mut(&node).unwrap();
             ubo.upload(&cnode.trs.get_matrix());
+
+            let model_view_buffer = self.res.model_view_buffers.get_mut(&node).unwrap();
+            model_view_buffer.upload(&model_view_matrix);
 
             self.res
                 .command_buffer
@@ -403,10 +413,25 @@ impl Frame {
             };
             model_buffer.upload(&cnode.trs.get_matrix());
 
+            // Check whether the view-model buffer already exists
+            let model_view_buffer = match self.res.model_view_buffers.get_mut(&node) {
+                Some(b) => b,
+                None => {
+                    // Create a new uniform buffer for this node's model view matrix
+                    let buffer = Buffer::new::<na::Matrix4<f32>>(
+                        &self.allocator,
+                        vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    );
+                    self.res.model_view_buffers.insert(node, buffer);
+                    self.res.model_view_buffers.get_mut(&node).unwrap()
+                }
+            };
+
             // Allocate and write descriptors
             let set_layouts = [pipeline.set_layouts[0]];
             let sets = self.res.pipeline_cache.descriptors.allocate(&set_layouts);
             T::write_set_model(&self.device, sets[0], &model_buffer);
+            T::write_set_model_view(&self.device, sets[0], &model_view_buffer);
 
             self.res
                 .command_buffer
