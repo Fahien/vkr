@@ -20,6 +20,10 @@ pub fn create_set_layout(
 }
 
 pub trait VertexInput {
+    fn get_pipeline() -> Pipelines {
+        Pipelines::MAIN
+    }
+
     fn get_bindings() -> vk::VertexInputBindingDescription;
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription>;
@@ -32,7 +36,49 @@ pub trait VertexInput {
         vec![]
     }
 
-    fn write_set_model(_device: &Device, _set: vk::DescriptorSet, _ubo: &Buffer) {}
+    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
+        // Update immediately the descriptor sets
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
+            .buffer(ubo.buffer)
+            .build();
+
+        let buffer_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let writes = vec![buffer_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
+
+    fn write_set_normal_matrix(device: &Device, set: vk::DescriptorSet, normal_matrix: &Buffer) {
+        // Update immediately the descriptor sets
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
+            .buffer(normal_matrix.buffer)
+            .build();
+
+        let buffer_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let writes = vec![buffer_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
 
     fn write_set_image(
         _device: &Device,
@@ -165,11 +211,16 @@ impl Material {
 pub struct Point {
     pos: na::Vector3<f32>,
     color: Color,
+    normal: na::Vector3<f32>,
 }
 
 impl Point {
     pub fn new(pos: na::Vector3<f32>, color: Color) -> Self {
-        Self { pos, color }
+        Self {
+            pos,
+            color,
+            normal: na::Vector3::zeros(),
+        }
     }
 }
 
@@ -196,43 +247,36 @@ impl VertexInput for Point {
                 .format(vk::Format::R32G32B32A32_SFLOAT)
                 .offset(offset_of!(Point, color) as u32)
                 .build(),
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Point, normal) as u32)
+                .build(),
         ]
     }
 
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
-        let model_bindings = vec![vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build()];
+        let model_bindings = vec![
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+        ];
         let model = create_set_layout(device, &model_bindings);
 
         let camera_bindings = Camera::get_set_layout_bindings();
         let camera = create_set_layout(device, &camera_bindings);
 
         vec![model, camera]
-    }
-
-    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
-        // Update immediately the descriptor sets
-        let buffer_info = vk::DescriptorBufferInfo::builder()
-            .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
-            .buffer(ubo.buffer)
-            .build();
-
-        let write = vk::WriteDescriptorSet::builder()
-            .dst_set(set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(&[buffer_info])
-            .build();
-
-        let writes = vec![write];
-        unsafe {
-            device.update_descriptor_sets(&writes, &[]);
-        }
     }
 }
 
@@ -249,6 +293,10 @@ impl Line {
 }
 
 impl VertexInput for Line {
+    fn get_pipeline() -> Pipelines {
+        Pipelines::LINE
+    }
+
     fn get_bindings() -> vk::VertexInputBindingDescription {
         Point::get_bindings()
     }
@@ -259,10 +307,6 @@ impl VertexInput for Line {
 
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
         Point::get_set_layouts(device)
-    }
-
-    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
-        Point::write_set_model(device, set, ubo);
     }
 }
 
@@ -329,12 +373,20 @@ impl VertexInput for Vertex {
     }
 
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
-        let model_bindings = vec![vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build()];
+        let model_bindings = vec![
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+        ];
         let model = create_set_layout(device, &model_bindings);
 
         let camera_bindings = Camera::get_set_layout_bindings();
@@ -344,28 +396,6 @@ impl VertexInput for Vertex {
         let material = create_set_layout(device, &material_bindings);
 
         vec![model, camera, material]
-    }
-
-    fn write_set_model(device: &Device, set: vk::DescriptorSet, ubo: &Buffer) {
-        // Update immediately the descriptor sets
-        let buffer_info = vk::DescriptorBufferInfo::builder()
-            .range(std::mem::size_of::<na::Matrix4<f32>>() as vk::DeviceSize)
-            .buffer(ubo.buffer)
-            .build();
-
-        let buffer_write = vk::WriteDescriptorSet::builder()
-            .dst_set(set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(&[buffer_info])
-            .build();
-
-        let writes = vec![buffer_write];
-
-        unsafe {
-            device.update_descriptor_sets(&writes, &[]);
-        }
     }
 }
 
