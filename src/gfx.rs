@@ -163,10 +163,10 @@ impl DefaultPipelines {
         Self { debug, pipelines }
     }
 
-    pub fn get(&self) -> &Pipeline {
+    pub fn get<T: VertexInput>(&self) -> &Pipeline {
         match self.debug {
             Some(index) => &self.pipelines[index as usize],
-            None => &self.pipelines[Pipelines::MAIN as usize],
+            None => &self.pipelines[T::get_pipeline() as usize],
         }
     }
 }

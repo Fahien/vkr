@@ -35,10 +35,12 @@ pub struct Color {
 #[spirv(vertex)]
 pub fn line_vs(
     #[spirv(descriptor_set = 0, binding = 0)] model: Uniform<Mat>,
+    #[spirv(descriptor_set = 0, binding = 1)] _normal_matrix: Uniform<Mat>,
     #[spirv(descriptor_set = 1, binding = 0)] view: Uniform<Mat>,
     #[spirv(descriptor_set = 1, binding = 1)] proj: Uniform<Mat>,
     in_pos: Input<Vec3>,
     in_color: Input<Vec4>,
+    in_normal: Input<Vec3>,
     mut color: Output<Vec4>,
     #[spirv(position)] mut out_pos: Output<Vec4>,
 ) {
@@ -86,6 +88,7 @@ pub fn main_fs(
 #[spirv(vertex)]
 pub fn main_vs(
     #[spirv(descriptor_set = 0, binding = 0)] model: Uniform<Mat>,
+    #[spirv(descriptor_set = 0, binding = 1)] normal_matrix: Uniform<Mat>,
     #[spirv(descriptor_set = 1, binding = 0)] view: Uniform<Mat>,
     #[spirv(descriptor_set = 1, binding = 1)] proj: Uniform<Mat>,
     in_pos: Input<Vec3>,
@@ -101,7 +104,7 @@ pub fn main_vs(
 
     *color = *in_color;
 
-    *normal = Mat3::from(model.matrix.inverse().transpose()) * in_normal;
+    *normal = Mat3::from(normal_matrix.matrix) * in_normal;
 
     uv.x = in_uv.x;
     uv.y = in_uv.y;
