@@ -39,7 +39,7 @@ impl Descriptors {
     pub fn new(dev: &mut Dev) -> Self {
         let pool = unsafe {
             // Support 1 model matrix, 1 view matrix, 1 proj matrix?
-            let uniform_count = 16;
+            let uniform_count = 32;
             let uniform_pool_size = vk::DescriptorPoolSize::builder()
                 .descriptor_count(uniform_count)
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
