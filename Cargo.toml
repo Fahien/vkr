@@ -22,11 +22,11 @@ name = "4-normal"
 path = "src/demo/4-normal.rs"
 
 [dependencies]
-ash = "0.31.0"
+ash = "0.33"
 sdl2 = "0.34.3"
 byteorder = "1.4.3"
 memoffset = "0.6.1"
-vk-mem = { git = "https://github.com/gwihlidal/vk-mem-rs", version = "0.2.3" }
+vk-mem = { git = "https://github.com/Fahien/vk-mem-rs", branch = "main" }
 nalgebra = "0.25.3"
 png = "0.16.8"
 imgui = "0.7.0"

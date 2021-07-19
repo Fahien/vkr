@@ -4,7 +4,7 @@
 
 use std::{ffi::CString, rc::Rc};
 
-use ash::{version::DeviceV1_0, *};
+use ash::*;
 use byteorder::{ByteOrder, NativeEndian};
 
 pub struct ShaderModule {

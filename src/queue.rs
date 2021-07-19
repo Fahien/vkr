@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use super::*;
-use ash::{version::DeviceV1_0, *};
+use ash::*;
 
 pub struct Queue {
     queue: vk::Queue,

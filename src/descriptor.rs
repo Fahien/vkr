@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use ash::{version::DeviceV1_0, *};
+use ash::*;
 
 use super::*;
 
