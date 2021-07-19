@@ -6,7 +6,7 @@ use std::{ffi::CString, rc::Rc};
 
 use super::*;
 
-use ash::{version::DeviceV1_0, *};
+use ash::*;
 use im::internal::RawWrapper;
 use imgui as im;
 use memoffset::offset_of;

@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use super::*;
 
-use ash::{version::DeviceV1_0, vk::BufferImageCopy, *};
+use ash::{vk::BufferImageCopy, *};
 
 pub struct CommandBuffer {
     pub command_buffer: vk::CommandBuffer,

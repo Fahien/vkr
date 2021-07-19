@@ -2,11 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{
-    extensions::ext::DebugReport,
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk::Handle,
-};
+use ash::{extensions::ext::DebugReport, vk::Handle};
 use sdl2 as sdl;
 use std::{
     borrow::Borrow,
@@ -120,10 +116,10 @@ impl Ctx {
         let layers = [CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
         let layer_names: Vec<*const i8> = layers.iter().map(|name| name.as_ptr()).collect();
 
-        let entry = ash::Entry::new().expect("Failed to create ash entry");
+        let entry = unsafe { ash::Entry::new() }.expect("Failed to create ash entry");
         let app_info = ash::vk::ApplicationInfo {
             p_application_name: "Test" as *const str as _,
-            api_version: ash::vk::make_version(1, 0, 0),
+            api_version: ash::vk::make_api_version(0, 1, 2, 0),
             ..Default::default()
         };
         let create_info = ash::vk::InstanceCreateInfo::builder()

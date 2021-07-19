@@ -6,8 +6,7 @@ edition = "2018"
 license = "MIT"
 
 [lib]
-crate-type = ["dylib"]
+crate-type = ["lib", "dylib"]
 
 [dependencies]
-spirv-std-macros = { path = "../../../dep/rust-gpu/crates/spirv-std-macros" }
-spirv-std = { path = "../../../dep/rust-gpu/crates/spirv-std" }
+spirv-std = { path = "../../../dep/rust-gpu/crates/spirv-std", features = ["glam"] }

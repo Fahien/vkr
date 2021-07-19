@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use ash::{version::DeviceV1_0, *};
+use ash::*;
 
 pub struct Sampler {
     pub sampler: vk::Sampler,

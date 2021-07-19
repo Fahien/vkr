@@ -4,7 +4,7 @@
 
 use super::gfx::Buffer;
 use super::*;
-use ash::{version::DeviceV1_0, *};
+use ash::*;
 use memoffset::offset_of;
 use nalgebra as na;
 
