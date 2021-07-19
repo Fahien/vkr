@@ -22,7 +22,7 @@ name = "4-normal"
 path = "src/demo/4-normal.rs"
 
 [dependencies]
-ash = "0.31.0"
+ash = "0.32"
 sdl2 = "0.34.3"
 byteorder = "1.4.3"
 memoffset = "0.6.1"
@@ -34,4 +34,4 @@ enum-ordinalize = "3.1.10"
 variant_count = "1.1.0"
 
 [build-dependencies]
-spirv-builder = { path = "dep/rust-gpu/crates/spirv-builder" }
+spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu" }

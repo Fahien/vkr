@@ -120,7 +120,7 @@ impl Ctx {
         let layers = [CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
         let layer_names: Vec<*const i8> = layers.iter().map(|name| name.as_ptr()).collect();
 
-        let entry = ash::Entry::new().expect("Failed to create ash entry");
+        let entry = unsafe { ash::Entry::new() }.expect("Failed to create ash entry");
         let app_info = ash::vk::ApplicationInfo {
             p_application_name: "Test" as *const str as _,
             api_version: ash::vk::make_version(1, 0, 0),
