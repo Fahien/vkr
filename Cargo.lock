@@ -334,9 +334,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.0"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e0d047c1062aa51e256408c560894e5251f08925980e53cf1aa5bd00eec6512"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -738,7 +738,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vk-mem"
 version = "0.2.3"
-source = "git+https://github.com/fahien/vk-mem-rs#dce9c061792b07821b8967a90ba1f77afd64005b"
+source = "git+https://github.com/Fahien/vk-mem-rs?branch=main#dce9c061792b07821b8967a90ba1f77afd64005b"
 dependencies = [
  "ash",
  "bitflags",

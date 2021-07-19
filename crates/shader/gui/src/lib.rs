@@ -10,6 +10,9 @@
 )]
 #![deny(warnings)]
 
+#[cfg(not(target_arch = "spirv"))]
+use spirv_std::macros::spirv;
+
 use spirv_std::{
     glam::{vec4, Mat4, Vec2, Vec4},
     image::{Image2d, SampledImage},
@@ -34,7 +37,7 @@ pub fn gui_vs(
     in_color: Vec4,
     uv: &mut Vec2,
     color: &mut Vec4,
-    #[spirv(position)] out_pos: &mut Vec4,
+    #[spirv(position, invariant)] out_pos: &mut Vec4,
 ) {
     *out_pos = *transform * vec4(in_pos.x, in_pos.y, 0.0, 1.0);
     *uv = in_uv;

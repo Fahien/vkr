@@ -10,6 +10,9 @@
 )]
 #![deny(warnings)]
 
+#[cfg(not(target_arch = "spirv"))]
+use spirv_std::macros::spirv;
+
 use spirv_std::{
     glam::{vec4, Mat3, Mat4, Vec2, Vec3, Vec4},
     image::{Image2d, SampledImage},
