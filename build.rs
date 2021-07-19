@@ -4,16 +4,14 @@
 
 use std::error::Error;
 
-use spirv_builder::SpirvBuilder;
+use spirv_builder::{MetadataPrintout, SpirvBuilder};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    SpirvBuilder::new("res/shader/main")
-        .spirv_version(1, 0)
-        .print_metadata(true)
+    SpirvBuilder::new("res/shader/main", "spirv-unknown-vulkan1.1")
+        .print_metadata(MetadataPrintout::Full)
         .build()?;
-    SpirvBuilder::new("res/shader/gui")
-        .spirv_version(1, 0)
-        .print_metadata(true)
+    SpirvBuilder::new("res/shader/gui", "spirv-unknown-vulkan1.1")
+        .print_metadata(MetadataPrintout::Full)
         .build()?;
     Ok(())
 }
