@@ -10,11 +10,13 @@
 // HACK(eddyb) can't easily see warnings otherwise from `spirv-builder` builds.
 #![deny(warnings)]
 
-
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 
-use spirv_std::{glam::{vec4, Mat4, Vec2, Vec3, Vec4}, image::{Image2d, SampledImage}};
+use spirv_std::{
+    glam::{vec4, IVec2, Mat4, Vec2, Vec3, Vec4},
+    image::{Image, Image2d, SampledImage},
+};
 
 #[allow(unused_attributes)]
 #[spirv(fragment)]
@@ -113,4 +115,18 @@ pub fn main_vs(
 
     uv.x = in_uv.x;
     uv.y = in_uv.y;
+}
+
+#[spirv(fragment)]
+pub fn present_fs(
+    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] image: &Image!(subpass, type=f32, sampled=false),
+    out_color: &mut Vec4,
+) {
+    let frag: Vec4 = image.read_subpass(IVec2::new(0, 0));
+    *out_color = frag;
+}
+
+#[spirv(vertex)]
+pub fn present_vs(in_pos: Vec2, #[spirv(position, invariant)] out_pos: &mut Vec4) {
+    *out_pos = vec4(in_pos.x, in_pos.y, 0.0, 1.0);
 }

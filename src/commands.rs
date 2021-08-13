@@ -43,14 +43,17 @@ impl CommandBuffer {
     }
 
     pub fn begin_render_pass(&self, pass: &Pass, framebuffer: &Framebuffer, area: vk::Rect2D) {
-        let mut color_clear = vk::ClearValue::default();
-        color_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
+        let mut present_clear = vk::ClearValue::default();
+        present_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
 
         let mut depth_clear = vk::ClearValue::default();
         depth_clear.depth_stencil.depth = 0.0;
         depth_clear.depth_stencil.stencil = 0;
 
-        let clear_values = [color_clear, depth_clear];
+        let mut albedo_clear = vk::ClearValue::default();
+        albedo_clear.color.float32 = [0.0, 0.0, 0.0, 1.0];
+
+        let clear_values = [present_clear, depth_clear, albedo_clear];
         let create_info = vk::RenderPassBeginInfo::builder()
             .framebuffer(framebuffer.framebuffer)
             .render_pass(pass.render)
@@ -62,6 +65,13 @@ impl CommandBuffer {
         unsafe {
             self.device
                 .cmd_begin_render_pass(self.command_buffer, &create_info, contents)
+        };
+    }
+
+    pub fn next_subpass(&self) {
+        unsafe {
+            self.device
+                .cmd_next_subpass(self.command_buffer, vk::SubpassContents::INLINE)
         };
     }
 
