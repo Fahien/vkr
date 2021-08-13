@@ -15,7 +15,10 @@ pub struct Framebuffer {
     pub framebuffer: vk::Framebuffer,
     pub depth_view: ImageView,
     pub depth_image: Image,
-    pub image_view: vk::ImageView,
+    pub albedo_view: ImageView,
+    pub albedo_image: Image,
+    /// Image view into a swapchain image
+    pub swapchain_view: vk::ImageView,
     pub width: u32,
     pub height: u32,
     device: Rc<Device>,
@@ -24,7 +27,7 @@ pub struct Framebuffer {
 impl Framebuffer {
     pub fn new(dev: &Dev, image: &Image, pass: &Pass) -> Self {
         // Image view into a swapchain images (device, image, format)
-        let image_view = {
+        let swapchain_view = {
             let create_info = vk::ImageViewCreateInfo::builder()
                 .image(image.image)
                 .view_type(vk::ImageViewType::TYPE_2D)
@@ -50,6 +53,18 @@ impl Framebuffer {
                 .expect("Failed to create Vulkan image view")
         };
 
+        // Albedo image with the same settings as the swapchain image
+        let mut albedo_image = Image::attachment(
+            &dev.allocator,
+            image.extent.width,
+            image.extent.height,
+            image.format,
+        );
+        albedo_image.transition(&dev, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        let albedo_view = ImageView::new(&dev.device, &albedo_image);
+
+        // Depth image
         let depth_format = vk::Format::D32_SFLOAT;
         let mut depth_image = Image::attachment(
             &dev.allocator,
@@ -61,9 +76,10 @@ impl Framebuffer {
 
         let depth_view = ImageView::new(&dev.device, &depth_image);
 
-        // Framebuffers (image_view, renderpass)
+        // Framebuffers (image_views, renderpass)
         let framebuffer = {
-            let attachments = [image_view, depth_view.view];
+            // Swapchain, depth, albedo
+            let attachments = [swapchain_view, depth_view.view, albedo_view.view];
 
             let create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
@@ -81,7 +97,9 @@ impl Framebuffer {
             framebuffer,
             depth_view,
             depth_image,
-            image_view,
+            albedo_view,
+            albedo_image,
+            swapchain_view,
             width: image.extent.width,
             height: image.extent.height,
             device: Rc::clone(&dev.device),
@@ -96,7 +114,7 @@ impl Drop for Framebuffer {
                 .device_wait_idle()
                 .expect("Failed to wait for device");
             self.device.destroy_framebuffer(self.framebuffer, None);
-            self.device.destroy_image_view(self.image_view, None);
+            self.device.destroy_image_view(self.swapchain_view, None);
         }
     }
 }
@@ -106,8 +124,11 @@ impl Drop for Framebuffer {
 pub struct Fallback {
     white_image: Image,
     white_view: ImageView,
-    white_sampler: Sampler,
+    /// A default sampler
+    pub white_sampler: Sampler,
     white_material: Material,
+    /// A triangle that covers the whole screen
+    pub present_buffer: Buffer,
 }
 
 impl Fallback {
@@ -121,11 +142,22 @@ impl Fallback {
 
         let white_material = Material::new(Color::white());
 
+        // Y pointing down
+        let present_vertices = vec![
+            PresentVertex::new(-1.0, -1.0, 0.0),
+            PresentVertex::new(-1.0, 3.0, 0.0),
+            PresentVertex::new(3.0, -1.0, 0.0),
+        ];
+        let mut present_buffer =
+            Buffer::new::<PresentVertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
+        present_buffer.upload_arr(&present_vertices);
+
         Self {
             white_image,
             white_view,
             white_sampler,
             white_material,
+            present_buffer,
         }
     }
 }
