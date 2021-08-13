@@ -85,7 +85,8 @@ impl Image {
         allocator: &Rc<RefCell<vk_mem::Allocator>>,
         width: u32,
         height: u32,
-        format: ash::vk::Format,
+        format: vk::Format,
+        usage: vk::ImageUsageFlags,
     ) -> Self {
         let allocator = allocator.clone();
 
@@ -94,13 +95,6 @@ impl Image {
             .height(height)
             .depth(1)
             .build();
-
-        let usage = if Image::is_depth_format(format) {
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-        } else {
-            // Default usage is as a texture
-            ash::vk::ImageUsageFlags::TRANSFER_DST | ash::vk::ImageUsageFlags::SAMPLED
-        };
 
         let image_info = ash::vk::ImageCreateInfo::builder()
             .image_type(ash::vk::ImageType::TYPE_2D)
@@ -135,8 +129,39 @@ impl Image {
         }
     }
 
+    /// Create an image that can be used as an input or output attachment
+    pub fn attachment(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        width: u32,
+        height: u32,
+        format: vk::Format,
+    ) -> Self {
+        let usage = if Image::is_depth_format(format) {
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT
+        } else {
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT
+        };
+        Self::new(allocator, width, height, format, usage)
+    }
+
+    /// Create an image that can be used to upload data from disk and sampled from a fragment shader
+    pub fn sampled(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        width: u32,
+        height: u32,
+        format: vk::Format,
+    ) -> Self {
+        Self::new(
+            allocator,
+            width,
+            height,
+            format,
+            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+        )
+    }
+
     pub fn from_data(dev: &Dev, data: &[u8], width: u32, height: u32, format: vk::Format) -> Self {
-        let mut image = Self::new(&dev.allocator, width, height, format);
+        let mut image = Self::sampled(&dev.allocator, width, height, format);
 
         let usage = ash::vk::BufferUsageFlags::TRANSFER_SRC;
         let staging = Buffer::from_data(&dev.allocator, data, usage);
@@ -144,10 +169,11 @@ impl Image {
         image
     }
 
+    /// Loads a PNG image from file and uploads it into a sampled image
     pub fn load(dev: &Dev, path: &str) -> Self {
         let mut png = Png::open(path);
         let staging = Buffer::load(&dev.allocator, &mut png);
-        let mut image = Image::new(
+        let mut image = Image::sampled(
             &dev.allocator,
             png.info.width,
             png.info.height,
