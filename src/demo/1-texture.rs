@@ -122,6 +122,7 @@ pub fn main() {
         frame.bind(vkr.pipelines.get_mut::<Vertex>(), &model, camera_node);
         frame.draw::<Vertex>(vkr.pipelines.get_mut::<Vertex>(), &model, rect);
 
+        vkr.end_scene(&mut frame);
         vkr.gui
             .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
 

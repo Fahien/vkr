@@ -28,6 +28,9 @@ pub struct Descriptors {
     /// where N is the number of pipeline layouts, and M is the number of materials
     pub material_sets: SetCache<Material>,
 
+    /// Descriptor sets for the present subpass
+    pub present_sets: Vec<vk::DescriptorSet>,
+
     /// Descriptor pools should be per-pipeline layout as weel as they could differ in terms of uniforms and samplers?
     /// Or can we provide sufficient descriptors for all supported pipeline layouts? Trying this approach.
     pool: vk::DescriptorPool,
@@ -52,8 +55,15 @@ impl Descriptors {
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
+            // Support 3 input attachments
+            let input_count = 3;
+            let input_pool_size = vk::DescriptorPoolSize::builder()
+                .descriptor_count(input_count)
+                .ty(vk::DescriptorType::INPUT_ATTACHMENT)
+                .build();
+
             let set_count = 16; // 5 nodes, 1 camera, 5 materials, 1 gui?
-            let pool_sizes = vec![uniform_pool_size, sampler_pool_size];
+            let pool_sizes = vec![uniform_pool_size, sampler_pool_size, input_pool_size];
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 .max_sets(set_count)
@@ -67,6 +77,7 @@ impl Descriptors {
             view_sets: SetCache::new(),
             model_sets: SetCache::new(),
             material_sets: SetCache::new(),
+            present_sets: vec![],
             pool,
             device: device.clone(),
         }
