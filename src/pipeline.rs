@@ -10,7 +10,7 @@ use crate::{
     gfx::Pass,
     model::{Line, Vertex, VertexInput},
     shader::ShaderModule,
-    Descriptors,
+    Descriptors, PresentVertex,
 };
 
 use enum_ordinalize::*;
@@ -21,6 +21,7 @@ pub enum Pipelines {
     LINE,
     MAIN,
     NORMAL,
+    PRESENT,
 }
 
 /// Collection of built-in pipelines
@@ -35,9 +36,10 @@ impl DefaultPipelines {
         let line = Pipeline::line(device, pass, width, height);
         let main = Pipeline::main(device, pass, width, height);
         let normal = Pipeline::normal(device, pass, width, height);
+        let present = Pipeline::present(device, pass, width, height);
         let debug = None;
 
-        let pipelines = [line, main, normal];
+        let pipelines = [line, main, normal, present];
 
         Self { debug, pipelines }
     }
@@ -84,9 +86,11 @@ impl Pipeline {
         vert: vk::PipelineShaderStageCreateInfo,
         frag: vk::PipelineShaderStageCreateInfo,
         topology: vk::PrimitiveTopology,
+        dynamic_state: &vk::PipelineDynamicStateCreateInfo,
         pass: &Pass,
         width: u32,
         height: u32,
+        subpass: u32,
     ) -> Self {
         let set_layouts = T::get_set_layouts(device);
         let constants = T::get_constants();
@@ -163,11 +167,6 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-            let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-                .dynamic_states(&states)
-                .build();
-
             let stages = [vert, frag];
 
             let create_info = [vk::GraphicsPipelineCreateInfo::builder()
@@ -181,7 +180,7 @@ impl Pipeline {
                 .color_blend_state(&blend_state)
                 .dynamic_state(&dynamic_state)
                 .render_pass(pass.render)
-                .subpass(0)
+                .subpass(subpass)
                 .layout(layout)
                 .build()];
 
@@ -204,14 +203,22 @@ impl Pipeline {
         let shader = ShaderModule::main(device);
         let vs = CString::new("line_vs").expect("Failed to create entrypoint");
         let fs = CString::new("line_fs").expect("Failed to create entrypoint");
+
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
+
         Self::new::<Line>(
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
             vk::PrimitiveTopology::LINE_STRIP,
+            &dynamic_state,
             pass,
             width,
             height,
+            0,
         )
     }
 
@@ -219,14 +226,22 @@ impl Pipeline {
         let shader = ShaderModule::main(device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
+
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
+
         Self::new::<Vertex>(
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
             vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
             pass,
             width,
             height,
+            0,
         )
     }
 
@@ -235,14 +250,42 @@ impl Pipeline {
         let shader = ShaderModule::main(device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
+
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
+
         Self::new::<Vertex>(
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
             vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
             pass,
             width,
             height,
+            0,
+        )
+    }
+
+    pub fn present(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(device);
+        let vs = CString::new("present_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("present_fs").expect("Failed to create entry point");
+
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+
+        Self::new::<PresentVertex>(
+            device,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
+            pass,
+            width,
+            height,
+            1,
         )
     }
 }

@@ -14,8 +14,8 @@
 use spirv_std::macros::spirv;
 
 use spirv_std::{
-    glam::{vec4, Mat3, Mat4, Vec2, Vec3, Vec4},
-    image::{Image2d, SampledImage},
+    glam::{vec4, Mat3, Mat4, IVec2, Vec2, Vec3, Vec4},
+    image::{Image, Image2d, SampledImage},
 };
 
 #[spirv(fragment)]
@@ -94,4 +94,18 @@ pub fn main_vs(
     *normal = Mat3::from_mat4(*view_from_model) * in_normal;
 
     *uv = in_uv;
+}
+
+#[spirv(fragment)]
+pub fn present_fs(
+    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] image: &Image!(subpass, type=f32, sampled=false),
+    out_color: &mut Vec4,
+) {
+    let frag: Vec4 = image.read_subpass(IVec2::new(0, 0));
+    *out_color = frag;
+}
+
+#[spirv(vertex)]
+pub fn present_vs(in_pos: Vec2, #[spirv(position, invariant)] out_pos: &mut Vec4) {
+    *out_pos = vec4(in_pos.x, in_pos.y, 0.0, 1.0);
 }

@@ -4,11 +4,12 @@
 
 use std::error::Error;
 
-use spirv_builder::{MetadataPrintout, SpirvBuilder};
+use spirv_builder::{MetadataPrintout, SpirvBuilder, Capability};
 
 fn main() -> Result<(), Box<dyn Error>> {
     SpirvBuilder::new("crates/shader/main", "spirv-unknown-vulkan1.1")
         .print_metadata(MetadataPrintout::Full)
+        .capability(Capability::InputAttachment)
         .build()?;
     SpirvBuilder::new("crates/shader/gui", "spirv-unknown-vulkan1.1")
         .print_metadata(MetadataPrintout::Full)
