@@ -51,7 +51,7 @@ impl Framebuffer {
         };
 
         let depth_format = vk::Format::D32_SFLOAT;
-        let mut depth_image = Image::new(
+        let mut depth_image = Image::attachment(
             &dev.allocator,
             image.extent.width,
             image.extent.height,
