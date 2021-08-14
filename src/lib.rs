@@ -27,6 +27,9 @@ pub use shader::*;
 pub mod sampler;
 pub use sampler::*;
 
+pub mod pipeline;
+pub use pipeline::*;
+
 pub mod gfx;
 pub use gfx::*;
 
