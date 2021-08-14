@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{extensions::ext::DebugReport, vk::Handle, Device};
+use ash::{extensions::ext::DebugReport, vk::Handle};
 use sdl2 as sdl;
 use std::{
     borrow::Borrow,
@@ -20,11 +20,8 @@ use crate::{
     image::{Image, Png},
     queue::Queue,
     util::{self, Timer},
-    Model, Node, Pipeline, VertexInput,
+    DefaultPipelines, Model, Node,
 };
-
-use enum_ordinalize::*;
-use variant_count::*;
 
 pub unsafe extern "system" fn vk_debug(
     _: ash::vk::DebugReportFlagsEXT,
@@ -138,47 +135,6 @@ impl Ctx {
             .expect("Failed to create Vulkan instance");
 
         Self { entry, instance }
-    }
-}
-
-#[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
-pub enum Pipelines {
-    LINE,
-    MAIN,
-    NORMAL,
-}
-
-/// Collection of built-in pipelines
-pub struct DefaultPipelines {
-    /// When debug is set, it is used instead of the one requested by a mesh
-    pub debug: Option<Pipelines>,
-    pub pipelines: [Pipeline; Pipelines::VARIANT_COUNT],
-}
-
-impl DefaultPipelines {
-    pub fn new(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let line = Pipeline::line(device, pass, width, height);
-        let main = Pipeline::main(device, pass, width, height);
-        let normal = Pipeline::normal(device, pass, width, height);
-        let debug = None;
-
-        let pipelines = [line, main, normal];
-
-        Self { debug, pipelines }
-    }
-
-    pub fn get<T: VertexInput>(&self) -> &Pipeline {
-        match self.debug {
-            Some(index) => &self.pipelines[index as usize],
-            None => &self.pipelines[T::get_pipeline() as usize],
-        }
-    }
-
-    pub fn get_mut<T: VertexInput>(&mut self) -> &mut Pipeline {
-        match self.debug {
-            Some(index) => &mut self.pipelines[index as usize],
-            None => &mut self.pipelines[T::get_pipeline() as usize],
-        }
     }
 }
 
