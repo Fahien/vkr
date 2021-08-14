@@ -13,6 +13,50 @@ use crate::{
     Descriptors,
 };
 
+use enum_ordinalize::*;
+use variant_count::*;
+
+#[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
+pub enum Pipelines {
+    LINE,
+    MAIN,
+    NORMAL,
+}
+
+/// Collection of built-in pipelines
+pub struct DefaultPipelines {
+    /// When debug is set, it is used instead of the one requested by a mesh
+    pub debug: Option<Pipelines>,
+    pub pipelines: [Pipeline; Pipelines::VARIANT_COUNT],
+}
+
+impl DefaultPipelines {
+    pub fn new(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
+        let line = Pipeline::line(device, pass, width, height);
+        let main = Pipeline::main(device, pass, width, height);
+        let normal = Pipeline::normal(device, pass, width, height);
+        let debug = None;
+
+        let pipelines = [line, main, normal];
+
+        Self { debug, pipelines }
+    }
+
+    pub fn get<T: VertexInput>(&self) -> &Pipeline {
+        match self.debug {
+            Some(index) => &self.pipelines[index as usize],
+            None => &self.pipelines[T::get_pipeline() as usize],
+        }
+    }
+
+    pub fn get_mut<T: VertexInput>(&mut self) -> &mut Pipeline {
+        match self.debug {
+            Some(index) => &mut self.pipelines[index as usize],
+            None => &mut self.pipelines[T::get_pipeline() as usize],
+        }
+    }
+}
+
 pub struct PipelineCache {
     /// List of descriptors, one for each swapchain image
     pub descriptors: Descriptors,
@@ -25,10 +69,11 @@ impl PipelineCache {
         }
     }
 }
-
 pub struct Pipeline {
     pub graphics: vk::Pipeline,
+    /// A pipeline layout depends on set layouts, constants, etc, to be created.
     pub layout: vk::PipelineLayout,
+    /// Set layouts do not really depend on anything
     pub set_layouts: Vec<vk::DescriptorSetLayout>,
     device: Rc<Device>,
 }

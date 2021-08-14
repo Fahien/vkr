@@ -29,7 +29,7 @@ pub use shader::*;
 mod sampler;
 pub use sampler::*;
 
-mod gfx;
+pub mod gfx;
 pub use gfx::*;
 
 mod descriptor;
