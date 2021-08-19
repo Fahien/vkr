@@ -116,7 +116,8 @@ impl VertexInput for im::DrawVert {
             .build()
     }
 
-    fn get_color_blend() -> Vec<vk::PipelineColorBlendAttachmentState> {
+    fn get_color_blend(subpass: u32) -> Vec<vk::PipelineColorBlendAttachmentState> {
+        assert!(subpass == 1);
         vec![vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
             .color_write_mask(
@@ -421,7 +422,7 @@ impl Gui {
 
                     let items = [
                         im::im_str!("None"),
-                        im::im_str!("Main"),
+                        im::im_str!("Albedo"),
                         im::im_str!("Normal"),
                     ];
                     ui.text(" · ");
