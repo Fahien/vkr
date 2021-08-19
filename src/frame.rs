@@ -13,6 +13,8 @@ use imgui as im;
 pub struct Framebuffer {
     // @todo Make a map of framebuffers indexed by render-pass as key
     pub framebuffer: vk::Framebuffer,
+    pub normal_view: ImageView,
+    pub normal_image: Image,
     pub depth_view: ImageView,
     pub depth_image: Image,
     pub albedo_view: ImageView,
@@ -76,10 +78,27 @@ impl Framebuffer {
 
         let depth_view = ImageView::new(&dev.device, &depth_image);
 
+        // Normal image
+        let normal_format = vk::Format::A2R10G10B10_UNORM_PACK32;
+        let mut normal_image = Image::attachment(
+            &dev.allocator,
+            image.extent.width,
+            image.extent.height,
+            normal_format,
+        );
+        normal_image.transition(&dev, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        let normal_view = ImageView::new(&dev.device, &normal_image);
+
         // Framebuffers (image_views, renderpass)
         let framebuffer = {
             // Swapchain, depth, albedo
-            let attachments = [swapchain_view, depth_view.view, albedo_view.view];
+            let attachments = [
+                swapchain_view,
+                depth_view.view,
+                albedo_view.view,
+                normal_view.view,
+            ];
 
             let create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(pass.render)
@@ -95,6 +114,8 @@ impl Framebuffer {
 
         Self {
             framebuffer,
+            normal_view,
+            normal_image,
             depth_view,
             depth_image,
             albedo_view,
@@ -384,7 +405,7 @@ impl Frame {
         model: &Model,
         node: Handle<Node>,
     ) {
-        let pipeline = pipelines.get::<T>();
+        let pipeline = pipelines.get_for::<T>();
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let children = model.nodes.get(node).unwrap().children.clone();
