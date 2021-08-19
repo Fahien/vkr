@@ -97,8 +97,8 @@ pub trait VertexInput {
             .build()
     }
 
-    fn get_color_blend() -> Vec<vk::PipelineColorBlendAttachmentState> {
-        vec![vk::PipelineColorBlendAttachmentState::builder()
+    fn get_color_blend(subpass: u32) -> Vec<vk::PipelineColorBlendAttachmentState> {
+        let mut state = vec![vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
             .color_write_mask(
                 vk::ColorComponentFlags::R
@@ -111,7 +111,13 @@ pub trait VertexInput {
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .color_blend_op(vk::BlendOp::ADD)
-            .build()]
+            .build()];
+
+        if subpass == 0 {
+            state.push(state[0]);
+        }
+
+        state
     }
 }
 
@@ -331,6 +337,7 @@ impl PresentVertex {
         device: &ash::Device,
         set: vk::DescriptorSet,
         albedo: &ImageView,
+        normal: &ImageView,
         sampler: &Sampler,
     ) {
         let image_info = vk::DescriptorImageInfo::builder()
@@ -347,7 +354,21 @@ impl PresentVertex {
             .image_info(&[image_info])
             .build();
 
-        let writes = vec![image_write];
+        let normal_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(normal.view)
+            .sampler(sampler.sampler)
+            .build();
+
+        let normal_image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .image_info(&[normal_image_info])
+            .build();
+
+        let writes = vec![image_write, normal_image_write];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
@@ -356,6 +377,10 @@ impl PresentVertex {
 }
 
 impl VertexInput for PresentVertex {
+    fn get_pipeline() -> Pipelines {
+        Pipelines::PRESENT
+    }
+
     fn get_bindings() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
@@ -377,14 +402,23 @@ impl VertexInput for PresentVertex {
     }
 
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
-        let albedo_bindings = vec![vk::DescriptorSetLayoutBinding::builder()
+        let albedo_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build()];
-        let albedo = create_set_layout(device, &albedo_bindings);
-        vec![albedo]
+            .build();
+
+        let normal_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let bindings = vec![albedo_binding, normal_binding];
+        let set_layout = create_set_layout(device, &bindings);
+        vec![set_layout]
     }
 }
 
