@@ -55,8 +55,8 @@ impl Descriptors {
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .build();
 
-            // Support 3 input attachments
-            let input_count = 3;
+            // Support 4 input attachments
+            let input_count = 4;
             let input_pool_size = vk::DescriptorPoolSize::builder()
                 .descriptor_count(input_count)
                 .ty(vk::DescriptorType::INPUT_ATTACHMENT)
