@@ -279,7 +279,7 @@ impl Vkr {
     pub fn end_scene(&mut self, frame: &mut Frame) {
         frame.res.command_buffer.next_subpass();
 
-        let present_pipeline = &self.pipelines.pipelines[Pipelines::PRESENT as usize];
+        let present_pipeline = self.pipelines.get_presentation();
         frame.res.command_buffer.bind_pipeline(present_pipeline);
 
         if frame.res.descriptors.present_sets.is_empty() {
@@ -291,6 +291,7 @@ impl Vkr {
                 &self.dev.device,
                 frame.res.descriptors.present_sets[0],
                 &frame.buffer.albedo_view,
+                &frame.buffer.normal_view,
                 &frame.res.fallback.white_sampler,
             );
         }
@@ -679,7 +680,23 @@ impl Pass {
             .final_layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .build();
 
-        let attachments = [present_attachment, depth_attachment, albedo_attachment];
+        let normal_attachment = vk::AttachmentDescription::builder()
+            .format(vk::Format::A2R10G10B10_UNORM_PACK32)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let attachments = [
+            present_attachment,
+            depth_attachment,
+            albedo_attachment,
+            normal_attachment,
+        ];
 
         let present_ref = ash::vk::AttachmentReference::builder()
             .attachment(0)
@@ -696,27 +713,37 @@ impl Pass {
             .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
-        let albedo_refs = [albedo_ref];
-        let present_refs = [present_ref];
+        let normal_ref = vk::AttachmentReference::builder()
+            .attachment(3)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let first_color_refs = [albedo_ref, normal_ref];
+        let second_color_refs = [present_ref];
 
         let albedo_input_ref = ash::vk::AttachmentReference::builder()
             .attachment(2)
             .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .build();
 
-        let input_refs = [albedo_input_ref];
+        let normal_input_ref = ash::vk::AttachmentReference::builder()
+            .attachment(3)
+            .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let input_refs = [albedo_input_ref, normal_input_ref];
 
         // Two subpasses
         let subpasses = [
             // First subpass writes albedo and depth
             ash::vk::SubpassDescription::builder()
                 .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
-                .color_attachments(&albedo_refs)
+                .color_attachments(&first_color_refs)
                 .depth_stencil_attachment(&depth_ref)
                 .build(),
             ash::vk::SubpassDescription::builder()
                 .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
-                .color_attachments(&present_refs)
+                .color_attachments(&second_color_refs)
                 .input_attachments(&input_refs)
                 .build(),
         ];
@@ -730,7 +757,7 @@ impl Pass {
             .dst_access_mask(ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
             .build();
 
-        let albedo_dependency = vk::SubpassDependency::builder()
+        let output_to_input_dependency = vk::SubpassDependency::builder()
             .src_subpass(0)
             .dst_subpass(1)
             .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
@@ -752,7 +779,11 @@ impl Pass {
             .dependency_flags(vk::DependencyFlags::BY_REGION)
             .build();
 
-        let dependencies = [init_dependency, albedo_dependency, present_dependency];
+        let dependencies = [
+            init_dependency,
+            output_to_input_dependency,
+            present_dependency,
+        ];
 
         // Build the render pass
         let create_info = vk::RenderPassCreateInfo::builder()

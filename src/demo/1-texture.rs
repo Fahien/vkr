@@ -117,9 +117,9 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
 
-        frame.bind(vkr.pipelines.get::<Line>(), &model, camera_node);
+        frame.bind(vkr.pipelines.get_for::<Line>(), &model, camera_node);
         frame.draw::<Line>(&vkr.pipelines, &model, lines);
-        frame.bind(vkr.pipelines.get::<Vertex>(), &model, camera_node);
+        frame.bind(vkr.pipelines.get_for::<Vertex>(), &model, camera_node);
         frame.draw::<Vertex>(&vkr.pipelines, &model, rect);
 
         vkr.end_scene(&mut frame);
