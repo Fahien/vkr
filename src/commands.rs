@@ -53,7 +53,10 @@ impl CommandBuffer {
         let mut albedo_clear = vk::ClearValue::default();
         albedo_clear.color.float32 = [0.0, 0.0, 0.0, 1.0];
 
-        let clear_values = [present_clear, depth_clear, albedo_clear];
+        let mut normal_clear = vk::ClearValue::default();
+        normal_clear.color.float32 = [0.0, 0.0, 0.0, 1.0];
+
+        let clear_values = [present_clear, depth_clear, albedo_clear, normal_clear];
         let create_info = vk::RenderPassBeginInfo::builder()
             .framebuffer(framebuffer.framebuffer)
             .render_pass(pass.render)
