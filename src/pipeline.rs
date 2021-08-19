@@ -13,9 +13,9 @@ use super::*;
 #[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
 pub enum Pipelines {
     LINE,
-    MAIN,
-    NORMAL,
     PRESENT,
+    NORMAL,
+    MAIN,
 }
 
 /// Collection of built-in pipelines
@@ -33,16 +33,24 @@ impl DefaultPipelines {
         let present = Pipeline::present(dev, pass, width, height);
         let debug = None;
 
-        let pipelines = [line, main, normal, present];
+        let pipelines = [line, present, normal, main];
 
         Self { debug, pipelines }
     }
 
-    pub fn get<T: VertexInput>(&self) -> &Pipeline {
+    pub fn get_for<T: VertexInput>(&self) -> &Pipeline {
+        self.get(T::get_pipeline())
+    }
+
+    pub fn get_presentation(&self) -> &Pipeline {
         match self.debug {
-            Some(index) => &self.pipelines[index as usize],
-            None => &self.pipelines[T::get_pipeline() as usize],
+            Some(variant) => self.get(variant),
+            None => self.get(Pipelines::PRESENT),
         }
+    }
+
+    pub fn get(&self, variant: Pipelines) -> &Pipeline {
+        &self.pipelines[variant as usize]
     }
 }
 
@@ -135,7 +143,7 @@ impl Pipeline {
 
             let depth_state = T::get_depth_state();
 
-            let blend_attachment = T::get_color_blend();
+            let blend_attachment = T::get_color_blend(subpass);
 
             let blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op_enable(false)
@@ -224,15 +232,12 @@ impl Pipeline {
     /// Returns a graphics pipeline which draws the normals of primitive's surfaces as a color
     pub fn normal(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
         let shader = ShaderModule::main(&dev.device);
-        let vs = CString::new("main_vs").expect("Failed to create entrypoint");
+        let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
 
-        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&states)
-            .build();
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
 
-        Self::new::<Vertex>(
+        Self::new::<PresentVertex>(
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -241,7 +246,7 @@ impl Pipeline {
             pass,
             width,
             height,
-            0,
+            1,
         )
     }
 
