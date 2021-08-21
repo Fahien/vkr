@@ -627,6 +627,7 @@ impl Frame {
     ) -> Result<(), vk::Result> {
         if self.res.image_ready == vk::Semaphore::null() {
             // Something went wrong, just skip this frame
+            println!("No image ready?");
             return Ok(());
         }
 
@@ -687,7 +688,10 @@ pub struct SwapchainFrames {
     pub current: usize,
     image_index: u32,
     pub image_ready_semaphores: Vec<Semaphore>,
-    pub frames: Vec<Frame>,
+    /// We use option here because this vector should not change size.
+    /// This means when a frame is retrieved for drawing, we take the frame and replace it with None.
+    /// When the frame is returned for presenting, we put it back in its original position.
+    pub frames: Vec<Option<Frame>>,
     pub swapchain: Swapchain,
 }
 
@@ -703,9 +707,9 @@ impl SwapchainFrames {
         let swapchain = Swapchain::new(ctx, surface, dev, width, height);
 
         let mut frames = Vec::new();
-        for image in swapchain.images.iter() {
+        for  image in swapchain.images.iter() {
             let frame = Frame::new(dev, image, pass);
-            frames.push(frame);
+            frames.push(Some(frame));
         }
 
         Self {
@@ -719,12 +723,11 @@ impl SwapchainFrames {
 
     pub fn recreate(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
         dev.wait();
-        //drop(self.swapchain);
         self.current = 0;
         let (width, height) = win.window.drawable_size();
         self.swapchain.recreate(&surface, &dev, width, height);
         for i in 0..self.swapchain.images.len() {
-            let frame = &mut self.frames[i];
+            let frame = self.frames[i].as_mut().unwrap();
             // Reset image ready semaphore handle for this frame
             // The image drawn one is still in use at the moment
             frame.res.image_ready = vk::Semaphore::null();
@@ -742,13 +745,13 @@ impl Frames for SwapchainFrames {
         pass: &Pass,
     ) -> Option<Frame> {
         // Image ready semaphores are not associated to single frames as we do not know which
-        // image index is going to be available on acquiting next image.
+        // image index is going to be available on acquiring next image.
         if self.image_ready_semaphores.len() >= self.frames.len() {
             self.image_ready_semaphores.pop();
         }
         let image_ready = Semaphore::new(&dev.device);
         let image_ready_handle = image_ready.semaphore;
-        self.image_ready_semaphores.push(image_ready);
+        self.image_ready_semaphores.insert(0, image_ready);
 
         let acquire_res = unsafe {
             self.swapchain.ext.acquire_next_image(
@@ -762,7 +765,7 @@ impl Frames for SwapchainFrames {
         match acquire_res {
             Ok((image_index, false)) => {
                 self.image_index = image_index;
-                let mut frame = self.frames.remove(image_index as usize);
+                let mut frame = self.frames[image_index as usize].take().unwrap();
                 // Wait for this frame to complete previous commands.
                 frame.res.wait();
                 // We still need to wait for the image to be ready before drawing onto it
@@ -782,12 +785,12 @@ impl Frames for SwapchainFrames {
     }
 
     fn present(&mut self, frame: Frame, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
-        self.frames.insert(self.image_index as usize, frame);
+        assert!(self.frames[self.image_index as usize].is_none());
+        self.frames[self.image_index as usize].replace(frame);
 
         match self
-            .frames
-            .last_mut()
-            .unwrap()
+            .frames[self.image_index as usize]
+            .as_mut().unwrap()
             .present(dev, &self.swapchain, self.image_index)
         {
             Ok(()) => (),
