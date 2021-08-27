@@ -552,6 +552,9 @@ impl Dev {
             .queue_priorities(&[1.0])
             .build()];
 
+        let mut device_create_info =
+            ash::vk::DeviceCreateInfo::builder().queue_create_infos(&queue_infos);
+
         // Enable some extensions
         let mut enabled_extensions: Vec<*const i8> = vec![];
 
@@ -559,17 +562,32 @@ impl Dev {
             unsafe { ctx.instance.enumerate_device_extension_properties(physical) }
                 .expect("Failed to enumerate Vulkan device extension properties");
 
+        let mut vulkan_memory_model = false;
+
         for prop in extension_properties.iter() {
             let name = unsafe { CStr::from_ptr(prop.extension_name.as_ptr()) }
                 .to_str()
                 .unwrap();
+            if name == "VK_KHR_vulkan_memory_model" {
+                enabled_extensions.push(prop.extension_name.as_ptr());
+                vulkan_memory_model = true;
+            }
             println!("\t{}", name);
         }
         enabled_extensions.push(ash::extensions::khr::Swapchain::name().as_ptr());
 
-        let device_create_info = ash::vk::DeviceCreateInfo::builder()
-            .queue_create_infos(&queue_infos)
-            .enabled_extension_names(&enabled_extensions);
+        device_create_info = device_create_info.enabled_extension_names(&enabled_extensions);
+
+        // Used only if extension is available
+        let mut vulkan_memory_model_features =
+            ash::vk::PhysicalDeviceVulkanMemoryModelFeatures::builder()
+                .vulkan_memory_model(true)
+                .build();
+        if vulkan_memory_model {
+            device_create_info = device_create_info.push_next(&mut vulkan_memory_model_features);
+        }
+
+        let device_create_info = device_create_info.build();
 
         let device = unsafe {
             ctx.instance
