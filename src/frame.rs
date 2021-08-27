@@ -206,6 +206,8 @@ pub struct Frameres {
     // Uniform buffers for materials
     pub material_buffers: BufferCache<Material>,
 
+    pub light_constants: Vec<u8>,
+
     pub descriptors: Descriptors,
     pub command_buffer: CommandBuffer,
 
@@ -242,6 +244,7 @@ impl Frameres {
             view_buffers: BufferCache::new(),
             proj_buffers: BufferCache::new(),
             material_buffers: BufferCache::new(),
+            light_constants: vec![],
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
@@ -414,6 +417,24 @@ impl Frame {
         }
 
         let cnode = model.nodes.get(node).unwrap();
+
+        // Check whether it has a light source
+        if let Some(light) = model.lights.get(cnode.light) {
+            // For the moment we expect one light direction, therefore push light constant
+            let light_constants = unsafe {
+                std::slice::from_raw_parts(
+                    light.dir.as_ptr() as *const u8,
+                    std::mem::size_of::<na::Vector3<f32>>(),
+                )
+            }.to_vec();
+
+            self.res.command_buffer.push_constants(
+                pipeline,
+                vk::ShaderStageFlags::FRAGMENT,
+                0,
+                &light_constants,
+            );
+        }
 
         let mesh = model.meshes.get(cnode.mesh);
         if mesh.is_none() {
@@ -765,9 +786,9 @@ impl Frames for SwapchainFrames {
         assert!(self.frames[self.image_index as usize].is_none());
         self.frames[self.image_index as usize].replace(frame);
 
-        match self
-            .frames[self.image_index as usize]
-            .as_mut().unwrap()
+        match self.frames[self.image_index as usize]
+            .as_mut()
+            .unwrap()
             .present(dev, &self.swapchain, self.image_index)
         {
             Ok(()) => (),

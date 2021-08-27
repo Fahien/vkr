@@ -505,6 +505,17 @@ impl VertexInput for Vertex {
 
         vec![model, camera, material]
     }
+
+    fn get_constants() -> Vec<vk::PushConstantRange> {
+        // Sun direction
+        vec![
+            vk::PushConstantRange::builder()
+            .offset(0)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .size(std::mem::size_of::<na::Vector3<f32>>() as u32)
+            .build()
+        ]
+    }
 }
 
 /// Transform
@@ -579,7 +590,7 @@ pub struct Camera {
 
 impl Camera {
     fn perspective_matrix(aspect: f32) -> na::Matrix4<f32> {
-        let fovy = 3.14 / 4.0;
+        let fovy = -3.14 / 4.0;
         let znear = 0.1;
         let zfar = 100.0;
         na::Perspective3::new(aspect, fovy, znear, zfar).to_homogeneous()
@@ -698,6 +709,19 @@ impl Camera {
     }
 }
 
+#[repr(C)]
+pub struct Light {
+    pub dir: na::Vector3<f32>,
+}
+
+impl Light {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            dir: na::Vector3::new(x, y, z),
+        }
+    }
+}
+
 type ScriptFn = Box<dyn Fn(f32, &mut Pack<Node>, Handle<Node>)>;
 
 pub struct Script {
@@ -728,6 +752,7 @@ pub struct Node {
     pub children: Vec<Handle<Node>>,
     pub camera: Handle<Camera>,
     pub mesh: Handle<Mesh>,
+    pub light: Handle<Light>,
     pub script: Handle<Script>,
 }
 
@@ -738,6 +763,7 @@ impl Node {
             children: vec![],
             camera: Handle::none(),
             mesh: Handle::none(),
+            light: Handle::none(),
             script: Handle::none(),
         }
     }
@@ -753,6 +779,7 @@ pub struct Model {
     pub materials: Pack<Material>,
     pub primitives: Pack<Primitive>,
     pub meshes: Pack<Mesh>,
+    pub lights: Pack<Light>,
     pub scripts: Pack<Script>,
 }
 
@@ -768,6 +795,7 @@ impl Model {
             materials: Pack::new(),
             primitives: Pack::new(),
             meshes: Pack::new(),
+            lights: Pack::new(),
             scripts: Pack::new(),
         }
     }
