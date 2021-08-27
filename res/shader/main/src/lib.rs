@@ -7,8 +7,6 @@
     feature(register_attr, lang_items),
     register_attr(spirv)
 )]
-// HACK(eddyb) can't easily see warnings otherwise from `spirv-builder` builds.
-#![deny(warnings)]
 
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -56,6 +54,7 @@ pub fn line_vs(
 #[allow(unused_attributes)]
 #[spirv(fragment)]
 pub fn main_fs(
+    #[spirv(push_constant)] sun_dir: &Vec3,
     #[spirv(uniform, descriptor_set = 2, binding = 0)] material_color: &Color,
     #[spirv(descriptor_set = 2, binding = 1)] material_albedo: &SampledImage<Image2d>,
     color: Vec4,
@@ -70,6 +69,13 @@ pub fn main_fs(
     out_color.y *= material_color.g;
     out_color.z *= material_color.b;
     out_color.w *= material_color.a;
+
+    let temp_sun_dir = sun_dir.normalize();
+    let normal = normal.normalize();
+    let diffuse_factor = normal.dot(temp_sun_dir).max(0.0);
+    out_color.x = 0.005 * out_color.x + 0.955 * diffuse_factor * out_color.x;
+    out_color.y = 0.005 * out_color.y + 0.955 * diffuse_factor * out_color.y;
+    out_color.z = 0.005 * out_color.z + 0.955 * diffuse_factor * out_color.z;
 
     out_normal.x = (normal.x + 1.0) / 2.0;
     out_normal.y = (normal.y + 1.0) / 2.0;
