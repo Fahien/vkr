@@ -27,8 +27,15 @@ pub fn main() {
     let cube_mesh = model.meshes.push(cube_mesh);
 
     let mut cube_node = Node::new();
+    cube_node.trs.translate(&na::Vector3::new(0.0, -1.0, 0.0));
     cube_node.mesh = cube_mesh;
     let cube_node = model.nodes.push(cube_node);
+
+    let light = Light::new(-1.0, 4.0, 1.0);
+    let light = model.lights.push(light);
+    let mut light_node = Node::new();
+    light_node.light = light;
+    let light_node = model.nodes.push(light_node);
 
     let camera = Camera::perspective(1.0);
     let camera = model.cameras.push(camera);
@@ -59,6 +66,8 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
         frame.bind(vkr.pipelines.get_for::<Vertex>(), &model, camera_node);
+        // Light needs to be pushed before drawing anything
+        frame.draw::<Vertex>(&vkr.pipelines, &model, light_node);
         frame.draw::<Vertex>(&vkr.pipelines, &model, cube_node);
 
         vkr.end_scene(&mut frame);

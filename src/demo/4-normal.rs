@@ -19,12 +19,19 @@ pub fn main() {
     cube_node.mesh = cube_mesh;
     let cube_node = model.nodes.push(cube_node);
 
+    let light = Light::new(2.0, 4.0, 2.0);
+    let light = model.lights.push(light);
+    let mut light_node = Node::new();
+    light_node.light = light;
+    let light_node = model.nodes.push(light_node);
+
     let camera = Camera::perspective(1.0);
     let camera = model.cameras.push(camera);
 
     let mut camera_node = Node::new();
     camera_node.camera = camera;
-    camera_node.trs.translate(&na::Vector3::new(0.0, 0.0, 4.0));
+    camera_node.trs.translate(&na::Vector3::new(0.0, 2.0, 4.0));
+    camera_node.trs.rotate(&na::UnitQuaternion::from_axis_angle(&na::Vector3::x_axis(), 0.35));
     let camera_node = model.nodes.push(camera_node);
 
     'running: loop {
@@ -34,10 +41,10 @@ pub fn main() {
 
         let delta = vkr.timer.get_delta().as_secs_f32();
 
-        if let Some(camera_node) = model.nodes.get_mut(camera_node) {
+        if let Some(model_node) = model.nodes.get_mut(cube_node) {
             let rot = na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), delta / 2.0);
-            let rot = rot * camera_node.trs.get_rotation();
-            camera_node.trs.set_rotation(&rot);
+            let rot = rot * model_node.trs.get_rotation();
+            model_node.trs.set_rotation(&rot);
         }
 
         let frame = vkr.begin_frame();
@@ -49,6 +56,7 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
         frame.bind(vkr.pipelines.get_for::<Vertex>(), &model, camera_node);
+        frame.draw::<Vertex>(&vkr.pipelines, &model, light_node);
         frame.draw::<Vertex>(&vkr.pipelines, &model, cube_node);
 
         vkr.end_scene(&mut frame);
