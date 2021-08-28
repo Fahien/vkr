@@ -338,8 +338,10 @@ impl PresentVertex {
         set: vk::DescriptorSet,
         albedo: &ImageView,
         normal: &ImageView,
+        depth: &ImageView,
         sampler: &Sampler,
     ) {
+        // Albedo
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(albedo.view)
@@ -354,6 +356,7 @@ impl PresentVertex {
             .image_info(&[image_info])
             .build();
 
+        // Normal
         let normal_image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(normal.view)
@@ -368,7 +371,22 @@ impl PresentVertex {
             .image_info(&[normal_image_info])
             .build();
 
-        let writes = vec![image_write, normal_image_write];
+        // Depth
+        let depth_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(depth.view)
+            .sampler(sampler.sampler)
+            .build();
+
+        let depth_image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(2)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .image_info(&[depth_image_info])
+            .build();
+
+        let writes = vec![image_write, normal_image_write, depth_image_write];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
@@ -412,7 +430,14 @@ impl VertexInput for PresentVertex {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        let bindings = vec![albedo_binding, normal_binding];
+        let depth_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(2)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+    
+        let bindings = vec![albedo_binding, normal_binding, depth_binding];
         let set_layout = create_set_layout(device, &bindings);
         vec![set_layout]
     }

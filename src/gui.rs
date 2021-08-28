@@ -424,6 +424,7 @@ impl Gui {
                         im::im_str!("None"),
                         im::im_str!("Albedo"),
                         im::im_str!("Normal"),
+                        im::im_str!("Depth"),
                     ];
                     ui.text(" · ");
                     ui.same_line(0.0);
