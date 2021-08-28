@@ -292,6 +292,7 @@ impl Vkr {
                 frame.res.descriptors.present_sets[0],
                 &frame.buffer.albedo_view,
                 &frame.buffer.normal_view,
+                &frame.buffer.depth_view,
                 &frame.res.fallback.white_sampler,
             );
         }
@@ -683,7 +684,7 @@ impl Pass {
             .stencil_load_op(ash::vk::AttachmentLoadOp::DONT_CARE)
             .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(ash::vk::ImageLayout::UNDEFINED)
-            .final_layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .final_layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .build();
 
         let albedo_attachment = ash::vk::AttachmentDescription::builder()
@@ -739,6 +740,11 @@ impl Pass {
         let first_color_refs = [albedo_ref, normal_ref];
         let second_color_refs = [present_ref];
 
+        let depth_input_ref = ash::vk::AttachmentReference::builder()
+            .attachment(1)
+            .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
         let albedo_input_ref = ash::vk::AttachmentReference::builder()
             .attachment(2)
             .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
@@ -749,7 +755,7 @@ impl Pass {
             .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .build();
 
-        let input_refs = [albedo_input_ref, normal_input_ref];
+        let input_refs = [albedo_input_ref, normal_input_ref, depth_input_ref];
 
         // Two subpasses
         let subpasses = [
