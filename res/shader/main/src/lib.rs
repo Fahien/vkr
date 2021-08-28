@@ -18,9 +18,10 @@ use spirv_std::{
 
 #[allow(unused_attributes)]
 #[spirv(fragment)]
-pub fn line_fs(color: Vec4, out_color: &mut Vec4, out_normal: &mut Vec4) {
+pub fn line_fs(color: Vec4, normal: Vec3, out_color: &mut Vec4, out_normal: &mut Vec4) {
     *out_color = color;
-    *out_normal = vec4(0.0, 0.0, 1.0, 1.0);
+    let normal = normal.normalize();
+    *out_normal = normal.extend(1.0);
 }
 
 pub struct Mat {
@@ -43,12 +44,14 @@ pub fn line_vs(
     #[spirv(uniform, descriptor_set = 1, binding = 1)] proj: &Mat,
     in_pos: Vec3,
     in_color: Vec4,
-    _in_normal: Vec3,
+    in_normal: Vec3,
     color: &mut Vec4,
+    normal: &mut Vec3,
     #[spirv(position)] out_pos: &mut Vec4,
 ) {
     *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
     *color = in_color;
+    *normal = in_normal;
 }
 
 #[allow(unused_attributes)]
@@ -111,11 +114,11 @@ pub fn main_vs(
 #[allow(unused_attributes)]
 #[spirv(fragment)]
 pub fn normal_fs(
-    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] albedo: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] _albedo: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] normal: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] _depth: &Image!(subpass, type=f32, sampled=false),
     out_color: &mut Vec4,
 ) {
-    let _frag: Vec4 = albedo.read_subpass(IVec2::new(0, 0));
     let norm: Vec4 = normal.read_subpass(IVec2::new(0, 0));
     out_color.x = (norm.x * 2.0) - 1.0;
     out_color.y = (norm.y * 2.0) - 1.0;
@@ -125,13 +128,27 @@ pub fn normal_fs(
 
 #[allow(unused_attributes)]
 #[spirv(fragment)]
+pub fn depth_fs(
+    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] _albedo: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] _normal: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] depth: &Image!(subpass, type=f32, sampled=false),
+    out_color: &mut Vec4,
+) {
+    let depth: Vec4 = depth.read_subpass(IVec2::new(0, 0));
+    *out_color = vec4(depth.x, depth.x, depth.x, 1.0);
+}
+
+#[allow(unused_attributes)]
+#[spirv(fragment)]
 pub fn present_fs(
     #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] albedo: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] normal: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] depth: &Image!(subpass, type=f32, sampled=false),
     out_color: &mut Vec4,
 ) {
     let frag: Vec4 = albedo.read_subpass(IVec2::new(0, 0));
     let _norm: Vec4 = normal.read_subpass(IVec2::new(0, 0));
+    let _depth: Vec4 = depth.read_subpass(IVec2::new(0, 0));
     *out_color = frag;
 }
 

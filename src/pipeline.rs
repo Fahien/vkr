@@ -15,6 +15,7 @@ pub enum Pipelines {
     LINE,
     PRESENT,
     NORMAL,
+    DEPTH,
     MAIN,
 }
 
@@ -30,10 +31,11 @@ impl DefaultPipelines {
         let line = Pipeline::line(dev, pass, width, height);
         let main = Pipeline::main(dev, pass, width, height);
         let normal = Pipeline::normal(dev, pass, width, height);
+        let depth = Pipeline::depth(dev, pass, width, height);
         let present = Pipeline::present(dev, pass, width, height);
         let debug = None;
 
-        let pipelines = [line, present, normal, main];
+        let pipelines = [line, present, normal, depth, main];
 
         Self { debug, pipelines }
     }
@@ -234,6 +236,27 @@ impl Pipeline {
         let shader = ShaderModule::main(&dev.device);
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
+
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+
+        Self::new::<PresentVertex>(
+            dev,
+            shader.get_vert(&vs),
+            shader.get_frag(&fs),
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
+            pass,
+            width,
+            height,
+            1,
+        )
+    }
+
+    /// Returns a graphics pipeline which draws the depth of primitive's surfaces as a color
+    pub fn depth(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(&dev.device);
+        let vs = CString::new("present_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("depth_fs").expect("Failed to create entrypoint");
 
         let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
 
