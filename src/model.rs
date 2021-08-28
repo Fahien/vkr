@@ -101,7 +101,11 @@ pub trait VertexInput {
     fn get_color_blend() -> Vec<vk::PipelineColorBlendAttachmentState> {
         vec![vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
-            .color_write_mask(vk::ColorComponentFlags::all())
+            .color_write_mask(
+                vk::ColorComponentFlags::R
+                    | vk::ColorComponentFlags::G
+                    | vk::ColorComponentFlags::B,
+            )
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .color_blend_op(vk::BlendOp::ADD)
@@ -307,6 +311,80 @@ impl VertexInput for Line {
 
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
         Point::get_set_layouts(device)
+    }
+}
+
+#[repr(C)]
+/// Very simple vertex used for the presentation pass
+pub struct PresentVertex {
+    pub pos: na::Vector4<f32>,
+}
+
+impl PresentVertex {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self {
+            pos: na::Vector4::new(x, y, 0.0, 1.0),
+        }
+    }
+
+    pub fn write_set(
+        device: &ash::Device,
+        set: vk::DescriptorSet,
+        albedo: &ImageView,
+        sampler: &Sampler,
+    ) {
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(albedo.view)
+            .sampler(sampler.sampler)
+            .build();
+
+        let image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .image_info(&[image_info])
+            .build();
+
+        let writes = vec![image_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
+}
+
+impl VertexInput for PresentVertex {
+    fn get_bindings() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Self>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    }
+
+    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
+        vec![
+            // position
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .offset(offset_of!(Vertex, pos) as u32)
+                .build(),
+        ]
+    }
+
+    fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
+        let albedo_bindings = vec![vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build()];
+        let albedo = create_set_layout(device, &albedo_bindings);
+        vec![albedo]
     }
 }
 
