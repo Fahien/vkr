@@ -5,6 +5,7 @@
 use ash::{
     extensions::ext::DebugReport,
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    vk,
     vk::Handle,
 };
 use sdl2 as sdl;
@@ -272,6 +273,37 @@ impl Vkr {
             }
             None => None,
         }
+    }
+
+    /// Finish rendering a 3D scene and starts next (present) subpass
+    pub fn end_scene(&mut self, frame: &mut Frame) {
+        frame.res.command_buffer.next_subpass();
+
+        let present_pipeline = &self.pipelines.pipelines[Pipelines::PRESENT as usize];
+        frame.res.command_buffer.bind_pipeline(present_pipeline);
+
+        if frame.res.descriptors.present_sets.is_empty() {
+            frame.res.descriptors.present_sets = frame
+                .res
+                .descriptors
+                .allocate(&present_pipeline.set_layouts);
+            PresentVertex::write_set(
+                &self.dev.device,
+                frame.res.descriptors.present_sets[0],
+                &frame.buffer.albedo_view,
+                &frame.res.fallback.white_sampler,
+            );
+        }
+        frame.res.command_buffer.bind_descriptor_sets(
+            present_pipeline,
+            &frame.res.descriptors.present_sets,
+            0,
+        );
+        frame
+            .res
+            .command_buffer
+            .bind_vertex_buffer(&frame.res.fallback.present_buffer);
+        frame.res.command_buffer.draw(3);
     }
 
     pub fn end_frame(&mut self, frame: Frame) {
@@ -611,7 +643,7 @@ pub struct Pass {
 impl Pass {
     pub fn new(dev: &mut Dev) -> Self {
         // Render pass (swapchain surface format, device)
-        let color_attachment = ash::vk::AttachmentDescription::builder()
+        let present_attachment = ash::vk::AttachmentDescription::builder()
             // @todo This format should come from a "framebuffer" object
             .format(dev.surface_format.format)
             .samples(ash::vk::SampleCountFlags::TYPE_1)
@@ -635,9 +667,21 @@ impl Pass {
             .final_layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
             .build();
 
-        let attachments = [color_attachment, depth_attachment];
+        let albedo_attachment = ash::vk::AttachmentDescription::builder()
+            // @todo This format should come from a "framebuffer" object
+            .format(dev.surface_format.format)
+            .samples(ash::vk::SampleCountFlags::TYPE_1)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(ash::vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(ash::vk::ImageLayout::UNDEFINED)
+            .final_layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
 
-        let color_ref = ash::vk::AttachmentReference::builder()
+        let attachments = [present_attachment, depth_attachment, albedo_attachment];
+
+        let present_ref = ash::vk::AttachmentReference::builder()
             .attachment(0)
             .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
@@ -647,16 +691,37 @@ impl Pass {
             .layout(ash::vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
             .build();
 
-        let color_refs = [color_ref];
+        let albedo_ref = ash::vk::AttachmentReference::builder()
+            .attachment(2)
+            .layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
 
-        // Just one subpass
-        let subpasses = [ash::vk::SubpassDescription::builder()
-            .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&color_refs)
-            .depth_stencil_attachment(&depth_ref)
-            .build()];
+        let albedo_refs = [albedo_ref];
+        let present_refs = [present_ref];
 
-        let present_dependency = ash::vk::SubpassDependency::builder()
+        let albedo_input_ref = ash::vk::AttachmentReference::builder()
+            .attachment(2)
+            .layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let input_refs = [albedo_input_ref];
+
+        // Two subpasses
+        let subpasses = [
+            // First subpass writes albedo and depth
+            ash::vk::SubpassDescription::builder()
+                .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
+                .color_attachments(&albedo_refs)
+                .depth_stencil_attachment(&depth_ref)
+                .build(),
+            ash::vk::SubpassDescription::builder()
+                .pipeline_bind_point(ash::vk::PipelineBindPoint::GRAPHICS)
+                .color_attachments(&present_refs)
+                .input_attachments(&input_refs)
+                .build(),
+        ];
+
+        let init_dependency = ash::vk::SubpassDependency::builder()
             .src_subpass(ash::vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
             .src_stage_mask(ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
@@ -665,10 +730,32 @@ impl Pass {
             .dst_access_mask(ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
             .build();
 
-        let dependencies = [present_dependency];
+        let albedo_dependency = vk::SubpassDependency::builder()
+            .src_subpass(0)
+            .dst_subpass(1)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .dependency_flags(vk::DependencyFlags::BY_REGION)
+            .build();
+
+        let present_dependency = vk::SubpassDependency::builder()
+            .src_subpass(0)
+            .dst_subpass(vk::SUBPASS_EXTERNAL)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .dst_stage_mask(vk::PipelineStageFlags::BOTTOM_OF_PIPE)
+            .dst_access_mask(vk::AccessFlags::MEMORY_READ)
+            .dependency_flags(vk::DependencyFlags::BY_REGION)
+            .build();
+
+        let dependencies = [init_dependency, albedo_dependency, present_dependency];
 
         // Build the render pass
-        let create_info = ash::vk::RenderPassCreateInfo::builder()
+        let create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachments)
             .subpasses(&subpasses)
             .dependencies(&dependencies)
