@@ -136,14 +136,22 @@ impl Pipeline {
         let shader = ShaderModule::gui(&dev.device);
         let vs = CString::new("gui_vs").expect("Failed to create entrypoint");
         let fs = CString::new("gui_fs").expect("Failed to create entrypoint");
+
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
+
         Self::new::<im::DrawVert>(
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
             vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
             pass,
             width,
             height,
+            1,
         )
     }
 }

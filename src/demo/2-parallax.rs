@@ -112,6 +112,7 @@ fn main() {
             frame.bind(vkr.pipelines.get::<Vertex>(), &model, camera_node);
             frame.draw::<Vertex>(&vkr.pipelines, &model, scene);
 
+            vkr.end_scene(&mut frame);
             vkr.gui.update(delta, &mut frame.res, |ui| {
                 im::Window::new(im::im_str!("Debug"))
                     .no_decoration()
