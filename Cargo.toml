@@ -21,6 +21,10 @@ path = "src/demo/3-cube.rs"
 name = "4-normal"
 path = "src/demo/4-normal.rs"
 
+[[bin]]
+name = "5-shadow"
+path = "src/demo/5-shadow.rs"
+
 [dependencies]
 ash = "0.32"
 sdl2 = "0.34.3"
