@@ -436,7 +436,7 @@ impl VertexInput for PresentVertex {
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
-    
+
         let bindings = vec![albedo_binding, normal_binding, depth_binding];
         let set_layout = create_set_layout(device, &bindings);
         vec![set_layout]
@@ -533,17 +533,15 @@ impl VertexInput for Vertex {
 
     fn get_constants() -> Vec<vk::PushConstantRange> {
         // Sun direction
-        vec![
-            vk::PushConstantRange::builder()
+        vec![vk::PushConstantRange::builder()
             .offset(0)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .size(std::mem::size_of::<na::Vector3<f32>>() as u32)
-            .build()
-        ]
+            .build()]
     }
 }
 
-/// Transform
+/// Transform, also Translate-Rotate-Scale
 pub struct Trs {
     model: na::Isometry3<f32>,
     scale: na::Vector3<f32>,
@@ -576,7 +574,12 @@ impl Trs {
     }
 
     pub fn get_translation(&self) -> na::Vector3<f32> {
+        // TODO: this is not the absolute position!
         self.model.translation.vector
+    }
+
+    pub fn set_translation(&mut self, translation: &na::Vector3<f32>) {
+        self.model.translation = na::Translation3::new(translation.x, translation.y, translation.z);
     }
 
     pub fn get_rotation(&self) -> na::UnitQuaternion<f32> {
@@ -600,6 +603,15 @@ impl Trs {
 
     pub fn scale(&mut self, scl: &na::Vector3<f32>) {
         self.scale = *scl;
+    }
+
+    pub fn look_at(&mut self, target: &na::Point3<f32>) {
+        let translation = self.get_translation();
+
+        // TODO: Figure out why Y values need to be negated
+        let eye = na::Point3::new(translation.x, -translation.y, translation.z);
+        let target = na::Point3::new(target.x, -target.y, target.z);
+        self.model = na::Isometry3::look_at_lh(&eye, &target, &na::Vector3::y_axis());
     }
 }
 
