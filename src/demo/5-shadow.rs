@@ -35,11 +35,28 @@ fn create_cube(vkr: &mut Vkr, model: &mut Model) -> Handle<Node> {
     model.nodes.push(cube_node)
 }
 
+/// Creates a directional light. Now, since these is going to generate a shadow map
+// we need to associate a camera to the node as well.
 fn create_light(model: &mut Model) -> Handle<Node> {
+    // TODO: do we really need this? We can just use the node's rotation.
     let light = Light::new(2.0, 4.0, 2.0);
     let light = model.lights.push(light);
+
+    let size = 8.0;
+    let camera = model.cameras.push(Camera::orthographic(
+        -size / 2.0,
+        size / 2.0,
+        -size / 2.0,
+        size / 2.0,
+        0.125,
+        size,
+    ));
+
     let mut light_node = Node::new();
     light_node.light = light;
+    light_node.camera = camera;
+
+    light_node.trs.look_at(&na::Point3::new(2.0, -4.0, 2.0));
     model.nodes.push(light_node)
 }
 
@@ -49,11 +66,8 @@ fn create_camera(model: &mut Model) -> Handle<Node> {
 
     let mut camera_node = Node::new();
     camera_node.camera = camera;
-    camera_node.trs.translate(&na::Vector3::new(0.0, 2.0, 4.0));
-    camera_node.trs.rotate(&na::UnitQuaternion::from_axis_angle(
-        &na::Vector3::x_axis(),
-        0.35,
-    ));
+    camera_node.trs.translate(&na::Vector3::new(1.0, 2.0, 4.0));
+    camera_node.trs.look_at(&na::Point3::origin());
     model.nodes.push(camera_node)
 }
 
@@ -88,6 +102,9 @@ pub fn main() {
             continue;
         }
         let mut frame = frame.unwrap();
+
+        // First of all we should generate a shadowmap
+        vkr.update_camera(&mut model, light);
 
         vkr.update_camera(&mut model, camera);
 
