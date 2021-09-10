@@ -32,7 +32,7 @@ pub trait VertexInput {
     /// The answer is definitely yes: 0 model, 1 camera, 2 material
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout>;
 
-    fn get_constants() -> Vec<vk::PushConstantRange> {
+    fn get_constants(_subpass: Subpass) -> Vec<vk::PushConstantRange> {
         vec![]
     }
 
@@ -98,7 +98,7 @@ pub trait VertexInput {
             .build()
     }
 
-    fn get_color_blend(subpass: u32) -> Vec<vk::PipelineColorBlendAttachmentState> {
+    fn get_color_blend(subpass: Subpass) -> Vec<vk::PipelineColorBlendAttachmentState> {
         let mut state = vec![vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
             .color_write_mask(
@@ -114,7 +114,8 @@ pub trait VertexInput {
             .color_blend_op(vk::BlendOp::ADD)
             .build()];
 
-        if subpass == 0 {
+        // Geometry subpass needs more blend states
+        if subpass == Subpass::GEOMETRY {
             state.push(state[0]);
         }
 
@@ -339,6 +340,7 @@ impl PresentVertex {
         albedo: &ImageView,
         normal: &ImageView,
         depth: &ImageView,
+        shadow: &ImageView,
         sampler: &Sampler,
     ) {
         // Albedo
@@ -386,7 +388,27 @@ impl PresentVertex {
             .image_info(&[depth_image_info])
             .build();
 
-        let writes = vec![image_write, normal_image_write, depth_image_write];
+        // Shadow
+        let shadow_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(shadow.view)
+            .sampler(sampler.sampler)
+            .build();
+
+        let shadow_image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .image_info(&[shadow_image_info])
+            .build();
+
+        let writes = vec![
+            image_write,
+            normal_image_write,
+            depth_image_write,
+            shadow_image_write,
+        ];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
@@ -398,7 +420,7 @@ impl VertexInput for PresentVertex {
     fn get_bindings() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
-            .stride(std::mem::size_of::<Self>() as u32)
+            .stride(std::mem::size_of::<PresentVertex>() as u32)
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()
     }
@@ -410,7 +432,7 @@ impl VertexInput for PresentVertex {
                 .binding(0)
                 .location(0)
                 .format(vk::Format::R32G32B32A32_SFLOAT)
-                .offset(offset_of!(Vertex, pos) as u32)
+                .offset(offset_of!(PresentVertex, pos) as u32)
                 .build(),
         ]
     }
@@ -437,7 +459,19 @@ impl VertexInput for PresentVertex {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        let bindings = vec![albedo_binding, normal_binding, depth_binding];
+        let shadow_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(3)
+            .descriptor_type(vk::DescriptorType::INPUT_ATTACHMENT)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let bindings = vec![
+            albedo_binding,
+            normal_binding,
+            depth_binding,
+            shadow_binding,
+        ];
         let set_layout = create_set_layout(device, &bindings);
         vec![set_layout]
     }
@@ -531,19 +565,27 @@ impl VertexInput for Vertex {
         vec![model, camera, material]
     }
 
-    fn get_constants() -> Vec<vk::PushConstantRange> {
-        // Sun direction
-        vec![vk::PushConstantRange::builder()
-            .offset(0)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .size(std::mem::size_of::<na::Vector3<f32>>() as u32)
-            .build()]
+    fn get_constants(subpass: Subpass) -> Vec<vk::PushConstantRange> {
+        let mut constants = vec![];
+
+        if subpass == Subpass::GEOMETRY {
+            // Sun direction used in the main fragment shader to calculate colors of surfaces hit by direct lighting
+            constants.push(
+                vk::PushConstantRange::builder()
+                    .offset(0)
+                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+                    .size(std::mem::size_of::<na::Vector3<f32>>() as u32)
+                    .build(),
+            );
+        }
+
+        constants
     }
 }
 
 /// Transform, also Translate-Rotate-Scale
 pub struct Trs {
-    model: na::Isometry3<f32>,
+    pub model: na::Isometry3<f32>,
     scale: na::Vector3<f32>,
 }
 
@@ -563,14 +605,12 @@ impl Trs {
     }
 
     pub fn get_view_matrix(&self) -> na::Matrix4<f32> {
-        let mut matrix = self.get_matrix();
-
-        // Invert translation
-        matrix.m14 = -matrix.m14;
-        matrix.m24 = -matrix.m24;
-        matrix.m34 = -matrix.m34;
-
-        matrix
+        let mut view = self.model.inverse().to_homogeneous();
+        // ??? Translation needs to be inverted to get the right view matrix from the transform of the node
+        //view.m14 = -view.m14;
+        //view.m24 = -view.m24;
+        //view.m34 = -view.m34;
+        view
     }
 
     pub fn get_translation(&self) -> na::Vector3<f32> {
@@ -607,11 +647,57 @@ impl Trs {
 
     pub fn look_at(&mut self, target: &na::Point3<f32>) {
         let translation = self.get_translation();
+        println!("Translation {}", translation);
 
-        // TODO: Figure out why Y values need to be negated
-        let eye = na::Point3::new(translation.x, -translation.y, translation.z);
-        let target = na::Point3::new(target.x, -target.y, target.z);
-        self.model = na::Isometry3::look_at_lh(&eye, &target, &na::Vector3::y_axis());
+        let eye = na::Point3::new(translation.x, translation.y, translation.z);
+        // Vulkan uses a right hand NDC space, but we take care of that with the projection values
+        self.model = na::Isometry3::look_at_rh(&eye, &target, &na::Vector3::y());
+        self.model.inverse_mut();
+    }
+
+    pub fn get_forward(&self) -> na::Vector3<f32> {
+        self.model.inverse()
+            .inverse_transform_vector(&-na::Vector3::z())
+            .normalize()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn forward() {
+        let eps = na::Vector3::new(1.0e-2, 1.0e-2, 1.0e-2);
+
+        // Looking towards negative Z
+        let trs = Trs::new();
+        let forward = trs.get_forward();
+        println!("Forward {}", forward);
+        assert!(forward == na::Vector3::new(0.0, 0.0, -1.0));
+
+        let mut trs = Trs::new();
+        trs.translate(&na::Vector3::new(0.0, 0.0, 1.0));
+        trs.look_at(&na::Point3::origin());
+        let forward = trs.get_forward();
+        println!("Forward {}", forward);
+        assert!(forward == na::Vector3::new(0.0, 0.0, -1.0));
+
+        let mut trs = Trs::new();
+        trs.translate(&na::Vector3::new(1.0, 0.0, 0.0));
+        trs.look_at(&na::Point3::origin());
+        let forward = trs.get_forward();
+        println!("Forward {}", (forward - na::Vector3::new(-1.0, 0.0, 0.0)).abs());
+        assert!((forward - na::Vector3::new(-1.0, 0.0, 0.0)).abs() < eps);
+
+        let mut trs = Trs::new();
+        trs.translate(&na::Vector3::new(1.0, 1.0, 1.0));
+        trs.look_at(&na::Point3::origin());
+        let forward = trs.get_forward();
+        println!("Forward {}", forward);
+        assert!(
+            (forward - na::Vector3::new(-0.57735, -0.57735, -0.57735)).abs() < eps
+        );
     }
 }
 
@@ -627,10 +713,12 @@ pub struct Camera {
 
 impl Camera {
     fn perspective_matrix(aspect: f32) -> na::Matrix4<f32> {
-        let fovy = -3.14 / 4.0;
+        let fovy = 3.14 / 4.0;
         let znear = 0.1;
         let zfar = 100.0;
-        na::Perspective3::new(aspect, fovy, znear, zfar).to_homogeneous()
+        let mut matrix = na::Perspective3::new(aspect, fovy, znear, zfar).to_homogeneous();
+        matrix.m22 = -matrix.m22;
+        matrix
     }
 
     pub fn perspective(aspect: f32) -> Self {
@@ -747,15 +835,11 @@ impl Camera {
 }
 
 #[repr(C)]
-pub struct Light {
-    pub dir: na::Vector3<f32>,
-}
+pub struct Light {}
 
 impl Light {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self {
-            dir: na::Vector3::new(x, y, z),
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 

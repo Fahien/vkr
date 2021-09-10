@@ -31,7 +31,7 @@ pub fn main() {
     cube_node.mesh = cube_mesh;
     let cube_node = model.nodes.push(cube_node);
 
-    let light = Light::new(-1.0, 4.0, 1.0);
+    let light = Light::new();
     let light = model.lights.push(light);
     let mut light_node = Node::new();
     light_node.light = light;
@@ -67,8 +67,8 @@ pub fn main() {
         let mut frame = frame.unwrap();
         frame.bind(vkr.pipelines.get_for::<Vertex>(), &model, camera_node);
         // Light needs to be pushed before drawing anything
-        frame.draw::<Vertex>(&vkr.pipelines, &model, light_node);
-        frame.draw::<Vertex>(&vkr.pipelines, &model, cube_node);
+        frame.draw::<Vertex>(vkr.pipelines.get_for::<Vertex>(), &model, light_node);
+        frame.draw::<Vertex>(vkr.pipelines.get_for::<Vertex>(), &model, cube_node);
 
         vkr.end_scene(&mut frame);
         vkr.gui.draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);

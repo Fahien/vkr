@@ -183,6 +183,37 @@ impl Image {
         image
     }
 
+    pub fn transition_while(&mut self, command_buffer: &mut CommandBuffer, new_layout: vk::ImageLayout) {
+        // Old layout -> New layout
+        let src_stage_mask = ash::vk::PipelineStageFlags::LATE_FRAGMENT_TESTS;
+        let dst_stage_mask = ash::vk::PipelineStageFlags::FRAGMENT_SHADER;
+        let dependency_flags = ash::vk::DependencyFlags::BY_REGION;
+        let image_memory_barriers = vec![ash::vk::ImageMemoryBarrier::builder()
+            .old_layout(new_layout)
+            .new_layout(new_layout)
+            .image(self.image)
+            .subresource_range(
+                ash::vk::ImageSubresourceRange::builder()
+                    .aspect_mask(Image::get_aspect_from_format(self.format))
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .src_access_mask(vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+            .dst_access_mask(ash::vk::AccessFlags::SHADER_READ)
+            .build()];
+        command_buffer.pipeline_barriers(
+            src_stage_mask,
+            dst_stage_mask,
+            dependency_flags,
+            &image_memory_barriers,
+        );
+
+        self.layout = new_layout;
+    }
+
     pub fn transition(&mut self, dev: &Dev, new_layout: vk::ImageLayout) {
         // @todo Use TRANSFER pool and transfer queue?
         let command_buffer = CommandBuffer::new(&dev.graphics_command_pool);

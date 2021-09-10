@@ -42,7 +42,7 @@ impl CommandBuffer {
         .expect("Failed to begin Vulkan command buffer");
     }
 
-    pub fn begin_render_pass(&self, pass: &Pass, framebuffer: &Framebuffer, area: vk::Rect2D) {
+    pub fn begin_render_pass(&self, pass: &Pass, framebuffer: vk::Framebuffer, area: vk::Rect2D) {
         let mut present_clear = vk::ClearValue::default();
         present_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
 
@@ -56,9 +56,11 @@ impl CommandBuffer {
         let mut normal_clear = vk::ClearValue::default();
         normal_clear.color.float32 = [0.0, 0.0, 0.0, 1.0];
 
-        let clear_values = [present_clear, depth_clear, albedo_clear, normal_clear];
+        let shadow_clear = depth_clear;
+
+        let clear_values = [present_clear, depth_clear, albedo_clear, normal_clear, shadow_clear];
         let create_info = vk::RenderPassBeginInfo::builder()
-            .framebuffer(framebuffer.framebuffer)
+            .framebuffer(framebuffer)
             .render_pass(pass.render)
             .render_area(area)
             .clear_values(&clear_values)

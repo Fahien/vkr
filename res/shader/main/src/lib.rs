@@ -12,7 +12,7 @@
 use spirv_std::macros::spirv;
 
 use spirv_std::{
-    glam::{vec4, IVec2, Mat4, Vec2, Vec3, Vec4},
+    glam::{vec4, IVec2, Mat3, Mat4, Vec2, Vec3, Vec4},
     image::{Image, Image2d, SampledImage},
 };
 
@@ -52,6 +52,21 @@ pub fn line_vs(
     *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
     *color = in_color;
     *normal = in_normal;
+}
+
+#[spirv(vertex)]
+pub fn shadow_vs(
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] model: &Mat,
+    #[spirv(uniform, descriptor_set = 0, binding = 1)] model_view: &Mat,
+    #[spirv(uniform, descriptor_set = 1, binding = 0)] view: &Mat,
+    #[spirv(uniform, descriptor_set = 1, binding = 1)] proj: &Mat,
+    in_pos: Vec3,
+    in_color: Vec4,
+    in_normal: Vec3,
+    in_uv: Vec2,
+    #[spirv(position)] out_pos: &mut Vec4,
+) {
+    *out_pos = proj.matrix * view.matrix * model.matrix * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
 }
 
 #[allow(unused_attributes)]
@@ -105,10 +120,8 @@ pub fn main_vs(
 
     *color = in_color;
 
-    let temp_normal = model_view.matrix * vec4(in_normal.x, in_normal.y, in_normal.z, 1.0);
-    normal.x = temp_normal.x;
-    normal.y = temp_normal.y;
-    normal.z = temp_normal.z;
+    let invtras: Mat3 = model.matrix.inverse().transpose().into();
+    *normal = invtras * in_normal;
 
     uv.x = in_uv.x;
     uv.y = in_uv.y;
@@ -120,12 +133,13 @@ pub fn normal_fs(
     #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] _albedo: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] normal: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] _depth: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 3, input_attachment_index = 3)] _shadow: &Image!(subpass, type=f32, sampled=false),
     out_color: &mut Vec4,
 ) {
     let norm: Vec4 = normal.read_subpass(IVec2::new(0, 0));
-    out_color.x = (norm.x * 2.0) - 1.0;
-    out_color.y = (norm.y * 2.0) - 1.0;
-    out_color.z = (norm.z * 2.0) - 1.0;
+    out_color.x = norm.x; // (norm.x * 2.0) - 1.0;
+    out_color.y = norm.y; // (norm.y * 2.0) - 1.0;
+    out_color.z = norm.z; // (norm.z * 2.0) - 1.0;
     out_color.w = 1.0;
 }
 
@@ -135,9 +149,23 @@ pub fn depth_fs(
     #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] _albedo: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] _normal: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] depth: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 3, input_attachment_index = 3)] _shadow: &Image!(subpass, type=f32, sampled=false),
     out_color: &mut Vec4,
 ) {
     let depth: Vec4 = depth.read_subpass(IVec2::new(0, 0));
+    *out_color = vec4(depth.x, depth.x, depth.x, 1.0);
+}
+
+#[allow(unused_attributes)]
+#[spirv(fragment)]
+pub fn shadow_fs(
+    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] _albedo: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] _normal: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] _depth: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 3, input_attachment_index = 3)] shadow: &Image!(subpass, type=f32, sampled=false),
+    out_color: &mut Vec4,
+) {
+    let depth: Vec4 = shadow.read_subpass(IVec2::new(0, 0));
     *out_color = vec4(depth.x, depth.x, depth.x, 1.0);
 }
 
@@ -147,6 +175,7 @@ pub fn present_fs(
     #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] albedo: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] normal: &Image!(subpass, type=f32, sampled=false),
     #[spirv(descriptor_set = 0, binding = 2, input_attachment_index = 2)] depth: &Image!(subpass, type=f32, sampled=false),
+    #[spirv(descriptor_set = 0, binding = 3, input_attachment_index = 3)] _shadow: &Image!(subpass, type=f32, sampled=false),
     out_color: &mut Vec4,
 ) {
     let frag: Vec4 = albedo.read_subpass(IVec2::new(0, 0));

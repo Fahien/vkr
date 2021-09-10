@@ -30,6 +30,9 @@ pub use sampler::*;
 pub mod pipeline;
 pub use pipeline::*;
 
+pub mod pass;
+pub use pass::*;
+
 pub mod gfx;
 pub use gfx::*;
 
