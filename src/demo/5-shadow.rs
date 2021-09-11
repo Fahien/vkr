@@ -38,11 +38,10 @@ fn create_cube(vkr: &mut Vkr, model: &mut Model) -> Handle<Node> {
 /// Creates a directional light. Now, since these is going to generate a shadow map
 // we need to associate a camera to the node as well.
 fn create_light(model: &mut Model) -> Handle<Node> {
-    // TODO: do we really need this? We can just use the node's rotation.
-    let light = Light::new(2.0, 4.0, 2.0);
+    let light = Light::new();
     let light = model.lights.push(light);
 
-    let size = 8.0;
+    let size = 16.0;
     let camera = model.cameras.push(Camera::orthographic(
         -size / 2.0,
         size / 2.0,
@@ -56,7 +55,8 @@ fn create_light(model: &mut Model) -> Handle<Node> {
     light_node.light = light;
     light_node.camera = camera;
 
-    light_node.trs.look_at(&na::Point3::new(2.0, -4.0, 2.0));
+    light_node.trs.translate(&na::Vector3::new(4.0, 4.0, 0.0));
+    light_node.trs.look_at(&na::Point3::origin());
     model.nodes.push(light_node)
 }
 
@@ -66,7 +66,7 @@ fn create_camera(model: &mut Model) -> Handle<Node> {
 
     let mut camera_node = Node::new();
     camera_node.camera = camera;
-    camera_node.trs.translate(&na::Vector3::new(1.0, 2.0, 4.0));
+    camera_node.trs.translate(&na::Vector3::new(4.0, 4.0, -4.0));
     camera_node.trs.look_at(&na::Point3::origin());
     model.nodes.push(camera_node)
 }
@@ -105,13 +105,20 @@ pub fn main() {
 
         // First of all we should generate a shadowmap
         vkr.update_camera(&mut model, light);
-
         vkr.update_camera(&mut model, camera);
 
-        frame.bind(vkr.pipelines.get_for::<Vertex>(), &model, camera);
-        frame.draw::<Vertex>(&vkr.pipelines, &model, light);
-        frame.draw::<Vertex>(&vkr.pipelines, &model, floor);
-        frame.draw::<Vertex>(&vkr.pipelines, &model, cube);
+        // Light pre pass
+        let light_pipeline = vkr.pipelines.get(Pipelines::SHADOW);
+        frame.bind_light(light_pipeline, &model, light);
+        frame.draw::<Vertex>(light_pipeline, &model, floor);
+        frame.draw::<Vertex>(light_pipeline, &model, cube);
+        vkr.end_light(&mut frame);
+
+        let pipeline = vkr.pipelines.get_for::<Vertex>();
+        frame.bind(pipeline, &model, camera);
+        frame.draw::<Vertex>(pipeline, &model, light);
+        frame.draw::<Vertex>(pipeline, &model, floor);
+        frame.draw::<Vertex>(pipeline, &model, cube);
 
         vkr.end_scene(&mut frame);
         vkr.gui

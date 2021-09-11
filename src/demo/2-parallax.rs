@@ -110,7 +110,7 @@ fn main() {
 
         if let Some(mut frame) = vkr.begin_frame() {
             frame.bind(vkr.pipelines.get_for::<Vertex>(), &model, camera_node);
-            frame.draw::<Vertex>(&vkr.pipelines, &model, scene);
+            frame.draw::<Vertex>(vkr.pipelines.get_for::<Vertex>(), &model, scene);
 
             vkr.end_scene(&mut frame);
             vkr.gui.update(delta, &mut frame.res, |ui| {

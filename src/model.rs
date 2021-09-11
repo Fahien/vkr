@@ -32,7 +32,7 @@ pub trait VertexInput {
     /// The answer is definitely yes: 0 model, 1 camera, 2 material
     fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout>;
 
-    fn get_constants() -> Vec<vk::PushConstantRange> {
+    fn get_constants(_subpass: Subpass) -> Vec<vk::PushConstantRange> {
         vec![]
     }
 
@@ -98,7 +98,7 @@ pub trait VertexInput {
             .build()
     }
 
-    fn get_color_blend(subpass: u32) -> Vec<vk::PipelineColorBlendAttachmentState> {
+    fn get_color_blend(subpass: Subpass) -> Vec<vk::PipelineColorBlendAttachmentState> {
         let mut state = vec![vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
             .color_write_mask(
@@ -114,7 +114,8 @@ pub trait VertexInput {
             .color_blend_op(vk::BlendOp::ADD)
             .build()];
 
-        if subpass == 0 {
+        // Geometry subpass needs more blend states
+        if subpass == Subpass::GEOMETRY {
             state.push(state[0]);
         }
 
@@ -324,12 +325,14 @@ impl VertexInput for Line {
 /// Very simple vertex used for the presentation pass
 pub struct PresentVertex {
     pub pos: na::Vector4<f32>,
+    pub uv: na::Vector4<f32>,
 }
 
 impl PresentVertex {
-    pub fn new(x: f32, y: f32) -> Self {
+    pub fn new(x: f32, y: f32, u: f32, v: f32) -> Self {
         Self {
             pos: na::Vector4::new(x, y, 0.0, 1.0),
+            uv: na::Vector4::new(u, v, 0.0, 0.0),
         }
     }
 
@@ -339,6 +342,7 @@ impl PresentVertex {
         albedo: &ImageView,
         normal: &ImageView,
         depth: &ImageView,
+        shadow: &ImageView,
         sampler: &Sampler,
     ) {
         // Albedo
@@ -373,7 +377,7 @@ impl PresentVertex {
 
         // Depth
         let depth_image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
             .image_view(depth.view)
             .sampler(sampler.sampler)
             .build();
@@ -386,7 +390,27 @@ impl PresentVertex {
             .image_info(&[depth_image_info])
             .build();
 
-        let writes = vec![image_write, normal_image_write, depth_image_write];
+        // Shadow
+        let shadow_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(shadow.view)
+            .sampler(sampler.sampler)
+            .build();
+
+        let shadow_image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&[shadow_image_info])
+            .build();
+
+        let writes = vec![
+            image_write,
+            normal_image_write,
+            depth_image_write,
+            shadow_image_write,
+        ];
 
         unsafe {
             device.update_descriptor_sets(&writes, &[]);
@@ -411,6 +435,13 @@ impl VertexInput for PresentVertex {
                 .location(0)
                 .format(vk::Format::R32G32B32A32_SFLOAT)
                 .offset(offset_of!(Self, pos) as u32)
+                .build(),
+            // uv
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Self, uv) as u32)
                 .build(),
         ]
     }
@@ -437,7 +468,19 @@ impl VertexInput for PresentVertex {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        let bindings = vec![albedo_binding, normal_binding, depth_binding];
+        let shadow_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(3)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let bindings = vec![
+            albedo_binding,
+            normal_binding,
+            depth_binding,
+            shadow_binding,
+        ];
         let set_layout = create_set_layout(device, &bindings);
         vec![set_layout]
     }
@@ -531,13 +574,21 @@ impl VertexInput for Vertex {
         vec![model, camera, material]
     }
 
-    fn get_constants() -> Vec<vk::PushConstantRange> {
-        // Sun direction
-        vec![vk::PushConstantRange::builder()
-            .offset(0)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .size(std::mem::size_of::<na::Vector3<f32>>() as u32)
-            .build()]
+    fn get_constants(subpass: Subpass) -> Vec<vk::PushConstantRange> {
+        let mut constants = vec![];
+
+        if subpass == Subpass::GEOMETRY {
+            // Sun direction used in the main fragment shader to calculate colors of surfaces hit by direct lighting
+            constants.push(
+                vk::PushConstantRange::builder()
+                    .offset(0)
+                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+                    .size(std::mem::size_of::<na::Vector3<f32>>() as u32)
+                    .build(),
+            );
+        }
+
+        constants
     }
 }
 
@@ -603,6 +654,53 @@ impl Trs {
         // Vulkan uses a right hand NDC space with a negative Y,
         // but we take care of that with the projection values.
         self.model = na::Isometry3::look_at_rh(&eye, &target, &na::Vector3::y()).inverse();
+    }
+
+    pub fn get_forward(&self) -> na::Vector3<f32> {
+        self.model
+            .inverse()
+            .inverse_transform_vector(&-na::Vector3::z())
+            .normalize()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn forward() {
+        let eps = na::Vector3::new(1.0e-2, 1.0e-2, 1.0e-2);
+
+        // Looking towards negative Z
+        let trs = Trs::new();
+        let forward = trs.get_forward();
+        println!("Forward {}", forward);
+        assert!(forward == na::Vector3::new(0.0, 0.0, -1.0));
+
+        let mut trs = Trs::new();
+        trs.translate(&na::Vector3::new(0.0, 0.0, 1.0));
+        trs.look_at(&na::Point3::origin());
+        let forward = trs.get_forward();
+        println!("Forward {}", forward);
+        assert!(forward == na::Vector3::new(0.0, 0.0, -1.0));
+
+        let mut trs = Trs::new();
+        trs.translate(&na::Vector3::new(1.0, 0.0, 0.0));
+        trs.look_at(&na::Point3::origin());
+        let forward = trs.get_forward();
+        println!(
+            "Forward {}",
+            (forward - na::Vector3::new(-1.0, 0.0, 0.0)).abs()
+        );
+        assert!((forward - na::Vector3::new(-1.0, 0.0, 0.0)).abs() < eps);
+
+        let mut trs = Trs::new();
+        trs.translate(&na::Vector3::new(1.0, 1.0, 1.0));
+        trs.look_at(&na::Point3::origin());
+        let forward = trs.get_forward();
+        println!("Forward {}", forward);
+        assert!((forward - na::Vector3::new(-0.57735, -0.57735, -0.57735)).abs() < eps);
     }
 }
 
@@ -740,15 +838,11 @@ impl Camera {
 }
 
 #[repr(C)]
-pub struct Light {
-    pub dir: na::Vector3<f32>,
-}
+pub struct Light {}
 
 impl Light {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self {
-            dir: na::Vector3::new(x, y, z),
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 

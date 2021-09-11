@@ -115,7 +115,10 @@ impl Ctx {
         for ext in extensions.iter() {
             extensions_names.push(ext.as_ptr() as *const i8);
         }
-        let layers = [CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
+        let layers = [
+            CString::new("VK_LAYER_KHRONOS_validation").unwrap(),
+            CString::new("VK_LAYER_KHRONOS_synchronization2").unwrap(),
+        ];
         let layer_names: Vec<*const i8> = layers.iter().map(|name| name.as_ptr()).collect();
 
         let entry = unsafe { ash::Entry::new() }.expect("Failed to create ash entry");
@@ -139,7 +142,8 @@ pub struct Vkr {
     pub pipelines: DefaultPipelines,
     pub gui: Gui,
     pub sfs: SwapchainFrames, // Use box of frames?
-    pub pass: Pass,           // How about multiple passes?
+    pub shadow_pass: Pass,
+    pub pass: Pass, // How about multiple passes?
     pub dev: Dev,
     pub surface: Surface,
     pub debug: Debug,
@@ -161,17 +165,19 @@ impl Vkr {
         let surface = Surface::new(&win, &ctx);
         let mut dev = Dev::new(&ctx, &surface);
 
+        let shadow_pass = Pass::shadow(&mut dev);
         let pass = Pass::new(&mut dev);
-        let sfs = SwapchainFrames::new(&ctx, &surface, &mut dev, width, height, &pass);
+        let sfs = SwapchainFrames::new(&ctx, &surface, &mut dev, width, height, &shadow_pass, &pass);
 
         let gui = Gui::new(&win, &dev, &pass);
 
-        let pipelines = DefaultPipelines::new(&dev, &pass, width, height);
+        let pipelines = DefaultPipelines::new(&dev, &shadow_pass, &pass, width, height);
 
         Self {
             pipelines,
             gui,
             sfs,
+            shadow_pass,
             pass,
             dev,
             surface,
@@ -268,12 +274,19 @@ impl Vkr {
             .next_frame(win, &self.surface, &self.dev, &self.pass)
         {
             Some(frame) => {
-                let (width, height) = self.win.as_mut().unwrap().window.drawable_size();
-                frame.begin(&self.pass, width, height);
+                frame.begin_shadow(&self.shadow_pass);
                 Some(frame)
             }
             None => None,
         }
+    }
+
+    /// Finish rendering the shadowmap, TODO rename?
+    pub fn end_light(&mut self, frame: &mut Frame) {
+        frame.res.command_buffer.end_render_pass();
+
+        let (width, height) = self.win.as_mut().unwrap().window.drawable_size();
+        frame.begin(&self.pass, width, height);
     }
 
     /// Finish rendering a 3D scene and starts next (present) subpass
@@ -294,6 +307,7 @@ impl Vkr {
                 &frame.buffer.albedo_view,
                 &frame.buffer.normal_view,
                 &frame.buffer.depth_view,
+                &frame.shadow_buffer.view,
                 &frame.res.fallback.white_sampler,
             );
         }
