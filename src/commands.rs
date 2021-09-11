@@ -42,6 +42,26 @@ impl CommandBuffer {
         .expect("Failed to begin Vulkan command buffer");
     }
 
+    pub fn begin_render_shadow_pass(&self, pass: &Pass, framebuffer: &ShadowFramebuffer, area: vk::Rect2D) {
+        let mut depth_clear = vk::ClearValue::default();
+        depth_clear.depth_stencil.depth = 0.0;
+        depth_clear.depth_stencil.stencil = 0;
+
+        let clear_values = [depth_clear];
+        let create_info = vk::RenderPassBeginInfo::builder()
+            .framebuffer(framebuffer.framebuffer)
+            .render_pass(pass.render)
+            .render_area(area)
+            .clear_values(&clear_values)
+            .build();
+        // Record it in the main command buffer
+        let contents = vk::SubpassContents::INLINE;
+        unsafe {
+            self.device
+                .cmd_begin_render_pass(self.command_buffer, &create_info, contents)
+        };
+    }
+
     pub fn begin_render_pass(&self, pass: &Pass, framebuffer: &Framebuffer, area: vk::Rect2D) {
         let mut present_clear = vk::ClearValue::default();
         present_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];

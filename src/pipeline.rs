@@ -16,7 +16,9 @@ pub enum Pipelines {
     PRESENT,
     NORMAL,
     DEPTH,
+    SHADOWPRESENT,
     MAIN,
+    SHADOW,
 }
 
 /// Collection of built-in pipelines
@@ -27,15 +29,17 @@ pub struct DefaultPipelines {
 }
 
 impl DefaultPipelines {
-    pub fn new(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+    pub fn new(dev: &Dev, shadow_pass: &Pass, pass: &Pass, width: u32, height: u32) -> Self {
         let line = Pipeline::line(dev, pass, width, height);
         let main = Pipeline::main(dev, pass, width, height);
         let normal = Pipeline::normal(dev, pass, width, height);
         let depth = Pipeline::depth(dev, pass, width, height);
         let present = Pipeline::present(dev, pass, width, height);
+        let shadowpresent = Pipeline::shadowpresent(dev, pass, width, height);
+        let shadow = Pipeline::shadow(dev, shadow_pass, width, height);
         let debug = None;
 
-        let pipelines = [line, present, normal, depth, main];
+        let pipelines = [line, present, normal, depth, shadowpresent, main, shadow];
 
         Self { debug, pipelines }
     }
@@ -69,16 +73,16 @@ impl Pipeline {
     pub fn new<T: VertexInput>(
         dev: &Dev,
         vert: vk::PipelineShaderStageCreateInfo,
-        frag: vk::PipelineShaderStageCreateInfo,
+        frag: Option<vk::PipelineShaderStageCreateInfo>,
         topology: vk::PrimitiveTopology,
         dynamic_state: &vk::PipelineDynamicStateCreateInfo,
         pass: &Pass,
         width: u32,
         height: u32,
-        subpass: u32,
+        subpass: Subpass,
     ) -> Self {
         let set_layouts = T::get_set_layouts(&dev.device);
-        let constants = T::get_constants();
+        let constants = T::get_constants(subpass);
 
         // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
@@ -152,7 +156,10 @@ impl Pipeline {
                 .attachments(&blend_attachment)
                 .build();
 
-            let stages = [vert, frag];
+            let mut stages = vec![vert];
+            if let Some(frag) = frag {
+                stages.push(frag);
+            }
 
             let create_info = [vk::GraphicsPipelineCreateInfo::builder()
                 .stages(&stages)
@@ -165,7 +172,7 @@ impl Pipeline {
                 .color_blend_state(&blend_state)
                 .dynamic_state(&dynamic_state)
                 .render_pass(pass.render)
-                .subpass(subpass)
+                .subpass(subpass.into())
                 .layout(layout)
                 .build()];
 
@@ -198,17 +205,41 @@ impl Pipeline {
         Self::new::<Line>(
             dev,
             shader.get_vert(&vs),
-            shader.get_frag(&fs),
+            Some(shader.get_frag(&fs)),
             vk::PrimitiveTopology::LINE_STRIP,
             &dynamic_state,
             pass,
             width,
             height,
-            0,
+            Subpass::GEOMETRY,
+        )
+    }
+
+    pub fn shadow(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        println!("Shadow");
+        let shader = ShaderModule::main(&dev.device);
+        let vs = CString::new("shadow_vs").expect("Failed to create entrypoint");
+
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
+
+        Self::new::<Vertex>(
+            dev,
+            shader.get_vert(&vs),
+            None,
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
+            pass,
+            width,
+            height,
+            Subpass::SHADOW, // first pass of shadow render pass
         )
     }
 
     pub fn main(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        println!("Main");
         let shader = ShaderModule::main(&dev.device);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
@@ -221,18 +252,19 @@ impl Pipeline {
         Self::new::<Vertex>(
             dev,
             shader.get_vert(&vs),
-            shader.get_frag(&fs),
+            Some(shader.get_frag(&fs)),
             vk::PrimitiveTopology::TRIANGLE_LIST,
             &dynamic_state,
             pass,
             width,
             height,
-            0,
+            Subpass::GEOMETRY,
         )
     }
 
     /// Returns a graphics pipeline which draws the normals of primitive's surfaces as a color
     pub fn normal(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        println!("Normal");
         let shader = ShaderModule::main(&dev.device);
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
@@ -242,13 +274,13 @@ impl Pipeline {
         Self::new::<PresentVertex>(
             dev,
             shader.get_vert(&vs),
-            shader.get_frag(&fs),
+            Some(shader.get_frag(&fs)),
             vk::PrimitiveTopology::TRIANGLE_LIST,
             &dynamic_state,
             pass,
             width,
             height,
-            1,
+            Subpass::LIGHT,
         )
     }
 
@@ -263,13 +295,34 @@ impl Pipeline {
         Self::new::<PresentVertex>(
             dev,
             shader.get_vert(&vs),
-            shader.get_frag(&fs),
+            Some(shader.get_frag(&fs)),
             vk::PrimitiveTopology::TRIANGLE_LIST,
             &dynamic_state,
             pass,
             width,
             height,
-            1,
+            Subpass::LIGHT,
+        )
+    }
+
+    /// Returns a graphics pipeline which draws the depth of primitive's surfaces as a color
+    pub fn shadowpresent(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
+        let shader = ShaderModule::main(&dev.device);
+        let vs = CString::new("present_vs").expect("Failed to create entrypoint");
+        let fs = CString::new("shadow_fs").expect("Failed to create entrypoint");
+
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+
+        Self::new::<PresentVertex>(
+            dev,
+            shader.get_vert(&vs),
+            Some(shader.get_frag(&fs)),
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            &dynamic_state,
+            pass,
+            width,
+            height,
+            Subpass::LIGHT,
         )
     }
 
@@ -283,13 +336,13 @@ impl Pipeline {
         Self::new::<PresentVertex>(
             dev,
             shader.get_vert(&vs),
-            shader.get_frag(&fs),
+            Some(shader.get_frag(&fs)),
             vk::PrimitiveTopology::TRIANGLE_LIST,
             &dynamic_state,
             pass,
             width,
             height,
-            1,
+            Subpass::LIGHT,
         )
     }
 }

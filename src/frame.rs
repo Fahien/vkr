@@ -8,6 +8,64 @@ use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
 use super::*;
 use imgui as im;
 
+pub struct ShadowFramebuffer {
+    pub framebuffer: vk::Framebuffer,
+    pub view: ImageView,
+    pub image: Image,
+    device: Rc<Device>,
+}
+
+impl ShadowFramebuffer {
+    pub fn new(dev: &Dev, extent: vk::Extent2D, pass: &Pass) -> Self {
+        // Shadow image
+        let shadow_format = vk::Format::D32_SFLOAT;
+        let mut image = Image::new(
+            &dev.allocator,
+            extent.width,
+            extent.height,
+            shadow_format,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+        );
+        image.transition(&dev, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+        let view = ImageView::new(&dev.device, &image);
+
+        // Framebuffers (image_views, renderpass)
+        let framebuffer = {
+            let attachments = [view.view];
+
+            let create_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(pass.render)
+                .attachments(&attachments)
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1)
+                .build();
+
+            unsafe { dev.device.create_framebuffer(&create_info, None) }
+                .expect("Failed to create Vulkan framebuffer")
+        };
+
+        Self {
+            framebuffer,
+            view,
+            image,
+            device: dev.device.clone(),
+        }
+    }
+}
+
+impl Drop for ShadowFramebuffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for device");
+            self.device.destroy_framebuffer(self.framebuffer, None);
+        }
+    }
+}
+
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
 pub struct Framebuffer {
@@ -165,9 +223,9 @@ impl Fallback {
 
         // Y pointing down
         let present_vertices = vec![
-            PresentVertex::new(-1.0, -1.0),
-            PresentVertex::new(-1.0, 3.0),
-            PresentVertex::new(3.0, -1.0),
+            PresentVertex::new(-1.0, -1.0, 0.0, 0.0),
+            PresentVertex::new(-1.0, 3.0, 0.0, 2.0),
+            PresentVertex::new(3.0, -1.0, 2.0, 0.0),
         ];
         let mut present_buffer =
             Buffer::new::<PresentVertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
@@ -265,6 +323,7 @@ impl Frameres {
 pub struct Frame {
     /// Used to compute the model-view matrix when rendering a mesh
     pub current_view: na::Matrix4<f32>,
+    pub shadow_buffer: ShadowFramebuffer,
     pub buffer: Framebuffer,
     pub res: Frameres,
     /// A frame should be able to allocate a uniform buffer on draw
@@ -273,12 +332,15 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
+    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass, shadow_pass: &Pass) -> Self {
+        let shadow_extent = vk::Extent2D::builder().width(512).height(512).build();
+        let shadow_buffer = ShadowFramebuffer::new(dev, shadow_extent, shadow_pass);
         let buffer = Framebuffer::new(dev, image, pass);
         let res = Frameres::new(dev);
 
         Frame {
             current_view: na::Matrix4::identity(),
+            shadow_buffer,
             buffer,
             res,
             allocator: dev.allocator.clone(),
@@ -286,10 +348,42 @@ impl Frame {
         }
     }
 
-    pub fn begin(&self, pass: &Pass) {
+    pub fn begin_shadow(&self, pass: &Pass) {
         self.res
             .command_buffer
             .begin(vk::CommandBufferUsageFlags::default());
+
+        let width = self.shadow_buffer.image.extent.width;
+        let height = self.shadow_buffer.image.extent.height;
+
+        // Needed by cmd_begin_render_pass
+        let area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::builder().x(0).y(0).build())
+            .extent(vk::Extent2D::builder().width(width).height(height).build())
+            .build();
+
+        self.res
+            .command_buffer
+            .begin_render_shadow_pass(pass, &self.shadow_buffer, area);
+
+        let viewport = vk::Viewport::builder()
+            .width(width as f32)
+            .height(height as f32)
+            .max_depth(0.0)
+            .min_depth(1.0)
+            .build();
+        self.res.command_buffer.set_viewport(&viewport);
+
+        let scissor = vk::Rect2D::builder()
+            .extent(vk::Extent2D::builder().width(width).height(height).build())
+            .build();
+        self.res.command_buffer.set_scissor(&scissor);
+    }
+
+    pub fn begin(&self, pass: &Pass, width: u32, height: u32) {
+        //self.res
+        //    .command_buffer
+        //    .begin(vk::CommandBufferUsageFlags::default());
 
         // Needed by cmd_begin_render_pass
         let area = vk::Rect2D::builder()
@@ -402,31 +496,115 @@ impl Frame {
         }
     }
 
-    pub fn draw<T: VertexInput>(
-        &mut self,
-        pipelines: &DefaultPipelines,
-        model: &Model,
-        node: Handle<Node>,
-    ) {
-        let pipeline = pipelines.get_for::<T>();
+    pub fn bind_light(&mut self, pipeline: &Pipeline, model: &Model, light_node: Handle<Node>) {
+        self.res.command_buffer.bind_pipeline(pipeline);
+
+        let width = self.buffer.width as f32;
+        let height = self.buffer.height as f32;
+        let viewport = vk::Viewport::builder()
+            .width(width)
+            .height(height)
+            .max_depth(0.0)
+            .min_depth(1.0)
+            .build();
+        self.res.command_buffer.set_viewport(&viewport);
+
+        let scissor = vk::Rect2D::builder()
+            .extent(
+                vk::Extent2D::builder()
+                    .width(self.buffer.width)
+                    .height(self.buffer.height)
+                    .build(),
+            )
+            .build();
+        self.res.command_buffer.set_scissor(&scissor);
+
+        let node = model.nodes.get(light_node).unwrap();
+        self.current_view = node.trs.get_view_matrix();
+        // Lights should have cameras for rendering shadowmaps
+        let camera = model.cameras.get(node.camera).unwrap();
+
+        if let Some(sets) = self
+            .res
+            .descriptors
+            .view_sets
+            .get(&(pipeline.set_layouts[1], light_node))
+        {
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline, sets, 1);
+
+            // If there is a descriptor set, there must be a buffer
+            let view_buffer = self.res.view_buffers.get_mut(&light_node).unwrap();
+            view_buffer.upload(&self.current_view);
+
+            let proj_buffer = self.res.proj_buffers.get_mut(&node.camera).unwrap();
+            proj_buffer.upload(&camera.proj);
+        } else {
+            // Allocate and write desc set for camera view
+            // Camera set layout is at index 1 (use a constant?)
+            let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[1]]);
+
+            if let Some(view_buffer) = self.res.view_buffers.get_mut(&light_node) {
+                // Buffer already there, just make the set pointing to it
+                Camera::write_set_view(self.device.borrow(), sets[0], &view_buffer);
+            } else {
+                // Create a new buffer for this node's view matrix
+                let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
+                    &self.allocator,
+                    vk::BufferUsageFlags::UNIFORM_BUFFER,
+                );
+                view_buffer.upload(&self.current_view);
+                Camera::write_set_view(self.device.borrow(), sets[0], &view_buffer);
+                self.res.view_buffers.insert(light_node, view_buffer);
+            }
+
+            if let Some(proj_buffer) = self.res.proj_buffers.get_mut(&node.camera) {
+                // Buffer already there, just make the set pointing to it
+                Camera::write_set_proj(self.device.borrow(), sets[0], &proj_buffer);
+            } else {
+                // Create a new buffer for this camera proj matrix
+                let mut proj_buffer = Buffer::new::<na::Matrix4<f32>>(
+                    &self.allocator,
+                    vk::BufferUsageFlags::UNIFORM_BUFFER,
+                );
+                proj_buffer.upload(&camera.proj);
+                Camera::write_set_proj(self.device.borrow(), sets[0], &proj_buffer);
+                self.res.proj_buffers.insert(node.camera, proj_buffer);
+            }
+
+            self.res
+                .command_buffer
+                .bind_descriptor_sets(pipeline, &sets, 1);
+
+            self.res
+                .descriptors
+                .view_sets
+                .insert((pipeline.set_layouts[1], light_node), sets);
+        }
+    }
+
+    pub fn draw<T: VertexInput>(&mut self, pipeline: &Pipeline, model: &Model, node: Handle<Node>) {
         self.res.command_buffer.bind_pipeline(pipeline);
 
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
-            self.draw::<T>(pipelines, model, child);
+            self.draw::<T>(pipeline, model, child);
         }
 
         let cnode = model.nodes.get(node).unwrap();
 
         // Check whether it has a light source
         if let Some(light) = model.lights.get(cnode.light) {
+            let light_direction = -cnode.trs.get_forward();
             // For the moment we expect one light direction, therefore push light constant
             let light_constants = unsafe {
                 std::slice::from_raw_parts(
-                    light.dir.as_ptr() as *const u8,
+                    light_direction.as_ptr() as *const u8,
                     std::mem::size_of::<na::Vector3<f32>>(),
                 )
-            }.to_vec();
+            }
+            .to_vec();
 
             self.res.command_buffer.push_constants(
                 pipeline,
@@ -651,6 +829,7 @@ impl Drop for Frame {
 }
 
 pub trait Frames {
+    // TODO why Pass is needed here?
     fn next_frame(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass)
         -> Option<Frame>;
     fn present(&mut self, frame: Frame, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass);
@@ -697,13 +876,14 @@ impl SwapchainFrames {
         dev: &mut Dev,
         width: u32,
         height: u32,
+        shadow_pass: &Pass,
         pass: &Pass,
     ) -> Self {
         let swapchain = Swapchain::new(ctx, surface, dev, width, height);
 
         let mut frames = Vec::new();
         for image in swapchain.images.iter() {
-            let frame = Frame::new(dev, image, pass);
+            let frame = Frame::new(dev, image, pass, shadow_pass);
             frames.push(Some(frame));
         }
 

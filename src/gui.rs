@@ -73,7 +73,8 @@ impl VertexInput for im::DrawVert {
         vec![create_set_layout(device, &bindings)]
     }
 
-    fn get_constants() -> Vec<vk::PushConstantRange> {
+    fn get_constants(subpass: Subpass) -> Vec<vk::PushConstantRange> {
+        assert!(subpass == Subpass::LIGHT);
         vec![vk::PushConstantRange::builder()
             .offset(0)
             .stage_flags(vk::ShaderStageFlags::VERTEX)
@@ -116,8 +117,8 @@ impl VertexInput for im::DrawVert {
             .build()
     }
 
-    fn get_color_blend(subpass: u32) -> Vec<vk::PipelineColorBlendAttachmentState> {
-        assert!(subpass == 1);
+    fn get_color_blend(subpass: Subpass) -> Vec<vk::PipelineColorBlendAttachmentState> {
+        assert!(subpass == Subpass::LIGHT);
         vec![vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(true)
             .color_write_mask(
@@ -146,13 +147,13 @@ impl Pipeline {
         Self::new::<im::DrawVert>(
             dev,
             shader.get_vert(&vs),
-            shader.get_frag(&fs),
+            Some(shader.get_frag(&fs)),
             vk::PrimitiveTopology::TRIANGLE_LIST,
             &dynamic_state,
             pass,
             width,
             height,
-            1,
+            Subpass::LIGHT,
         )
     }
 }
@@ -425,6 +426,7 @@ impl Gui {
                         im::im_str!("Albedo"),
                         im::im_str!("Normal"),
                         im::im_str!("Depth"),
+                        im::im_str!("Shadow"),
                     ];
                     ui.text(" · ");
                     ui.same_line(0.0);
