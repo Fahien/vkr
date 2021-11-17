@@ -210,11 +210,14 @@ pub struct FrameCache {
 
     pub fence: Fence,
 
-    // Image ready semaphores are free and unlinked from a frame as we do not know which one
-    // is going to be acquired, thus can not wait for a specific fence and can not signal a
-    // specific image ready semaphore.
-    pub image_ready: vk::Semaphore,
+    // The image ready semaphore is used by the acquire next image function and it will be signaled
+    // then the image is ready to be rendered onto. Indeed it is also used by the submit draw
+    // function which will wait for the image to be ready before submitting draw commands
+    pub image_ready: Semaphore,
 
+    // Image drawn sempahore is used when submitting draw commands to a back-buffer
+    // and it will be signaled when rendering is finished. Indeed the present function
+    // is waiting on this sempahore before presenting the back-buffer to screen.
     pub image_drawn: Semaphore,
 
     pub fallback: Fallback,
@@ -244,17 +247,15 @@ impl FrameCache {
             pipeline_cache: PipelineCache::new(&dev.device),
             command_buffer,
             fence,
-            image_ready: vk::Semaphore::null(),
+            image_ready: Semaphore::new(&dev.device),
             image_drawn: Semaphore::new(&dev.device),
             fallback: Fallback::new(&dev),
         }
     }
 
     pub fn wait(&mut self) {
-        if self.fence.can_wait {
-            self.fence.wait();
-            self.fence.reset();
-        }
+        self.fence.wait();
+        self.fence.reset();
     }
 }
 
@@ -625,23 +626,15 @@ impl Frame {
         swapchain: &Swapchain,
         image_index: u32,
     ) -> Result<(), vk::Result> {
-        if self.res.image_ready == vk::Semaphore::null() {
-            // Something went wrong, just skip this frame
-            println!("No image ready?");
-            return Ok(());
-        }
-
-        self.res.image_drawn = Semaphore::new(&dev.device);
-
         dev.graphics_queue.submit_draw(
             &self.res.command_buffer,
-            self.res.image_ready,
-            &self.res.image_drawn,
+            self.res.image_ready.semaphore,
+            self.res.image_drawn.semaphore,
             Some(&mut self.res.fence),
         );
 
         dev.graphics_queue
-            .present(image_index, swapchain, &self.res.image_drawn)
+            .present(image_index, swapchain, self.res.image_drawn.semaphore)
     }
 }
 
@@ -685,9 +678,14 @@ impl Frames for OffscreenFrames {
 
 /// Swapchain frames work on swapchain images
 pub struct SwapchainFrames {
+    /// This is the frame index. It is updated in a round-robin fashon.
+    /// It is not necessarily the same as the image index.
     pub current: usize,
+
+    /// This is the index of the swapchain image currently in use.
+    /// Not necessarily the same as the frame index.
     image_index: u32,
-    pub image_ready_semaphores: Vec<Semaphore>,
+
     /// We use option here because this vector should not change size.
     /// This means when a frame is retrieved for drawing, we take the frame and replace it with None.
     /// When the frame is returned for presenting, we put it back in its original position.
@@ -715,8 +713,7 @@ impl SwapchainFrames {
         Self {
             current: 0,
             image_index: 0,
-            image_ready_semaphores: vec![],
-            frames: frames,
+            frames,
             swapchain,
         }
     }
@@ -728,9 +725,6 @@ impl SwapchainFrames {
         self.swapchain.recreate(&surface, &dev, width, height);
         for i in 0..self.swapchain.images.len() {
             let frame = self.frames[i].as_mut().unwrap();
-            // Reset image ready semaphore handle for this frame
-            // The image drawn one is still in use at the moment
-            frame.res.image_ready = vk::Semaphore::null();
             frame.buffer = Framebuffer::new(&dev, &self.swapchain.images[i], &pass);
         }
     }
@@ -744,20 +738,14 @@ impl Frames for SwapchainFrames {
         dev: &Dev,
         pass: &Pass,
     ) -> Option<Frame> {
-        // Image ready semaphores are not associated to single frames as we do not know which
-        // image index is going to be available on acquiring next image.
-        if self.image_ready_semaphores.len() >= self.frames.len() {
-            self.image_ready_semaphores.pop();
-        }
+        // Let us create a new semaphore for next image
         let image_ready = Semaphore::new(&dev.device);
-        let image_ready_handle = image_ready.semaphore;
-        self.image_ready_semaphores.insert(0, image_ready);
 
         let acquire_res = unsafe {
             self.swapchain.ext.acquire_next_image(
                 self.swapchain.swapchain,
-                64,
-                image_ready_handle,
+                u64::MAX,
+                image_ready.semaphore,
                 vk::Fence::null(),
             )
         };
@@ -765,12 +753,12 @@ impl Frames for SwapchainFrames {
         match acquire_res {
             Ok((image_index, false)) => {
                 self.image_index = image_index;
-                let mut frame = self.frames[image_index as usize].take().unwrap();
-                // Wait for this frame to complete previous commands.
+                self.current = image_index as usize;
+                let mut frame = self.frames[self.current].take().unwrap();
+                // When previous draw is finished, the fence is signaled, let us wait for it.
                 frame.res.wait();
-                // We still need to wait for the image to be ready before drawing onto it
-                // therefore we store the semaphore in this frame to be used later.
-                frame.res.image_ready = image_ready_handle;
+                // At this point the image should be ready and we can safely overwrite previous semaphore.
+                frame.res.image_ready = image_ready;
                 Some(frame)
             }
             // Suboptimal
@@ -785,15 +773,15 @@ impl Frames for SwapchainFrames {
     }
 
     fn present(&mut self, frame: Frame, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
-        assert!(self.frames[self.image_index as usize].is_none());
-        self.frames[self.image_index as usize].replace(frame);
+        assert!(self.frames[self.current as usize].is_none());
+        self.frames[self.current as usize].replace(frame);
 
-        match self
-            .frames[self.image_index as usize]
-            .as_mut().unwrap()
+        match self.frames[self.current as usize]
+            .as_mut()
+            .unwrap()
             .present(dev, &self.swapchain, self.image_index)
         {
-            Ok(()) => (),
+            Ok(()) => {}
             // Recreate swapchain
             Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 self.recreate(win, surface, dev, pass);
