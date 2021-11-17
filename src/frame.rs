@@ -906,6 +906,8 @@ impl SwapchainFrames {
             // Reset image ready semaphore handle for this frame
             // The image drawn one is still in use at the moment
             frame.res.image_ready = vk::Semaphore::null();
+            frame.res.descriptors.free(&frame.res.descriptors.present_sets);
+            frame.res.descriptors.present_sets.clear();
             frame.buffer = Framebuffer::new(&dev, &self.swapchain.images[i], &pass);
         }
     }
