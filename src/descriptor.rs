@@ -29,6 +29,7 @@ pub struct Descriptors {
     pub material_sets: SetCache<Material>,
 
     /// Descriptor sets for the present subpass
+    /// These need to be recreated when the swapchain goes out of date
     pub present_sets: Vec<vk::DescriptorSet>,
 
     /// Descriptor pools should be per-pipeline layout as weel as they could differ in terms of uniforms and samplers?
@@ -67,6 +68,7 @@ impl Descriptors {
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
                 .max_sets(set_count)
+                .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
                 .build();
             dev.device.create_descriptor_pool(&create_info, None)
         }
@@ -91,6 +93,14 @@ impl Descriptors {
 
         unsafe { self.device.allocate_descriptor_sets(&create_info) }
             .expect("Failed to allocate Vulkan descriptor sets")
+    }
+
+    pub fn free(&self, descriptors: &[vk::DescriptorSet]) {
+        unsafe {
+            self.device
+                .free_descriptor_sets(self.pool, descriptors)
+                .expect("msFailed to free descriptor sets");
+        }
     }
 }
 
