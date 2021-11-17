@@ -269,7 +269,10 @@ impl Pipeline {
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
 
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
 
         Self::new::<PresentVertex>(
             dev,
@@ -290,7 +293,10 @@ impl Pipeline {
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("depth_fs").expect("Failed to create entrypoint");
 
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
 
         Self::new::<PresentVertex>(
             dev,
@@ -311,7 +317,10 @@ impl Pipeline {
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("shadow_fs").expect("Failed to create entrypoint");
 
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
 
         Self::new::<PresentVertex>(
             dev,
@@ -331,7 +340,10 @@ impl Pipeline {
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("present_fs").expect("Failed to create entry point");
 
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&states)
+            .build();
 
         Self::new::<PresentVertex>(
             dev,
