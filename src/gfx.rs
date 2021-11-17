@@ -413,7 +413,7 @@ impl Swapchain {
 
         let create_info = ash::vk::SwapchainCreateInfoKHR::builder()
             .surface(surface.surface)
-            .min_image_count(2)
+            .min_image_count(3)
             .image_format(dev.surface_format.format)
             .image_color_space(dev.surface_format.color_space)
             .image_extent(
@@ -427,7 +427,7 @@ impl Swapchain {
             .image_sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
             .pre_transform(surface_capabilities.current_transform)
             .composite_alpha(ash::vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(ash::vk::PresentModeKHR::FIFO)
+            .present_mode(ash::vk::PresentModeKHR::MAILBOX)
             .clipped(true);
         unsafe { ext.create_swapchain(&create_info, None) }
             .expect("Failed to create Vulkan swapchain")

@@ -276,7 +276,7 @@ pub struct Frameres {
     // specific image ready semaphore.
     pub image_ready: vk::Semaphore,
 
-    pub image_drawn: Semaphore,
+    pub image_drawn: vk::Semaphore,
 
     pub fallback: Fallback,
 }
@@ -307,7 +307,7 @@ impl Frameres {
             command_buffer,
             fence,
             image_ready: vk::Semaphore::null(),
-            image_drawn: Semaphore::new(&dev.device),
+            image_drawn: vk::Semaphore::null(),
             fallback: Fallback::new(&dev),
         }
     }
@@ -804,17 +804,15 @@ impl Frame {
             return Ok(());
         }
 
-        self.res.image_drawn = Semaphore::new(&dev.device);
-
         dev.graphics_queue.submit_draw(
             &self.res.command_buffer,
             self.res.image_ready,
-            &self.res.image_drawn,
+            self.res.image_drawn,
             Some(&mut self.res.fence),
         );
 
         dev.graphics_queue
-            .present(image_index, swapchain, &self.res.image_drawn)
+            .present(image_index, swapchain, self.res.image_drawn)
     }
 }
 
@@ -861,7 +859,8 @@ impl Frames for OffscreenFrames {
 pub struct SwapchainFrames {
     pub current: usize,
     image_index: u32,
-    pub image_ready_semaphores: Vec<Semaphore>,
+    pub image_ready_semaphore: Semaphore,
+    pub image_drawn_semaphore: Semaphore,
     /// We use option here because this vector should not change size.
     /// This means when a frame is retrieved for drawing, we take the frame and replace it with None.
     /// When the frame is returned for presenting, we put it back in its original position.
@@ -890,7 +889,8 @@ impl SwapchainFrames {
         Self {
             current: 0,
             image_index: 0,
-            image_ready_semaphores: vec![],
+            image_ready_semaphore: Semaphore::new(&dev.device),
+            image_drawn_semaphore: Semaphore::new(&dev.device),
             frames: frames,
             swapchain,
         }
@@ -923,17 +923,12 @@ impl Frames for SwapchainFrames {
     ) -> Option<Frame> {
         // Image ready semaphores are not associated to single frames as we do not know which
         // image index is going to be available on acquiring next image.
-        if self.image_ready_semaphores.len() >= self.frames.len() {
-            self.image_ready_semaphores.pop();
-        }
-        let image_ready = Semaphore::new(&dev.device);
-        let image_ready_handle = image_ready.semaphore;
-        self.image_ready_semaphores.insert(0, image_ready);
+        let image_ready_handle = self.image_ready_semaphore.semaphore;
 
         let acquire_res = unsafe {
             self.swapchain.ext.acquire_next_image(
                 self.swapchain.swapchain,
-                64,
+                u64::MAX,
                 image_ready_handle,
                 vk::Fence::null(),
             )
@@ -948,6 +943,7 @@ impl Frames for SwapchainFrames {
                 // We still need to wait for the image to be ready before drawing onto it
                 // therefore we store the semaphore in this frame to be used later.
                 frame.res.image_ready = image_ready_handle;
+                frame.res.image_drawn = self.image_drawn_semaphore.semaphore;
                 Some(frame)
             }
             // Suboptimal

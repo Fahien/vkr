@@ -38,7 +38,7 @@ impl Queue {
         &self,
         command_buffer: &CommandBuffer,
         wait: vk::Semaphore,
-        signal: &Semaphore,
+        signal: vk::Semaphore,
         fence: Option<&mut Fence>,
     ) {
         // Wait for the image to be available ..
@@ -46,7 +46,7 @@ impl Queue {
         // .. at color attachment output stage
         let wait_dst_stage_mask = [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [command_buffer.command_buffer];
-        let signals = [signal.semaphore];
+        let signals = [signal];
 
         let submits = [ash::vk::SubmitInfo::builder()
             .wait_semaphores(&waits)
@@ -62,11 +62,11 @@ impl Queue {
         &self,
         image_index: u32,
         swapchain: &Swapchain,
-        wait: &Semaphore,
+        wait: vk::Semaphore,
     ) -> Result<(), ash::vk::Result> {
         let pres_image_indices = [image_index];
         let pres_swapchains = [swapchain.swapchain];
-        let pres_semaphores = [wait.semaphore];
+        let pres_semaphores = [wait];
         let present_info = ash::vk::PresentInfoKHR::builder()
             .image_indices(&pres_image_indices)
             .swapchains(&pres_swapchains)
