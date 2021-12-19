@@ -2,14 +2,13 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{extensions::ext::DebugReport, vk, vk::Handle};
+use ash::{extensions::ext::DebugUtils, vk, vk::Handle};
 use sdl2 as sdl;
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     cell::RefCell,
-    ffi::{c_void, CStr, CString},
+    ffi::{CStr, CString},
     ops::Deref,
-    os::raw::c_char,
     rc::Rc,
 };
 
@@ -23,17 +22,19 @@ use crate::{
     DefaultPipelines, Model, Node, PresentVertex,
 };
 
-pub unsafe extern "system" fn vk_debug(
-    _: ash::vk::DebugReportFlagsEXT,
-    _: ash::vk::DebugReportObjectTypeEXT,
-    _: u64,
-    _: usize,
-    _: i32,
-    _: *const c_char,
-    message: *const c_char,
-    _: *mut c_void,
-) -> u32 {
-    eprintln!("{:?}", CStr::from_ptr(message));
+unsafe extern "system" fn vk_debug(
+    _message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _user_data: *mut std::os::raw::c_void,
+) -> vk::Bool32 {
+    let callback_data = *p_callback_data;
+    let message = if callback_data.p_message.is_null() {
+        Cow::from("No message")
+    } else {
+        CStr::from_ptr(callback_data.p_message).to_string_lossy()
+    };
+    eprintln!("{:?}", message);
     ash::vk::FALSE
 }
 
@@ -69,28 +70,26 @@ impl Win {
 }
 
 pub struct Debug {
-    loader: DebugReport,
-    callback: ash::vk::DebugReportCallbackEXT,
+    loader: DebugUtils,
+    messenger: vk::DebugUtilsMessengerEXT,
 }
 
 impl Debug {
     fn new(ctx: &Ctx) -> Self {
-        let debug_info = ash::vk::DebugReportCallbackCreateInfoEXT::builder()
-            .flags(
-                ash::vk::DebugReportFlagsEXT::ERROR
-                    | ash::vk::DebugReportFlagsEXT::WARNING
-                    | ash::vk::DebugReportFlagsEXT::PERFORMANCE_WARNING,
-            )
-            .pfn_callback(Some(vk_debug));
-
-        let loader = { DebugReport::new(&ctx.entry, &ctx.instance) };
-        let callback = unsafe {
+        let loader = DebugUtils::new(&ctx.entry, &ctx.instance);
+        let messenger = unsafe {
             loader
-                .create_debug_report_callback(&debug_info, None)
-                .expect("Failed to create Vulkan debug callback")
+                .create_debug_utils_messenger(
+                    &vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                        .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
+                        .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                        .pfn_user_callback(Some(vk_debug)),
+                    None,
+                )
+                .expect("Failed to create Vulkan debug messenger")
         };
 
-        Self { loader, callback }
+        Self { loader, messenger }
     }
 }
 
@@ -98,7 +97,7 @@ impl Drop for Debug {
     fn drop(&mut self) {
         unsafe {
             self.loader
-                .destroy_debug_report_callback(self.callback, None);
+                .destroy_debug_utils_messenger(self.messenger, None);
         }
     }
 }
@@ -114,7 +113,7 @@ impl Ctx {
             .window
             .vulkan_instance_extensions()
             .expect("Failed to get SDL vulkan extensions");
-        let mut extensions_names = vec![DebugReport::name().as_ptr()];
+        let mut extensions_names = vec![DebugUtils::name().as_ptr()];
         for ext in extensions.iter() {
             extensions_names.push(ext.as_ptr() as *const i8);
         }
