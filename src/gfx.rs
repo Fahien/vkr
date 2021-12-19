@@ -845,6 +845,8 @@ impl Buffer {
         size: ash::vk::DeviceSize,
         usage: ash::vk::BufferUsageFlags,
     ) -> (ash::vk::Buffer, vk_mem::Allocation) {
+        assert!(size >= 32);
+
         let buffer_info = ash::vk::BufferCreateInfo::builder()
             .size(size)
             .usage(usage)
@@ -867,7 +869,7 @@ impl Buffer {
 
     /// Loads data from a png image in `path` directly into a staging buffer
     pub fn load(allocator: &Rc<RefCell<vk_mem::Allocator>>, png: &mut Png) -> Self {
-        let size = png.info.buffer_size();
+        let size = png.info.buffer_size().max(32);
         let usage = ash::vk::BufferUsageFlags::TRANSFER_SRC;
 
         // Create staging buffer
@@ -904,6 +906,8 @@ impl Buffer {
         usage: ash::vk::BufferUsageFlags,
         size: ash::vk::DeviceSize,
     ) -> Self {
+        assert!(size >= 32);
+        let allocator = allocator.clone();
         let (buffer, allocation) = Self::create_buffer(&allocator.deref().borrow(), size, usage);
 
         Self {
@@ -911,7 +915,7 @@ impl Buffer {
             buffer,
             size,
             usage,
-            allocator: allocator.clone(),
+            allocator,
         }
     }
 
@@ -920,7 +924,20 @@ impl Buffer {
         usage: ash::vk::BufferUsageFlags,
     ) -> Self {
         let size = std::mem::size_of::<T>() as ash::vk::DeviceSize;
+        let size = size.max(32);
         Self::new_with_size(allocator, usage, size)
+    }
+
+    pub fn new_arr<T>(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        usage: ash::vk::BufferUsageFlags,
+        arr: &[T],
+    ) -> Self {
+        let size = (std::mem::size_of::<T>() * arr.len()) as vk::DeviceSize;
+        let size = size.max(32);
+        let mut buffer = Self::new_with_size(allocator, usage, size);
+        buffer.upload_raw(arr.as_ptr(), size);
+        buffer
     }
 
     pub fn from_data(
@@ -928,7 +945,9 @@ impl Buffer {
         data: &[u8],
         usage: ash::vk::BufferUsageFlags,
     ) -> Self {
-        let mut buffer = Self::new_with_size(allocator, usage, data.len() as ash::vk::DeviceSize);
+        let size = data.len() as ash::vk::DeviceSize;
+        let size = size.max(32);
+        let mut buffer = Self::new_with_size(allocator, usage, size);
         buffer.upload_arr(data);
         buffer
     }
@@ -938,6 +957,20 @@ impl Buffer {
             data as *const T,
             std::mem::size_of::<T>() as ash::vk::DeviceSize,
         );
+    }
+
+    pub fn map<T>(&mut self) -> &[T] {
+        let alloc = self.allocator.deref().borrow();
+        let data = alloc
+            .map_memory(&self.allocation)
+            .expect("Failed to map Vulkan memory");
+        let slice_size = self.size as usize / std::mem::size_of::<T>();
+        unsafe { std::slice::from_raw_parts(data as _, slice_size) }
+    }
+
+    pub fn unmap(&mut self) {
+        let alloc = self.allocator.deref().borrow();
+        alloc.unmap_memory(&self.allocation);
     }
 
     pub fn upload_raw<T>(&mut self, src: *const T, size: ash::vk::DeviceSize) {
@@ -952,6 +985,7 @@ impl Buffer {
     pub fn upload_arr<T>(&mut self, arr: &[T]) {
         // Create a new buffer if not enough size for the vector
         let size = (arr.len() * std::mem::size_of::<T>()) as ash::vk::DeviceSize;
+        let size = size.max(32);
         if size as ash::vk::DeviceSize != self.size {
             let alloc = self.allocator.deref().borrow();
             alloc.destroy_buffer(self.buffer, &self.allocation);
