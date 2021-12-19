@@ -169,9 +169,11 @@ impl Fallback {
             PresentVertex::new(-1.0, 3.0),
             PresentVertex::new(3.0, -1.0),
         ];
-        let mut present_buffer =
-            Buffer::new::<PresentVertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
-        present_buffer.upload_arr(&present_vertices);
+        let present_buffer = Buffer::new_arr(
+            &dev.allocator,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            &present_vertices,
+        );
 
         Self {
             _white_image: white_image,
