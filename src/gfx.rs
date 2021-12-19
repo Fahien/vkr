@@ -699,7 +699,7 @@ impl Pass {
             .stencil_load_op(ash::vk::AttachmentLoadOp::DONT_CARE)
             .stencil_store_op(ash::vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(ash::vk::ImageLayout::UNDEFINED)
-            .final_layout(ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .final_layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
         let normal_attachment = vk::AttachmentDescription::builder()
@@ -710,7 +710,7 @@ impl Pass {
             .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
             .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
         let attachments = [
@@ -770,13 +770,19 @@ impl Pass {
                 .build(),
         ];
 
+        // These dependencies follow the example from
+        // https://github.com/SaschaWillems/Vulkan/blob/master/examples/subpasses/subpasses.cpp
         let init_dependency = ash::vk::SubpassDependency::builder()
             .src_subpass(ash::vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
-            .src_stage_mask(ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(ash::vk::AccessFlags::empty())
+            .src_stage_mask(ash::vk::PipelineStageFlags::BOTTOM_OF_PIPE)
+            .src_access_mask(ash::vk::AccessFlags::MEMORY_READ)
             .dst_stage_mask(ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_access_mask(
+                ash::vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .dependency_flags(vk::DependencyFlags::BY_REGION)
             .build();
 
         let output_to_input_dependency = vk::SubpassDependency::builder()
@@ -790,7 +796,7 @@ impl Pass {
             .build();
 
         let present_dependency = vk::SubpassDependency::builder()
-            .src_subpass(0)
+            .src_subpass(1)
             .dst_subpass(vk::SUBPASS_EXTERNAL)
             .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .src_access_mask(
