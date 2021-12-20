@@ -38,6 +38,11 @@ impl ShaderModule {
         Self::new(device, SHADERS)
     }
 
+    pub fn compute(device: &Rc<Device>) -> Self {
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_compute_shaders.spv"));
+        Self::new(device, SHADERS)
+    }
+
     /// The entrypoint c string should be alive until the pipeline has been created
     pub fn get_stage(
         &self,

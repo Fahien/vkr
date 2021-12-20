@@ -16,6 +16,7 @@ pub enum Pipelines {
     PRESENT,
     NORMAL,
     MAIN,
+    COMPUTE,
 }
 
 /// Collection of built-in pipelines
@@ -31,9 +32,10 @@ impl DefaultPipelines {
         let main = Pipeline::main(dev, pass, width, height);
         let normal = Pipeline::normal(dev, pass, width, height);
         let present = Pipeline::present(dev, pass, width, height);
+        let compute = Pipeline::compute(dev);
         let debug = None;
 
-        let pipelines = [line, present, normal, main];
+        let pipelines = [line, present, normal, main, compute];
 
         Self { debug, pipelines }
     }
@@ -268,6 +270,60 @@ impl Pipeline {
             height,
             1,
         )
+    }
+
+    pub fn compute(dev: &Dev) -> Self {
+        let shader = ShaderModule::compute(&dev.device);
+
+        // TODO: This should be inferred from the shader
+        let bindings = [vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .build()];
+
+        let set_layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+        let set_layout = unsafe {
+            dev.device
+                .create_descriptor_set_layout(&set_layout_create_info, None)
+        }
+        .expect("Failed to create descriptor set layout");
+
+        let layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&[set_layout])
+            .build();
+
+        let layout = unsafe { dev.device.create_pipeline_layout(&layout_create_info, None) }
+            .expect("Failed to create pipeline layout");
+
+        let stage = shader.get_stage(
+            &CString::new("main_cs").expect("Failed to create entry point string"),
+            vk::ShaderStageFlags::COMPUTE,
+        );
+
+        let pipeline_create_info = vk::ComputePipelineCreateInfo::builder()
+            .stage(stage)
+            .layout(layout)
+            .build();
+
+        let pipeline = unsafe {
+            dev.device.create_compute_pipelines(
+                vk::PipelineCache::null(),
+                &[pipeline_create_info],
+                None,
+            )
+        }
+        .expect("Failed to create pipeline")[0];
+
+        Self {
+            graphics: pipeline,
+            layout,
+            set_layouts: vec![set_layout],
+            device: dev.device.clone(),
+        }
     }
 }
 
