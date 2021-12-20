@@ -11,8 +11,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         .print_metadata(MetadataPrintout::Full)
         .capability(Capability::InputAttachment)
         .build()?;
+
     SpirvBuilder::new("res/shader/gui", "spirv-unknown-vulkan1.1")
         .print_metadata(MetadataPrintout::Full)
         .build()?;
+
+    SpirvBuilder::new("res/shader/compute", "spirv-unknown-vulkan1.1")
+        .print_metadata(MetadataPrintout::Full)
+        .capability(Capability::Int8)
+        .build()?;
+
     Ok(())
 }

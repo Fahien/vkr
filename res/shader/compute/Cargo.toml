@@ -1,0 +1,12 @@
+[package]
+name = "vkr-compute-shaders"
+version = "0.1.0"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[lib]
+crate-type = ["lib", "dylib"]
+
+[dependencies]
+spirv-std = { path = "../../../dep/rust-gpu/crates/spirv-std", features = ["glam"] }
