@@ -17,6 +17,7 @@
 - Concurrent frames drawing
 - Various rendering pipelines
 - Multiple subpasses
+- Vulkan boilerplate code generator for Rust shaders
 
 ## Requirements
 
