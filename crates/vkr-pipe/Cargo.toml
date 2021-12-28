@@ -5,4 +5,9 @@ authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
 
+[lib]
+proc-macro = true
+
 [dependencies]
+syn = { version = "1.0", features = ["full"] }
+quote = "1.0"
