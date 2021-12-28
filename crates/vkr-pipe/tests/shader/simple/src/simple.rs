@@ -12,6 +12,10 @@
 
 use spirv_std::glam::{vec4, Vec3, Vec4};
 
+// This file is parsed as a `syn::File`
+// This function will appear within its `items`
+// We can parse its attributes as a `Meta` to find a `MetaList` (spirv)
+// A `MetaList` contains other `Meta`s, in this case a `Path` (fragment)
 #[spirv(fragment)]
 pub fn main_fs(out_color: &mut Vec4) {
     *out_color = vec4(1.0, 0.0, 0.0, 1.0)
