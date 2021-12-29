@@ -1,0 +1,9 @@
+[package]
+name = "vkr-pipe-test"
+version = "0.1.0"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+vkr-pipe =  { path = "../vkr-pipe" }

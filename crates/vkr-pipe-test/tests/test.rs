@@ -1,10 +1,10 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
 use vkr_pipe::*;
 
-pipewriter!("crates/vkr-pipe/tests/shader/simple/src/simple.rs");
+pipewriter!("crates/vkr-pipe-test/shader/simple/src/simple.rs");
 
 #[test]
 fn build_simple_shader() {
