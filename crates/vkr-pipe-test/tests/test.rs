@@ -4,7 +4,7 @@
 
 use vkr_pipe::*;
 
-pipewriter!("crates/vkr-pipe-test/shader/simple/src/simple.rs");
+pipewriter!("crates/vkr-pipe-test/shader/simple");
 
 #[test]
 fn load_simple_shader() {

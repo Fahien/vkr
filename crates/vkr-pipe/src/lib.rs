@@ -17,9 +17,18 @@ use shader::*;
 
 #[proc_macro]
 pub fn pipewriter(input: TokenStream) -> TokenStream {
-    let shader = input.to_string().replace("\"", "");
+    let shader_crate = input.to_string().replace("\"", "");
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
-    let shader_path = current_dir.join(&shader);
+    let crate_dir = current_dir.join(&shader_crate);
+
+    let cargo_toml_path = crate_dir.join("Cargo.toml");
+    let cargo_toml_str = std::fs::read_to_string(&cargo_toml_path)
+        .expect(&format!("Failed to read {}", cargo_toml_path.display()));
+    let cargo_toml = toml::from_str(&cargo_toml_str)
+        .expect(&format!("Failter to parse {}", cargo_toml_path.display()));
+
+    let shader_name = get_shader_name(&cargo_toml);
+    let shader_path = crate_dir.join(&shader_name);
     let mut code = File::open(&shader_path)
         .expect(&format!("Failed to open shader {}", shader_path.display()));
     let mut buf = String::new();
@@ -29,6 +38,27 @@ pub fn pipewriter(input: TokenStream) -> TokenStream {
 
     // Build the Pipeline implementation
     gen_pipelines(&file)
+}
+
+/// Returns the shader file name looking into its `Cargo.toml`
+fn get_shader_name(cargo_toml: &toml::Value) -> String {
+    let table = cargo_toml
+        .as_table()
+        .expect("Failed to get Cargo.toml table");
+
+    for (key, value) in table {
+        if key == "lib" {
+            let lib = value.as_table().expect("Failed to get lib table");
+            for (key, value) in lib {
+                if key == "path" {
+                    return value.as_str().expect("Failed to get lib value").to_string();
+                }
+            }
+        }
+    }
+
+    // Default value
+    "src/lib.rs".to_string()
 }
 
 fn gen_pipelines(file: &syn::File) -> TokenStream {
