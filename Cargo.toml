@@ -3,7 +3,7 @@ members = [
     "crates/vkr-util",
     "crates/vkr-core",
     "crates/vkr-pipe",
-    "crates/vkr-pipe-test"
+    "crates/vkr-pipe-test",
     "crates/vkr",
     "crates/vkr-demo",
 ]

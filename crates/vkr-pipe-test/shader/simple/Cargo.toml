@@ -5,6 +5,9 @@ authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
 
+# Empty workspace is needed here for correct building by excluding it from the outer workspace
+[workspace]
+
 [lib]
 crate-type = ["lib", "dylib"]
 
@@ -12,4 +15,4 @@ crate-type = ["lib", "dylib"]
 path = "src/simple.rs"
 
 [dependencies]
-spirv-std = { git = "https://github.com/EmbarkStudios/rust-gpu.git", branch = "main", features = ["glam"] }
+spirv-std = { git = "https://github.com/EmbarkStudios/rust-gpu.git", tag = "v0.4.0-alpha.12", features = ["glam"] }

@@ -506,7 +506,7 @@ checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
 [[package]]
 name = "rustc_codegen_spirv"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
 dependencies = [
  "bimap",
  "hashbrown",
@@ -637,7 +637,7 @@ checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
 [[package]]
 name = "spirv-builder"
 version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
+source = "git+https://github.com/EmbarkStudios/rust-gpu.git?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
 dependencies = [
  "memchr",
  "raw-string",
@@ -790,6 +790,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "vkr-pipe-test"
+version = "0.1.0"
+dependencies = [
+ "spirv-builder",
+ "vkr-pipe",
 ]
 
 [[package]]
