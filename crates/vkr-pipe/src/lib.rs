@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 extern crate proc_macro;
-use std::{fs::File, io::Read};
 
 use proc_macro::*;
 
@@ -15,69 +14,108 @@ use util::*;
 mod shader;
 use shader::*;
 
+mod module;
+use module::*;
+
 #[proc_macro]
 pub fn pipewriter(input: TokenStream) -> TokenStream {
     let shader_crate = input.to_string().replace("\"", "");
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
     let crate_dir = current_dir.join(&shader_crate);
 
-    let cargo_toml_path = crate_dir.join("Cargo.toml");
-    let cargo_toml_str = std::fs::read_to_string(&cargo_toml_path)
-        .expect(&format!("Failed to read {}", cargo_toml_path.display()));
-    let cargo_toml = toml::from_str(&cargo_toml_str)
-        .expect(&format!("Failter to parse {}", cargo_toml_path.display()));
-
-    let shader_name = get_shader_name(&cargo_toml);
-    let shader_path = crate_dir.join(&shader_name);
-    let mut code = File::open(&shader_path)
-        .expect(&format!("Failed to open shader {}", shader_path.display()));
-    let mut buf = String::new();
-    code.read_to_string(&mut buf)
-        .expect(&format!("Failed to read shader {}", shader_path.display()));
-    let file = syn::parse_file(&buf).expect(&format!("Failed to parse {}", shader_path.display()));
+    let crate_module = CrateModule::new(crate_dir);
 
     // Build the Pipeline implementation
-    gen_pipelines(&file)
+    gen_pipelines(&crate_module)
 }
 
-/// Returns the shader file name looking into its `Cargo.toml`
-fn get_shader_name(cargo_toml: &toml::Value) -> String {
-    let table = cargo_toml
-        .as_table()
-        .expect("Failed to get Cargo.toml table");
+fn gen_pipelines(crate_module: &CrateModule) -> TokenStream {
+    let crate_name: proc_macro2::TokenStream = format!("Crate{}", crate_module.name.to_camelcase())
+        .parse()
+        .unwrap();
+    let shader_spv = format!("{}.spv", crate_module.name.replace('-', "_"));
 
-    for (key, value) in table {
-        if key == "lib" {
-            let lib = value.as_table().expect("Failed to get lib table");
-            for (key, value) in lib {
-                if key == "path" {
-                    return value.as_str().expect("Failed to get lib value").to_string();
-                }
-            }
-        }
-    }
+    let pipelines = get_pipelines(&crate_module.file);
 
-    // Default value
-    "src/lib.rs".to_string()
-}
+    let pipeline_names = pipelines.iter().map(|m| {
+        let pipeline_name = format!("Pipeline{}", m.name.to_camelcase());
+        pipeline_name
+            .parse::<proc_macro2::TokenStream>()
+            .expect("Failed to parse shader name")
+    });
 
-fn gen_pipelines(file: &syn::File) -> TokenStream {
-    let mut gen = TokenStream::new();
+    let mut gen = quote! {
+        use std::rc::Rc;
+        use ash::Device;
+        use vkr_core::ShaderModule;
+    };
 
-    for pipeline in get_pipelines(file) {
-        let struct_name: proc_macro2::TokenStream =
-            format!("Pipeline{}", pipeline.name).parse().unwrap();
-
+    for pipeline in pipeline_names {
         let pipeline_gen = quote! {
-            struct #struct_name {
+            pub struct #pipeline {
+            }
 
+            impl #pipeline {
+                pub fn new(shader_module: &ShaderModule) -> Self {
+                    Self {
+                    }
+                }
             }
         };
 
-        gen.extend::<TokenStream>(pipeline_gen.into());
+        gen.extend(pipeline_gen);
     }
 
-    gen
+    let pipeline_vars = pipelines.iter().map(|m| {
+        m.name
+            .to_lowercase()
+            .parse::<proc_macro2::TokenStream>()
+            .expect("Failed to parse shader name")
+    });
+
+    let pipeline_defs = pipelines.iter().map(|m| {
+        let pipeline_name = format!(
+            "{}: Pipeline{}",
+            m.name.to_lowercase(),
+            m.name.to_camelcase()
+        );
+        pipeline_name
+            .parse::<proc_macro2::TokenStream>()
+            .expect("Failed to parse shader name")
+    });
+
+    let pipeline_vars_impl = pipelines.iter().map(|m| {
+        let pipeline_name = format!(
+            "let {} = Pipeline{}::new(&shader_module)",
+            m.name.to_lowercase(),
+            m.name.to_camelcase()
+        );
+        pipeline_name
+            .parse::<proc_macro2::TokenStream>()
+            .expect("Failed to parse shader name")
+    });
+
+    let crate_gen = quote! {
+        pub struct #crate_name {
+            shader_module: ShaderModule,
+            pub #( #pipeline_defs, )*
+        }
+
+        impl #crate_name {
+            pub fn new(device: &Rc<Device>) -> Self {
+                const CODE: &[u8] = include_bytes!(env!(#shader_spv));
+                let shader_module = ShaderModule::new(device, CODE);
+                #( #pipeline_vars_impl; )*
+                Self {
+                    shader_module,
+                #( #pipeline_vars, )*
+                }
+            }
+        }
+    };
+    gen.extend(crate_gen);
+
+    gen.into()
 }
 
 /// Collects all the pipelines found in a shader file

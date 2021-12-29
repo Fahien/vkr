@@ -7,6 +7,8 @@ license = "MIT"
 
 [dependencies]
 vkr-pipe =  { path = "../vkr-pipe" }
+ash = "0.33"
+vkr-core = { git = "https://github.com/fahien/vkr.git", branch = "restructure", default-features = false }
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu.git", tag = "v0.4.0-alpha.12" }
