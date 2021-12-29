@@ -16,9 +16,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "glam"
-version = "0.16.0"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4126c0479ccf7e8664c36a2d719f5f2c140fbb4f9090008098d2c291fa5b3f16"
+checksum = "e01732b97afd8508eee3333a541b9f7610f454bb818669e66e90f5f57c93a776"
 dependencies = [
  "num-traits",
 ]
@@ -68,7 +68,8 @@ dependencies = [
 
 [[package]]
 name = "spirv-std"
-version = "0.4.0-alpha.10"
+version = "0.4.0-alpha.12"
+source = "git+https://github.com/EmbarkStudios/rust-gpu?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
 dependencies = [
  "bitflags",
  "glam",
@@ -79,7 +80,8 @@ dependencies = [
 
 [[package]]
 name = "spirv-std-macros"
-version = "0.4.0-alpha.10"
+version = "0.4.0-alpha.12"
+source = "git+https://github.com/EmbarkStudios/rust-gpu?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -90,7 +92,8 @@ dependencies = [
 
 [[package]]
 name = "spirv-types"
-version = "0.4.0-alpha.10"
+version = "0.4.0-alpha.12"
+source = "git+https://github.com/EmbarkStudios/rust-gpu?tag=v0.4.0-alpha.12#44c9fdd8c511ff14ab64281c54910651fba86a0f"
 
 [[package]]
 name = "syn"
