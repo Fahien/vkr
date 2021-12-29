@@ -8,6 +8,7 @@ pipewriter!("crates/vkr-pipe/tests/shader/simple/src/simple.rs");
 
 #[test]
 fn build_simple_shader() {
-    let _pipeline = PipelineMain {};
+    let _main_pipeline = PipelineMain {};
+    let _secondary_pipeline = PipelineSecondary {};
     assert!(1 == 1);
 }

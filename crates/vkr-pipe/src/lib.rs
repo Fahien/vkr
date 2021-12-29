@@ -8,7 +8,6 @@ use std::{fs::File, io::Read};
 use proc_macro::*;
 
 use quote::quote;
-use syn;
 
 mod util;
 use util::*;
@@ -33,9 +32,27 @@ pub fn pipewriter(input: TokenStream) -> TokenStream {
 }
 
 fn gen_pipelines(file: &syn::File) -> TokenStream {
-    let mut gen = quote! {};
+    let mut gen = TokenStream::new();
 
-    let mut name = None;
+    for pipeline in get_pipelines(file) {
+        let struct_name: proc_macro2::TokenStream =
+            format!("Pipeline{}", pipeline.name).parse().unwrap();
+
+        let pipeline_gen = quote! {
+            struct #struct_name {
+
+            }
+        };
+
+        gen.extend::<TokenStream>(pipeline_gen.into());
+    }
+
+    gen
+}
+
+/// Collects all the pipelines found in a shader file
+fn get_pipelines(file: &syn::File) -> Vec<Pipeline> {
+    let mut pipelines = vec![];
 
     let functions = file
         .items
@@ -45,28 +62,18 @@ fn gen_pipelines(file: &syn::File) -> TokenStream {
     // Go through all the functions of the file
     for func in functions {
         if let Some(spirv) = get_spirv(func) {
-            // Extract prefix of function
-            let prefix = get_prefix(&func.sig.ident.to_string());
-
-            // Convert to camelcase and use it to name the pipeline
-            name = Some(prefix.to_camelcase());
-
             let shader_type = get_shader_type(&spirv);
-            println!("{}: {:?}", name.as_ref().unwrap(), shader_type)
+            if let Some(ShaderType::Fragment) = shader_type {
+                // Extract prefix of function
+                let prefix = get_prefix(&func.sig.ident.to_string());
+                // Convert to camelcase and use it to name the pipeline
+                let name = prefix.to_camelcase();
+                pipelines.push(Pipeline::new(name));
+            }
         }
     }
 
-    if let Some(name) = name.as_ref() {
-        let struct_name: proc_macro2::TokenStream = format!("Pipeline{}", name).parse().unwrap();
-
-        gen = quote! {
-            struct #struct_name {
-
-            }
-        };
-    }
-
-    gen.into()
+    pipelines
 }
 
 /// Analyzes the attributes of a function, looking for a spirv `MetaList`

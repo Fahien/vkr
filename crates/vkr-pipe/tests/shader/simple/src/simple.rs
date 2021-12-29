@@ -25,3 +25,13 @@ pub fn main_fs(out_color: &mut Vec4) {
 pub fn main_vs(in_pos: Vec3, #[spirv(position)] out_pos: &mut Vec4) {
     *out_pos = vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
 }
+
+#[spirv(fragment)]
+pub fn secondary_fs(out_color: &mut Vec4) {
+    *out_color = vec4(1.0, 0.0, 0.0, 1.0)
+}
+
+#[spirv(vertex)]
+pub fn secondary_vs(in_pos: Vec3, #[spirv(position)] out_pos: &mut Vec4) {
+    *out_pos = vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+}
