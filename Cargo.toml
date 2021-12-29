@@ -34,4 +34,4 @@ enum-ordinalize = "3.1.10"
 variant_count = "1.1.0"
 
 [build-dependencies]
-spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag="v0.4.0-alpha.12" }
+spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag = "v0.4.0-alpha.12" }
