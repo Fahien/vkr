@@ -9,7 +9,7 @@ use std::{
     cell::RefCell,
     ffi::{CStr, CString},
     ops::Deref,
-    rc::Rc, os::raw::c_char,
+    rc::Rc, os::raw::c_char, marker::PhantomData,
 };
 
 use crate::{
@@ -38,6 +38,8 @@ unsafe extern "system" fn vk_debug(
     ash::vk::FALSE
 }
 
+
+#[cfg(feature = "win")]
 pub struct Win {
     pub events: sdl::EventPump,
     pub window: sdl::video::Window,
@@ -45,6 +47,7 @@ pub struct Win {
     pub ctx: sdl::Sdl,
 }
 
+#[cfg(feature = "win")]
 impl Win {
     pub fn new(name: &str, width: u32, height: u32) -> Self {
         let ctx = sdl::init().expect("Failed to initialize SDL");
@@ -104,14 +107,18 @@ impl Drop for Debug {
 
 pub struct CtxBuilder<'w> {
     debug: bool,
+    #[cfg(feature = "win")]
     win: Option<&'w Win>,
+    _phantom: PhantomData<&'w u8>,
 }
 
 impl<'w> CtxBuilder<'w> {
     pub fn new() -> Self {
         Self {
             debug: true,
+            #[cfg(feature = "win")]
             win: None,
+            _phantom: PhantomData
         }
     }
 
@@ -120,6 +127,7 @@ impl<'w> CtxBuilder<'w> {
         self
     }
 
+    #[cfg(feature = "win")]
     pub fn win(mut self, win: &'w Win) -> Self {
         self.win = Some(win);
         self
@@ -132,6 +140,7 @@ impl<'w> CtxBuilder<'w> {
             extension_names.push(DebugUtils::name().as_ptr());
         }
 
+        #[cfg(feature = "win")]
         if let Some(win) = self.win {
             let extensions = win
                 .window
@@ -402,6 +411,7 @@ pub struct Surface {
 }
 
 impl Surface {
+    #[cfg(feature = "win")]
     pub fn new(win: &Win, ctx: &Ctx) -> Self {
         let surface = win
             .window
@@ -629,6 +639,8 @@ impl Dev {
             }
             println!("\t{}", name);
         }
+
+        #[cfg(feature = "win")]
         enabled_extensions.push(ash::extensions::khr::Swapchain::name().as_ptr());
 
         device_create_info = device_create_info.enabled_extension_names(&enabled_extensions);
