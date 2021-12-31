@@ -14,6 +14,13 @@ pub fn header() -> TokenStream {
     }
 }
 
+fn get_format(arg_type: &syn::Ident) -> TokenStream {
+    if arg_type == "Vec3" {
+        return quote! { vk::Format::R32G32B32_SFLOAT };
+    }
+    todo!("Failed to get format for: {}", arg_type);
+}
+
 pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
     let pipeline_name = format!("Pipeline{}", pipeline.name.to_camelcase())
         .parse::<proc_macro2::TokenStream>()
@@ -21,6 +28,24 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
     let vs = format!("{}_vs", pipeline.name.to_lowercase());
     let fs = format!("{}_fs", pipeline.name.to_lowercase());
+
+    // Generate bindings
+    let mut vertex_attributes = TokenStream::new();
+
+    for (loc, arg_type) in pipeline.arg_types.iter().enumerate() {
+        let format = get_format(arg_type);
+
+        let attribute = quote! {
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(#loc as u32)
+                .format(#format)
+                .offset(0)
+                .build(),
+        };
+
+        vertex_attributes.extend(attribute);
+    }
 
     quote! {
         pub struct #pipeline_name {
@@ -45,16 +70,42 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
                 let layout = Self::new_layout(&shader_module.device);
 
+                let vertex_bindings = [
+                    vk::VertexInputBindingDescription::builder()
+                        .binding(0)
+                        .stride(std::mem::size_of::<[f32;3]>() as u32)
+                        .input_rate(vk::VertexInputRate::VERTEX)
+                        .build()
+                ];
+                let vertex_attributes = [
+                    #vertex_attributes
+                ];
                 let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                    // TODO: collect bindings and attributes
+                    .vertex_attribute_descriptions(&vertex_attributes)
+                    .vertex_binding_descriptions(&vertex_bindings)
                     .build();
 
                 let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::builder()
                     .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                    .primitive_restart_enable(false)
+                    .build();
+
+                let depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(true)
+                    .depth_write_enable(true)
+                    .depth_compare_op(vk::CompareOp::GREATER)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
                     .build();
 
                 let rasterization = vk::PipelineRasterizationStateCreateInfo::builder()
                     .line_width(1.0)
+                    .depth_clamp_enable(false)
+                    .rasterizer_discard_enable(false)
+                    .polygon_mode(vk::PolygonMode::FILL)
+                    .cull_mode(vk::CullModeFlags::NONE)
+                    .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+                    .depth_bias_enable(false)
                     .build();
 
                 // Pass as input? Or just use a default value.
@@ -87,6 +138,28 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     .alpha_to_one_enable(false)
                     .build();
 
+                let blend_attachments = [
+                    vk::PipelineColorBlendAttachmentState::builder()
+                    .blend_enable(true)
+                    .color_write_mask(
+                        vk::ColorComponentFlags::R
+                            | vk::ColorComponentFlags::G
+                            | vk::ColorComponentFlags::B,
+                    )
+                    .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                    .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                    .color_blend_op(vk::BlendOp::ADD)
+                    .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                    .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                    .color_blend_op(vk::BlendOp::ADD)
+                    .build()
+                ];
+
+                let blend = vk::PipelineColorBlendStateCreateInfo::builder()
+                    .logic_op_enable(false)
+                    .attachments(&blend_attachments)
+                    .build();
+
                 let states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
                 let dynamics = vk::PipelineDynamicStateCreateInfo::builder()
                     .dynamic_states(&states)
@@ -96,11 +169,14 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     .stages(&stages)
                     .layout(layout)
                     .render_pass(pass.render)
+                    .subpass(0)
                     .vertex_input_state(&vertex_input)
                     .input_assembly_state(&input_assembly)
+                    .depth_stencil_state(&depth_stencil)
                     .rasterization_state(&rasterization)
                     .viewport_state(&view)
                     .multisample_state(&multisample)
+                    .color_blend_state(&blend)
                     .dynamic_state(&dynamics)
                     .build();
 

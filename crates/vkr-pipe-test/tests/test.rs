@@ -23,4 +23,6 @@ fn build_simple_shader() {
     let _secondary_pipeline = &shader_crate.secondary;
 
     assert!(1 == 1);
+
+    dev.wait();
 }
