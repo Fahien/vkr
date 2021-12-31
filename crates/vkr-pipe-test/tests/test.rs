@@ -2,8 +2,8 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use vkr_core::Ctx;
 use vkr_pipe::*;
-use vkr_core::{Ctx, Dev};
 
 pipewriter!("crates/vkr-pipe-test/shader/simple");
 
@@ -18,7 +18,7 @@ fn build_simple_shader() {
     let ctx = Ctx::builder().build();
     let dev = Dev::new(&ctx, None);
 
-    let shader_crate = CrateSimpleShader::new(&dev.device);
+    let shader_crate = CrateSimpleShader::new(&dev);
     let _main_pipeline = &shader_crate.main;
     let _secondary_pipeline = &shader_crate.secondary;
 
