@@ -37,27 +37,61 @@ fn gen_pipelines(crate_module: &CrateModule) -> TokenStream {
 
     let pipelines = get_pipelines(&crate_module.file);
 
-    let pipeline_names = pipelines.iter().map(|m| {
-        let pipeline_name = format!("Pipeline{}", m.name.to_camelcase());
-        pipeline_name
-            .parse::<proc_macro2::TokenStream>()
-            .expect("Failed to parse shader name")
-    });
-
     let mut gen = quote! {
-        use std::rc::Rc;
-        use ash::Device;
+        use std::{ffi::CString, rc::Rc};
+        use ash::{vk, Device};
         use vkr_core::ShaderModule;
     };
 
-    for pipeline in pipeline_names {
+    for pipeline in &pipelines {
+        let pipeline_name = format!("Pipeline{}", pipeline.name.to_camelcase())
+            .parse::<proc_macro2::TokenStream>()
+            .expect("Failed to parse shader name");
+
+        let vs = format!("{}_vs", pipeline.name);
+        let fs = format!("{}_fs", pipeline.name);
+
         let pipeline_gen = quote! {
-            pub struct #pipeline {
+            pub struct #pipeline_name {
+                pipeline: vk::Pipeline
             }
 
-            impl #pipeline {
+            impl #pipeline_name {
+                pub fn new_layout(device: &Rc<Device>) -> vk::PipelineLayout {
+                    let create_info = vk::PipelineLayoutCreateInfo::builder().build();
+                    let layout = unsafe { device.create_pipeline_layout(&create_info, None) };
+                    layout.expect("Failed to create Vulkan pipeline layout")
+                }
+
+                pub fn new_impl(shader_module: &ShaderModule, vs: &str, fs: &str) -> vk::Pipeline {
+                    let vs_entry = CString::new(vs).expect("Failed to create vertex entry point");
+                    let fs_entry = CString::new(fs).expect("Failed to create vertex entry point");
+
+                    let stages = [
+                        shader_module.get_vert(&vs_entry),
+                        shader_module.get_frag(&fs_entry)
+                    ];
+
+                    let layout = Self::new_layout(&shader_module.device);
+
+                    let create_info = vk::GraphicsPipelineCreateInfo::builder()
+                        .stages(&stages)
+                        .layout(layout)
+                        // TODO renderpass
+                        .build();
+
+                    let pipelines = unsafe { shader_module.device.create_graphics_pipelines(vk::PipelineCache::null(), &[create_info], None) };
+                    let mut pipelines = pipelines.expect("Failed to create Vulkan graphics pipeline");
+                    let pipeline = pipelines.pop().expect("Failed to pop Vulkan pipeline");
+
+                    pipeline
+                }
+
                 pub fn new(shader_module: &ShaderModule) -> Self {
+                    let pipeline = Self::new_impl(shader_module, #vs, #fs);
+
                     Self {
+                        pipeline
                     }
                 }
             }
