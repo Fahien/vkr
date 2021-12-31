@@ -10,10 +10,11 @@ pub enum ShaderType {
 
 pub struct Pipeline {
     pub name: String,
+    pub arg_types: Vec<syn::Ident>,
 }
 
 impl Pipeline {
-    pub fn new(name: String) -> Self {
-        Self { name }
+    pub fn new(name: String, arg_types: Vec<syn::Ident>) -> Self {
+        Self { name, arg_types }
     }
 }

@@ -56,14 +56,28 @@ fn get_pipelines(file: &syn::File) -> Vec<Pipeline> {
 
     // Go through all the functions of the file
     for func in functions {
+        // Analyze spirv attribute
         if let Some(spirv) = get_spirv(func) {
+            let mut name = None;
+
+            // Collect input parameters
+            let mut arg_types = vec![];
+
             let shader_type = get_shader_type(&spirv);
-            if let Some(ShaderType::Fragment) = shader_type {
-                // Extract prefix of function
-                let prefix = get_prefix(&func.sig.ident.to_string());
-                // Convert to camelcase and use it to name the pipeline
-                let name = prefix.to_camelcase();
-                pipelines.push(Pipeline::new(name));
+            match shader_type {
+                Some(ShaderType::Vertex) => {
+                    // Extract prefix of function
+                    let prefix = get_prefix(&func.sig.ident.to_string());
+                    // Convert to camelcase and use it to name the pipeline
+                    name = Some(prefix.to_camelcase());
+
+                    arg_types = get_args_type(func);
+                }
+                _ => (),
+            }
+
+            if let Some(name) = name {
+                pipelines.push(Pipeline::new(name, arg_types));
             }
         }
     }
@@ -101,4 +115,32 @@ fn get_shader_type(spirv: &syn::MetaList) -> Option<ShaderType> {
         }
     }
     None
+}
+
+/// Collects the arguments type of a function
+fn get_args_type(func: &syn::ItemFn) -> Vec<syn::Ident> {
+    let mut ret = vec![];
+
+    for arg in &func.sig.inputs {
+        match arg {
+            syn::FnArg::Typed(t) => match &*t.ty {
+                syn::Type::Path(p) => {
+                    for seg in &p.path.segments {
+                        if seg.ident == "Vec3" {
+                            ret.push(seg.ident.clone());
+                        } else {
+                            todo!("Handle input {}", seg.ident);
+                        }
+                    }
+                }
+                syn::Type::Reference(_) => {
+                    // TODO: look for mutable output values
+                }
+                _ => (),
+            },
+            _ => (),
+        }
+    }
+
+    ret
 }
