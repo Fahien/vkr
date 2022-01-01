@@ -49,7 +49,9 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
     quote! {
         pub struct #pipeline_name {
-            pipeline: vk::Pipeline
+            layout: vk::PipelineLayout,
+            pipeline: vk::Pipeline,
+            device: Rc<Device>,
         }
 
         impl #pipeline_name {
@@ -59,7 +61,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 layout.expect("Failed to create Vulkan pipeline layout")
             }
 
-            pub fn new_impl(shader_module: &ShaderModule, vs: &str, fs: &str, pass: &Pass) -> vk::Pipeline {
+            pub fn new_impl(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, pass: &Pass) -> vk::Pipeline {
                 let vs_entry = CString::new(vs).expect("Failed to create vertex entry point");
                 let fs_entry = CString::new(fs).expect("Failed to create vertex entry point");
 
@@ -67,8 +69,6 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     shader_module.get_vert(&vs_entry),
                     shader_module.get_frag(&fs_entry)
                 ];
-
-                let layout = Self::new_layout(&shader_module.device);
 
                 let vertex_bindings = [
                     vk::VertexInputBindingDescription::builder()
@@ -140,19 +140,33 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
                 let blend_attachments = [
                     vk::PipelineColorBlendAttachmentState::builder()
-                    .blend_enable(true)
-                    .color_write_mask(
-                        vk::ColorComponentFlags::R
-                            | vk::ColorComponentFlags::G
-                            | vk::ColorComponentFlags::B,
-                    )
-                    .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-                    .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-                    .color_blend_op(vk::BlendOp::ADD)
-                    .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                    .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-                    .color_blend_op(vk::BlendOp::ADD)
-                    .build()
+                        .blend_enable(true)
+                        .color_write_mask(
+                            vk::ColorComponentFlags::R
+                                | vk::ColorComponentFlags::G
+                                | vk::ColorComponentFlags::B,
+                        )
+                        .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                        .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                        .color_blend_op(vk::BlendOp::ADD)
+                        .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                        .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                        .color_blend_op(vk::BlendOp::ADD)
+                        .build(),
+                    vk::PipelineColorBlendAttachmentState::builder()
+                        .blend_enable(true)
+                        .color_write_mask(
+                            vk::ColorComponentFlags::R
+                                | vk::ColorComponentFlags::G
+                                | vk::ColorComponentFlags::B,
+                        )
+                        .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                        .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                        .color_blend_op(vk::BlendOp::ADD)
+                        .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                        .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                        .color_blend_op(vk::BlendOp::ADD)
+                        .build()
                 ];
 
                 let blend = vk::PipelineColorBlendStateCreateInfo::builder()
@@ -188,10 +202,23 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
             }
 
             pub fn new(shader_module: &ShaderModule, render_pass: &Pass) -> Self {
-                let pipeline = Self::new_impl(shader_module, #vs, #fs, render_pass);
+                let device = shader_module.device.clone();
+                let layout = Self::new_layout(&shader_module.device);
+                let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass);
 
                 Self {
-                    pipeline
+                    layout,
+                    pipeline,
+                    device
+                }
+            }
+        }
+
+        impl Drop for #pipeline_name {
+            fn drop(&mut self) {
+                unsafe {
+                    self.device.destroy_pipeline_layout(self.layout, None);
+                    self.device.destroy_pipeline(self.pipeline, None);
                 }
             }
         }
