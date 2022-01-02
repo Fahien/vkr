@@ -34,13 +34,12 @@ fn gen_pipelines(crate_module: &CrateModule) -> TokenStream {
 
     let pipelines = get_pipelines(&crate_module.file);
 
+    gen.extend(gen::cache(crate_module, &pipelines));
+
     for pipeline in &pipelines {
         let pipeline_gen = gen::pipeline(pipeline);
         gen.extend(pipeline_gen);
     }
-
-    let crate_gen = gen::crate_module(&crate_module, &pipelines);
-    gen.extend(crate_gen);
 
     gen.into()
 }

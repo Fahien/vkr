@@ -10,7 +10,7 @@ pub fn header() -> TokenStream {
     quote! {
         use std::{ffi::CString, rc::Rc};
         use ash::{vk, Device};
-        use vkr_core::{Dev, Pass, ShaderModule};
+        use vkr_core::{Dev, Pass, ShaderModule, Pipeline};
     }
 }
 
@@ -25,6 +25,8 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
     let pipeline_name = format!("Pipeline{}", pipeline.name.to_camelcase())
         .parse::<proc_macro2::TokenStream>()
         .expect("Failed to parse shader name");
+
+    let pipeline_str = pipeline.name.to_camelcase();
 
     let vs = format!("{}_vs", pipeline.name.to_lowercase());
     let fs = format!("{}_fs", pipeline.name.to_lowercase());
@@ -52,6 +54,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
             layout: vk::PipelineLayout,
             pipeline: vk::Pipeline,
             device: Rc<Device>,
+            name: String,
         }
 
         impl #pipeline_name {
@@ -61,7 +64,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 layout.expect("Failed to create Vulkan pipeline layout")
             }
 
-            pub fn new_impl(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, pass: &Pass) -> vk::Pipeline {
+            pub fn new_impl(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass) -> vk::Pipeline {
                 let vs_entry = CString::new(vs).expect("Failed to create vertex entry point");
                 let fs_entry = CString::new(fs).expect("Failed to create vertex entry point");
 
@@ -182,7 +185,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 let create_info = vk::GraphicsPipelineCreateInfo::builder()
                     .stages(&stages)
                     .layout(layout)
-                    .render_pass(pass.render)
+                    .render_pass(render_pass)
                     .subpass(0)
                     .vertex_input_state(&vertex_input)
                     .input_assembly_state(&input_assembly)
@@ -201,7 +204,8 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 pipeline
             }
 
-            pub fn new(shader_module: &ShaderModule, render_pass: &Pass) -> Self {
+            pub fn new(shader_module: &ShaderModule, render_pass: vk::RenderPass) -> Self {
+                let name = String::from(#pipeline_str);
                 let device = shader_module.device.clone();
                 let layout = Self::new_layout(&shader_module.device);
                 let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass);
@@ -209,8 +213,27 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 Self {
                     layout,
                     pipeline,
-                    device
+                    device,
+                    name
                 }
+            }
+        }
+
+        impl Pipeline for #pipeline_name {
+            fn get_name(&self) -> &String {
+                &self.name
+            }
+
+            fn get_set_layouts(&self) -> &[vk::DescriptorSetLayout] {
+                &self.set_layouts
+            }
+
+            fn get_layout(&self) -> vk::PipelineLayout {
+                self.layout
+            }
+
+            fn get_pipeline(&self) -> vk::Pipeline {
+                self.pipeline
             }
         }
 
@@ -225,63 +248,104 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
     }
 }
 
-pub fn crate_module(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream {
-    let crate_name: proc_macro2::TokenStream = format!("Crate{}", crate_module.name.to_camelcase())
+pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream {
+    let enum_name: proc_macro2::TokenStream = format!("Shader{}", crate_module.name.to_camelcase())
         .parse()
         .unwrap();
 
     let shader_spv = format!("{}.spv", crate_module.name.replace('-', "_"));
 
-    let pipeline_vars = pipelines.iter().map(|m| {
+    let pipeline_names = pipelines.iter().map(|m| {
         m.name
-            .to_lowercase()
+            .to_camelcase()
             .parse::<TokenStream>()
             .expect("Failed to parse shader name")
     });
 
-    let pipeline_defs = pipelines.iter().map(|m| {
-        let pipeline_name = format!(
-            "{}: Pipeline{}",
-            m.name.to_lowercase(),
-            m.name.to_camelcase()
-        );
-        pipeline_name
-            .parse::<TokenStream>()
-            .expect("Failed to parse shader name")
+    let pipeline_new = pipelines.iter().map(|m| {
+        format!(
+            "Shader{0}::{1} => {{
+                Box::new(Pipeline{1}::new(shader_module, render_pass))
+            }}",
+            crate_module.name.to_camelcase(),
+            m.name.to_camelcase(),
+        )
+        .parse::<TokenStream>()
+        .expect("Failed to parse shader name")
     });
 
-    let pipeline_vars_impl = pipelines.iter().map(|m| {
-        let pipeline_name = format!(
-            "let {} = Pipeline{}::new(&shader_module, &pass)",
-            m.name.to_lowercase(),
-            m.name.to_camelcase()
-        );
-        pipeline_name
+    let pipeline_count = pipelines.len();
+
+    let pipeline_init = pipelines.iter().map(|_| {
+        "None"
             .parse::<TokenStream>()
             .expect("Failed to parse shader name")
     });
 
     quote! {
-        pub struct #crate_name {
-            shader_module: ShaderModule,
-            pass: Pass,
-            pub #( #pipeline_defs, )*
+        #[derive(Copy,Clone,Debug)]
+        pub enum #enum_name {
+            #( #pipeline_names, )*
         }
 
-        impl #crate_name {
+        impl #enum_name {
+            fn create_pipeline(&self, shader_module: &ShaderModule, render_pass: vk::RenderPass) -> Box<dyn Pipeline> {
+                match self {
+                    #( #pipeline_new, )*
+                }
+            }
+        }
+
+        pub struct PipelinePool {
+            pass: Pass,
+            pipelines: [Option<Box<dyn Pipeline>>;#pipeline_count],
+            shader_module: Option<ShaderModule>,
+            device: Rc<Device>,
+        }
+
+        impl PipelinePool {
+            /// Returns an empty pipeline cache
             pub fn new(dev: &Dev) -> Self {
-                const CODE: &[u8] = include_bytes!(env!(#shader_spv));
-                let shader_module = ShaderModule::new(&dev.device, CODE);
+                let shader_module = None;
+
+                let pipelines = [
+                    #( #pipeline_init, )*
+                ];
 
                 let pass = Pass::new(dev);
 
-                #( #pipeline_vars_impl; )*
-
                 Self {
-                    shader_module,
                     pass,
-                #( #pipeline_vars, )*
+                    pipelines,
+                    shader_module,
+                    device: dev.device.clone(),
                 }
+            }
+
+            fn get_shader_module(&mut self) -> &ShaderModule {
+                if self.shader_module.is_none() {
+                    const CODE: &[u8] = include_bytes!(env!(#shader_spv));
+                    self.shader_module = Some(ShaderModule::new(&self.device, CODE));
+                }
+
+                self.shader_module.as_ref().unwrap()
+            }
+
+            fn create_pipeline(&mut self, shader: #enum_name) {
+                assert!(self.pipelines[shader as usize].is_none());
+
+                let render_pass = self.pass.render;
+                let shader_module = self.get_shader_module();
+                let pipeline = shader.create_pipeline(shader_module, render_pass);
+                self.pipelines[shader as usize] = Some(pipeline);
+            }
+
+            pub fn get(&mut self, shader: #enum_name) -> &Box<dyn Pipeline> {
+                if self.pipelines[shader as usize].is_none() {
+                    self.create_pipeline(shader)
+                }
+
+                self.pipelines[shader as usize].as_ref().unwrap()
             }
         }
     }

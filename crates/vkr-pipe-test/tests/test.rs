@@ -18,9 +18,15 @@ fn build_simple_shader() {
     let ctx = Ctx::builder().build();
     let dev = Dev::new(&ctx, None);
 
-    let shader_crate = CrateSimpleShader::new(&dev);
-    let _main_pipeline = &shader_crate.main;
-    let _secondary_pipeline = &shader_crate.secondary;
+    let mut cache = PipelineCache::new(&dev);
+
+    let main_pipeline = cache.get(ShaderSimpleShader::Main);
+    assert!(main_pipeline.get_name() == "Main");
+
+    let secondary_pipeline = cache.get(ShaderSimpleShader::Secondary);
+    eprintln!("{}", secondary_pipeline.get_name());
+    assert!(secondary_pipeline.get_name() == "Secondary");
+
 
     assert!(1 == 1);
 
