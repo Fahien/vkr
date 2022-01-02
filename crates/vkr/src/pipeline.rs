@@ -2,10 +2,9 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{ffi::CString, rc::Rc};
-use vkr_core::Pass;
-
 use ash::{vk, Device};
+use std::{ffi::CString, rc::Rc};
+use vkr_core::{Pass, Pipeline};
 
 use crate::{
     model::{Line, Vertex, VertexInput},
@@ -28,15 +27,15 @@ pub enum Pipelines {
 pub struct DefaultPipelines {
     /// When debug is set, it is used instead of the one requested by a mesh
     pub debug: Option<Pipelines>,
-    pub pipelines: [Pipeline; Pipelines::VARIANT_COUNT],
+    pub pipelines: [DefaultPipeline; Pipelines::VARIANT_COUNT],
 }
 
 impl DefaultPipelines {
     pub fn new(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let line = Pipeline::line(device, pass, width, height);
-        let main = Pipeline::main(device, pass, width, height);
-        let normal = Pipeline::normal(device, pass, width, height);
-        let present = Pipeline::present(device, pass, width, height);
+        let line = DefaultPipeline::line(device, pass, width, height);
+        let main = DefaultPipeline::main(device, pass, width, height);
+        let normal = DefaultPipeline::normal(device, pass, width, height);
+        let present = DefaultPipeline::present(device, pass, width, height);
         let debug = None;
 
         let pipelines = [line, present, normal, main];
@@ -44,11 +43,11 @@ impl DefaultPipelines {
         Self { debug, pipelines }
     }
 
-    pub fn get_mut_presentation(&mut self) -> &mut Pipeline {
+    pub fn get_mut_presentation(&mut self) -> &mut DefaultPipeline {
         &mut self.pipelines[Pipelines::PRESENT as usize]
     }
 
-    pub fn get_mut<T: VertexInput>(&mut self) -> &mut Pipeline {
+    pub fn get_mut<T: VertexInput>(&mut self) -> &mut DefaultPipeline {
         match self.debug {
             Some(index) => &mut self.pipelines[index as usize],
             None => &mut self.pipelines[T::get_pipeline() as usize],
@@ -68,17 +67,20 @@ impl PipelineCache {
         }
     }
 }
-pub struct Pipeline {
+
+pub struct DefaultPipeline {
     pub graphics: vk::Pipeline,
     /// A pipeline layout depends on set layouts, constants, etc, to be created.
     pub layout: vk::PipelineLayout,
     /// Set layouts do not really depend on anything
     pub set_layouts: Vec<vk::DescriptorSetLayout>,
     device: Rc<Device>,
+    name: String,
 }
 
-impl Pipeline {
+impl DefaultPipeline {
     pub fn new<T: VertexInput>(
+        name: String,
         device: &Rc<Device>,
         vert: vk::PipelineShaderStageCreateInfo,
         frag: vk::PipelineShaderStageCreateInfo,
@@ -92,7 +94,7 @@ impl Pipeline {
         let set_layouts = T::get_set_layouts(device);
         let constants = T::get_constants();
 
-        // Pipeline layout (device, descriptorset layouts, shader reflection?)
+        // DefaultPipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
             let create_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&set_layouts)
@@ -193,6 +195,7 @@ impl Pipeline {
             set_layouts,
             layout,
             device: device.clone(),
+            name,
         }
     }
 
@@ -208,6 +211,7 @@ impl Pipeline {
             .build();
 
         Self::new::<Line>(
+            "Line".to_string(),
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -232,6 +236,7 @@ impl Pipeline {
             .build();
 
         Self::new::<Vertex>(
+            "Main".to_string(),
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -254,6 +259,7 @@ impl Pipeline {
         let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
 
         Self::new::<PresentVertex>(
+            "Normal".to_string(),
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -275,6 +281,7 @@ impl Pipeline {
         let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
 
         Self::new::<PresentVertex>(
+            "Present".to_string(),
             device,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -288,7 +295,7 @@ impl Pipeline {
     }
 }
 
-impl Drop for Pipeline {
+impl Drop for DefaultPipeline {
     fn drop(&mut self) {
         unsafe {
             for set_layout in &self.set_layouts {
@@ -297,5 +304,27 @@ impl Drop for Pipeline {
             self.device.destroy_pipeline_layout(self.layout, None);
             self.device.destroy_pipeline(self.graphics, None);
         }
+    }
+}
+
+impl Pipeline for DefaultPipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    fn get_set_layouts(&self) -> &[vk::DescriptorSetLayout] {
+        &self.set_layouts
+    }
+
+    fn get_layout(&self) -> vk::PipelineLayout {
+        self.layout
+    }
+
+    fn get_pipeline(&self) -> vk::Pipeline {
+        self.graphics
     }
 }

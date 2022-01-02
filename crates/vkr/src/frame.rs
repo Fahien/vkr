@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -313,8 +313,15 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
     }
 
-    pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
-        self.res.command_buffer.bind_pipeline(pipeline.graphics);
+    pub fn bind(
+        &mut self,
+        pipeline: &mut DefaultPipeline,
+        model: &Model,
+        camera_node: Handle<Node>,
+    ) {
+        self.res
+            .command_buffer
+            .bind_pipeline(pipeline.get_pipeline());
 
         let width = self.buffer.width as f32;
         let height = self.buffer.height as f32;
@@ -345,8 +352,8 @@ impl Frame {
 
         let camera = model.cameras.get(node.camera).unwrap();
 
-        let pipeline_layout = pipeline.layout;
-        let camera_set_layouts = pipeline.set_layouts[1];
+        let pipeline_layout = pipeline.get_layout();
+        let camera_set_layouts = pipeline.get_set_layouts()[1];
 
         if let Some(sets) = self
             .res
@@ -368,7 +375,7 @@ impl Frame {
         } else {
             // Allocate and write desc set for camera view
             // Camera set layout is at index 1 (use a constant?)
-            let set_layouts = [pipeline.set_layouts[1]];
+            let set_layouts = [camera_set_layouts];
             let sets = self.res.pipeline_cache.descriptors.allocate(&set_layouts);
 
             if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
@@ -401,7 +408,7 @@ impl Frame {
 
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline.layout, &sets, 1);
+                .bind_descriptor_sets(pipeline.get_layout(), &sets, 1);
 
             self.res
                 .pipeline_cache
@@ -413,11 +420,13 @@ impl Frame {
 
     pub fn draw<T: VertexInput>(
         &mut self,
-        pipeline: &mut Pipeline,
+        pipeline: &mut DefaultPipeline,
         model: &Model,
         node: Handle<Node>,
     ) {
-        self.res.command_buffer.bind_pipeline(pipeline.graphics);
+        self.res
+            .command_buffer
+            .bind_pipeline(pipeline.get_pipeline());
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
             self.draw::<T>(pipeline, model, child);
@@ -431,8 +440,8 @@ impl Frame {
         }
         let mesh = mesh.unwrap();
 
-        let pipeline_layout = pipeline.layout;
-        let model_set_layouts = pipeline.set_layouts[0];
+        let pipeline_layout = pipeline.get_layout();
+        let model_set_layouts = pipeline.get_set_layouts()[0];
 
         let model_view_matrix = (self.current_view * cnode.trs.get_matrix())
             .try_inverse()
@@ -487,14 +496,14 @@ impl Frame {
             };
 
             // Allocate and write descriptors
-            let set_layouts = [pipeline.set_layouts[0]];
+            let set_layouts = [model_set_layouts];
             let sets = self.res.pipeline_cache.descriptors.allocate(&set_layouts);
             T::write_set_model(&self.device, sets[0], &model_buffer);
             T::write_set_model_view(&self.device, sets[0], &model_view_buffer);
 
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline.layout, &sets, 0);
+                .bind_descriptor_sets(pipeline_layout, &sets, 0);
 
             self.res
                 .pipeline_cache
@@ -507,7 +516,7 @@ impl Frame {
             let primitive = model.primitives.get(*hprimitive).unwrap();
 
             // Does this pipeline support materials at all?
-            if pipeline.set_layouts.len() > 2 {
+            if pipeline.get_set_layouts().len() > 2 {
                 // How about grouping by material?
                 let material = match model.materials.get(primitive.material) {
                     Some(m) => m,
