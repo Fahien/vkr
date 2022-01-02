@@ -2,11 +2,11 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use ash::{vk, Device};
+use vkr_util::Handle;
 use std::{collections::HashMap, rc::Rc};
 
-use ash::{vk, Device};
-
-use crate::{model::Node, util::Handle, Material};
+use crate::{model::Node, Material};
 
 type SetCache<T> = HashMap<(vk::DescriptorSetLayout, Handle<T>), Vec<vk::DescriptorSet>>;
 

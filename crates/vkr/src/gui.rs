@@ -2,14 +2,12 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{ffi::CString, rc::Rc};
-
-use super::*;
-
 use ash::{vk, Device};
 use im::internal::RawWrapper;
-use imgui as im;
 use memoffset::offset_of;
+use std::{ffi::CString, rc::Rc};
+
+use crate::*;
 
 pub struct Gui {
     /// Not common as camera and model, therefore we store it here
@@ -134,7 +132,8 @@ impl VertexInput for im::DrawVert {
 
 impl Pipeline {
     fn gui(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::gui(device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_gui_shaders.spv"));
+        let shader = ShaderModule::new(device, SHADERS);
         let vs = CString::new("gui_vs").expect("Failed to create entrypoint");
         let fs = CString::new("gui_fs").expect("Failed to create entrypoint");
 
@@ -271,7 +270,12 @@ impl Gui {
         io.display_size[1] = self.height
     }
 
-    pub fn update<F: FnOnce(&im::Ui)>(&mut self, delta: f32, frame_cache: &mut FrameCache, draw: F) {
+    pub fn update<F: FnOnce(&im::Ui)>(
+        &mut self,
+        delta: f32,
+        frame_cache: &mut FrameCache,
+        draw: F,
+    ) {
         self.ctx.io_mut().delta_time = delta;
         let ui = self.ctx.frame();
 
@@ -294,7 +298,9 @@ impl Gui {
         }
 
         // Bind GUI pipeline
-        frame_cache.command_buffer.bind_pipeline(&self.pipeline);
+        frame_cache
+            .command_buffer
+            .bind_pipeline(self.pipeline.graphics);
 
         let viewport = vk::Viewport::builder()
             .width(self.width)
@@ -311,6 +317,8 @@ impl Gui {
         let shift = na::Vector3::new(-1.0, -1.0, 0.0);
         transform.append_translation_mut(&shift);
 
+        let layout = self.pipeline.layout;
+
         let constants = unsafe {
             std::slice::from_raw_parts(
                 transform.as_ptr() as *const u8,
@@ -318,14 +326,13 @@ impl Gui {
             )
         };
         frame_cache.command_buffer.push_constants(
-            &self.pipeline,
+            layout,
             vk::ShaderStageFlags::VERTEX,
             0,
             constants,
         );
 
         // Bind descriptors
-        let layout = self.pipeline.layout;
         if frame_cache.pipeline_cache.descriptors.gui_sets.is_empty() {
             frame_cache.pipeline_cache.descriptors.gui_sets = frame_cache
                 .pipeline_cache

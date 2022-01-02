@@ -2,10 +2,10 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{vk, Device};
+use ash::vk;
 use std::{cell::RefCell, rc::Rc};
 
-use super::*;
+use crate::*;
 
 pub struct Primitive {
     pub vertex_count: u32,

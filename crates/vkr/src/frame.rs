@@ -5,8 +5,7 @@
 use ash::{vk, Device};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use super::*;
-use imgui as im;
+use crate::*;
 
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
@@ -298,7 +297,7 @@ impl Frame {
 
         self.res
             .command_buffer
-            .begin_render_pass(pass, &self.buffer, area);
+            .begin_render_pass(pass.render, self.buffer.framebuffer, area);
 
         let viewport = vk::Viewport::builder()
             .width(width as f32)
@@ -315,7 +314,7 @@ impl Frame {
     }
 
     pub fn bind(&mut self, pipeline: &mut Pipeline, model: &Model, camera_node: Handle<Node>) {
-        self.res.command_buffer.bind_pipeline(pipeline);
+        self.res.command_buffer.bind_pipeline(pipeline.graphics);
 
         let width = self.buffer.width as f32;
         let height = self.buffer.height as f32;
@@ -341,7 +340,7 @@ impl Frame {
         self.current_view = node.trs.get_view_matrix();
 
         if pipeline.set_layouts.len() < 2 {
-            return
+            return;
         }
 
         let camera = model.cameras.get(node.camera).unwrap();
@@ -418,8 +417,7 @@ impl Frame {
         model: &Model,
         node: Handle<Node>,
     ) {
-        self.res.command_buffer.bind_pipeline(pipeline);
-
+        self.res.command_buffer.bind_pipeline(pipeline.graphics);
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
             self.draw::<T>(pipeline, model, child);
@@ -707,7 +705,7 @@ impl SwapchainFrames {
         let swapchain = Swapchain::new(ctx, surface, dev, width, height);
 
         let mut frames = Vec::new();
-        for  image in swapchain.images.iter() {
+        for image in swapchain.images.iter() {
             let frame = Frame::new(dev, image, pass);
             frames.push(Some(frame));
         }
@@ -728,6 +726,12 @@ impl SwapchainFrames {
         for i in 0..self.swapchain.images.len() {
             let frame = self.frames[i].as_mut().unwrap();
             frame.buffer = Framebuffer::new(&dev, &self.swapchain.images[i], &pass);
+            frame
+                .res
+                .pipeline_cache
+                .descriptors
+                .free(&frame.res.pipeline_cache.descriptors.present_sets);
+            frame.res.pipeline_cache.descriptors.present_sets.clear();
         }
     }
 }
