@@ -2,12 +2,10 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{ffi::CString, rc::Rc};
-
-use enum_ordinalize::*;
-use variant_count::*;
-
 use ash::vk;
+use enum_ordinalize::*;
+use std::{ffi::CString, rc::Rc};
+use variant_count::*;
 
 use super::*;
 #[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
@@ -184,7 +182,8 @@ impl Pipeline {
     }
 
     pub fn line(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(&dev.device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(&dev.device, SHADERS);
         let vs = CString::new("line_vs").expect("Failed to create entrypoint");
         let fs = CString::new("line_fs").expect("Failed to create entrypoint");
 
@@ -207,7 +206,8 @@ impl Pipeline {
     }
 
     pub fn main(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(&dev.device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(&dev.device, SHADERS);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
 
@@ -231,7 +231,8 @@ impl Pipeline {
 
     /// Returns a graphics pipeline which draws the normals of primitive's surfaces as a color
     pub fn normal(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(&dev.device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(&dev.device, SHADERS);
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
 
@@ -251,7 +252,8 @@ impl Pipeline {
     }
 
     pub fn present(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(&dev.device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(&dev.device, SHADERS);
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("present_fs").expect("Failed to create entry point");
 

@@ -2,14 +2,12 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{ffi::CString, rc::Rc};
-
-use super::*;
-
 use ash::*;
 use im::internal::RawWrapper;
-use imgui as im;
 use memoffset::offset_of;
+use std::{ffi::CString, rc::Rc};
+
+use crate::*;
 
 pub struct Gui {
     /// Not common as camera and model, therefore we store it here
@@ -134,7 +132,8 @@ impl VertexInput for im::DrawVert {
 
 impl Pipeline {
     fn gui(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::gui(&dev.device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_gui_shaders.spv"));
+        let shader = ShaderModule::new(&dev.device, SHADERS);
         let vs = CString::new("gui_vs").expect("Failed to create entrypoint");
         let fs = CString::new("gui_fs").expect("Failed to create entrypoint");
 
@@ -294,7 +293,7 @@ impl Gui {
         }
 
         // Bind GUI pipeline
-        res.command_buffer.bind_pipeline(&self.pipeline);
+        res.command_buffer.bind_pipeline(self.pipeline.graphics);
 
         let viewport = vk::Viewport::builder()
             .width(self.width)
@@ -318,7 +317,7 @@ impl Gui {
             )
         };
         res.command_buffer.push_constants(
-            &self.pipeline,
+            self.pipeline.layout,
             vk::ShaderStageFlags::VERTEX,
             0,
             constants,
@@ -336,8 +335,11 @@ impl Gui {
                 &self.sampler,
             )
         }
-        res.command_buffer
-            .bind_descriptor_sets(&self.pipeline, &res.descriptors.gui_sets, 0);
+        res.command_buffer.bind_descriptor_sets(
+            self.pipeline.layout,
+            &res.descriptors.gui_sets,
+            0,
+        );
 
         // Upload vertex and index buffers
         res.gui_vertex_buffer.upload_arr(&vertex_data);

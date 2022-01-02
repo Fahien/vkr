@@ -5,8 +5,7 @@
 use ash::*;
 use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
 
-use super::*;
-use imgui as im;
+use crate::*;
 
 /// This is the one that is going to be recreated
 /// when the swapchain goes out of date
@@ -299,7 +298,7 @@ impl Frame {
 
         self.res
             .command_buffer
-            .begin_render_pass(pass, &self.buffer, area);
+            .begin_render_pass(pass.render, self.buffer.framebuffer, area);
 
         let viewport = vk::Viewport::builder()
             .width(width as f32)
@@ -316,7 +315,7 @@ impl Frame {
     }
 
     pub fn bind(&mut self, pipeline: &Pipeline, model: &Model, camera_node: Handle<Node>) {
-        self.res.command_buffer.bind_pipeline(pipeline);
+        self.res.command_buffer.bind_pipeline(pipeline.graphics);
 
         let width = self.buffer.width as f32;
         let height = self.buffer.height as f32;
@@ -350,7 +349,7 @@ impl Frame {
         {
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline, sets, 1);
+                .bind_descriptor_sets(pipeline.layout, sets, 1);
 
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
@@ -393,7 +392,7 @@ impl Frame {
 
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline, &sets, 1);
+                .bind_descriptor_sets(pipeline.layout, &sets, 1);
 
             self.res
                 .descriptors
@@ -409,7 +408,7 @@ impl Frame {
         node: Handle<Node>,
     ) {
         let pipeline = pipelines.get_for::<T>();
-        self.res.command_buffer.bind_pipeline(pipeline);
+        self.res.command_buffer.bind_pipeline(pipeline.graphics);
 
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
@@ -444,7 +443,7 @@ impl Frame {
 
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline, sets, 0);
+                .bind_descriptor_sets(pipeline.layout, sets, 0);
         } else {
             // Check the model buffer already exists
             let model_buffer = match self.res.model_buffers.get_mut(&node) {
@@ -482,7 +481,7 @@ impl Frame {
 
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline, &sets, 0);
+                .bind_descriptor_sets(pipeline.layout, &sets, 0);
 
             self.res
                 .descriptors
@@ -518,7 +517,7 @@ impl Frame {
                     // @todo Use a constant or something that is not a magic number (2)
                     self.res
                         .command_buffer
-                        .bind_descriptor_sets(pipeline, sets, 2);
+                        .bind_descriptor_sets(pipeline.layout, sets, 2);
                 } else {
                     // Check if material uniform buffer already exists
                     let material_buffer =
@@ -568,7 +567,7 @@ impl Frame {
 
                     self.res
                         .command_buffer
-                        .bind_descriptor_sets(pipeline, &sets, 2);
+                        .bind_descriptor_sets(pipeline.layout, &sets, 2);
 
                     self.res
                         .descriptors
@@ -704,7 +703,10 @@ impl SwapchainFrames {
         self.swapchain.recreate(&surface, &dev, width, height);
         for i in 0..self.swapchain.images.len() {
             let frame = self.frames[i].as_mut().unwrap();
-            frame.res.descriptors.free(&frame.res.descriptors.present_sets);
+            frame
+                .res
+                .descriptors
+                .free(&frame.res.descriptors.present_sets);
             frame.res.descriptors.present_sets.clear();
             frame.buffer = Framebuffer::new(&dev, &self.swapchain.images[i], &pass);
         }

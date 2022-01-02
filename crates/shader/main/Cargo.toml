@@ -5,6 +5,8 @@ authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
 
+[workspace]
+
 [lib]
 crate-type = ["lib", "dylib"]
 

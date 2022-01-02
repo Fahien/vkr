@@ -42,7 +42,12 @@ impl CommandBuffer {
         .expect("Failed to begin Vulkan command buffer");
     }
 
-    pub fn begin_render_pass(&self, pass: &Pass, framebuffer: &Framebuffer, area: vk::Rect2D) {
+    pub fn begin_render_pass(
+        &self,
+        pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        area: vk::Rect2D,
+    ) {
         let mut present_clear = vk::ClearValue::default();
         present_clear.color.float32 = [0.0, 10.0 / 255.0, 28.0 / 255.0, 1.0];
 
@@ -58,8 +63,8 @@ impl CommandBuffer {
 
         let clear_values = [present_clear, depth_clear, albedo_clear, normal_clear];
         let create_info = vk::RenderPassBeginInfo::builder()
-            .framebuffer(framebuffer.framebuffer)
-            .render_pass(pass.render)
+            .framebuffer(framebuffer)
+            .render_pass(pass)
             .render_area(area)
             .clear_values(&clear_values)
             .build();
@@ -92,21 +97,18 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_pipeline(&self, pipeline: &Pipeline) {
+    pub fn bind_pipeline(&self, pipeline: vk::Pipeline) {
         let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
         unsafe {
-            self.device.cmd_bind_pipeline(
-                self.command_buffer,
-                graphics_bind_point,
-                pipeline.graphics,
-            );
+            self.device
+                .cmd_bind_pipeline(self.command_buffer, graphics_bind_point, pipeline);
         }
     }
 
     /// Set index here corresponds to the descriptor_set index in the shader
     pub fn bind_descriptor_sets(
         &self,
-        pipeline: &Pipeline,
+        layout: vk::PipelineLayout,
         sets: &[vk::DescriptorSet],
         set_index: u32,
     ) {
@@ -115,7 +117,7 @@ impl CommandBuffer {
             self.device.cmd_bind_descriptor_sets(
                 self.command_buffer,
                 graphics_bind_point,
-                pipeline.layout,
+                layout,
                 set_index,
                 sets,
                 &[],
@@ -150,19 +152,14 @@ impl CommandBuffer {
 
     pub fn push_constants(
         &self,
-        pipeline: &Pipeline,
+        layout: vk::PipelineLayout,
         stages: vk::ShaderStageFlags,
         offset: u32,
         constants: &[u8],
     ) {
         unsafe {
-            self.device.cmd_push_constants(
-                self.command_buffer,
-                pipeline.layout,
-                stages,
-                offset,
-                constants,
-            )
+            self.device
+                .cmd_push_constants(self.command_buffer, layout, stages, offset, constants)
         }
     }
 

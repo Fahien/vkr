@@ -1,0 +1,8 @@
+[package]
+name = "vkr-util"
+version = "0.4.1"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]

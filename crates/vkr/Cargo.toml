@@ -1,0 +1,21 @@
+[package]
+name = "vkr"
+version = "0.4.1"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+ash = "0.33"
+sdl2 = "0.34.3"
+memoffset = "0.6.1"
+vk-mem = { git = "https://github.com/Fahien/vk-mem-rs", branch = "main" }
+png = "0.16.8"
+imgui = "0.7.0"
+enum-ordinalize = "3.1.10"
+variant_count = "1.1.0"
+vkr-util = { path = "../vkr-util" }
+vkr-core = { path = "../vkr-core" }
+
+[build-dependencies]
+spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag = "v0.4.0-alpha.12" }

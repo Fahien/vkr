@@ -5,7 +5,7 @@
 use ash::*;
 use std::{cell::RefCell, rc::Rc};
 
-use super::*;
+use crate::*;
 
 pub struct Primitive {
     pub vertex_count: u32,

@@ -2,11 +2,10 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use super::gfx::Buffer;
-use super::*;
 use ash::*;
 use memoffset::offset_of;
-use nalgebra as na;
+
+use crate::*;
 
 pub fn create_set_layout(
     device: &Device,
