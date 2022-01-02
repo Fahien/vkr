@@ -46,3 +46,6 @@ pub use sync::*;
 
 pub mod pass;
 pub use pass::*;
+
+pub mod pipeline;
+pub use pipeline::*;
