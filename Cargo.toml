@@ -1,41 +1,7 @@
-[package]
-name = "vkr"
-version = "0.4.1"
-authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
-edition = "2018"
-license = "MIT"
-
-[[bin]]
-name = "1-texture"
-path = "src/demo/1-texture.rs"
-
-[[bin]]
-name = "2-parallax"
-path = "src/demo/2-parallax.rs"
-
-[[bin]]
-name = "3-cube"
-path = "src/demo/3-cube.rs"
-
-[[bin]]
-name = "4-normal"
-path = "src/demo/4-normal.rs"
-
-[dependencies]
-ash = "0.33"
-sdl2 = { version = "0.34.3", optional = true }
-byteorder = "1.4.3"
-memoffset = "0.6.1"
-vk-mem = { git = "https://github.com/Fahien/vk-mem-rs", branch = "main" }
-nalgebra = "0.25.3"
-png = "0.16.8"
-imgui = "0.7.0"
-enum-ordinalize = "3.1.10"
-variant_count = "1.1.0"
-
-[build-dependencies]
-spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag = "v0.4.0-alpha.12" }
-
-[features]
-default = ["win"]
-win = ["sdl2"]
+[workspace]
+members = [
+    "crates/vkr-util",
+    "crates/vkr-core",
+    "crates/vkr",
+    "crates/vkr-demo",
+]

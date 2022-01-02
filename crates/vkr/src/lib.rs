@@ -3,31 +3,18 @@
 // SPDX-License-Identifier: MIT
 
 pub use imgui as im;
-pub use nalgebra as na;
-pub use sdl2 as sdl;
 
-pub mod util;
-pub use util::*;
+pub use vkr_core::*;
+pub use vkr_util::*;
+
+pub mod texture;
+pub use texture::*;
 
 mod model;
 pub use model::*;
 
 mod pipeline;
 pub use pipeline::*;
-
-mod commands;
-pub use commands::*;
-
-mod image;
-pub use image::*;
-
-mod queue;
-
-mod shader;
-pub use shader::*;
-
-mod sampler;
-pub use sampler::*;
 
 pub mod gfx;
 pub use gfx::*;
@@ -38,10 +25,8 @@ pub use descriptor::*;
 pub mod mesh;
 pub use mesh::*;
 
-mod sync;
-pub use sync::*;
-
 mod gui;
+pub use gui::*;
 
 mod frame;
 pub use frame::*;

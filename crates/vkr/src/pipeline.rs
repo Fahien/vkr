@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 use std::{ffi::CString, rc::Rc};
+use vkr_core::Pass;
 
 use ash::{vk, Device};
 
 use crate::{
-    gfx::Pass,
     model::{Line, Vertex, VertexInput},
     shader::ShaderModule,
     Descriptors, PresentVertex,
@@ -197,7 +197,8 @@ impl Pipeline {
     }
 
     pub fn line(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(device, SHADERS);
         let vs = CString::new("line_vs").expect("Failed to create entrypoint");
         let fs = CString::new("line_fs").expect("Failed to create entrypoint");
 
@@ -220,7 +221,8 @@ impl Pipeline {
     }
 
     pub fn main(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(device, SHADERS);
         let vs = CString::new("main_vs").expect("Failed to create entrypoint");
         let fs = CString::new("main_fs").expect("Failed to create entrypoint");
 
@@ -244,7 +246,8 @@ impl Pipeline {
 
     /// Returns a graphics pipeline which draws the normals of primitive's surfaces as a color
     pub fn normal(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(device, SHADERS);
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
 
@@ -264,7 +267,8 @@ impl Pipeline {
     }
 
     pub fn present(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let shader = ShaderModule::main(device);
+        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
+        let shader = ShaderModule::new(device, SHADERS);
         let vs = CString::new("present_vs").expect("Failed to create entrypoint");
         let fs = CString::new("present_fs").expect("Failed to create entry point");
 

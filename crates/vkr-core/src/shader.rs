@@ -9,7 +9,7 @@ use byteorder::{ByteOrder, NativeEndian};
 
 pub struct ShaderModule {
     shader: vk::ShaderModule,
-    device: Rc<Device>,
+    pub device: Rc<Device>,
 }
 
 impl ShaderModule {
@@ -26,16 +26,6 @@ impl ShaderModule {
             .expect("Failed to create Vulkan shader module");
 
         Self { shader, device }
-    }
-
-    pub fn main(device: &Rc<Device>) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
-        Self::new(device, SHADERS)
-    }
-
-    pub fn gui(device: &Rc<Device>) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_gui_shaders.spv"));
-        Self::new(device, SHADERS)
     }
 
     /// The entrypoint c string should be alive until the pipeline has been created

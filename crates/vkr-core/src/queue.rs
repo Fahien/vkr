@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use ash::{vk, Device};
 
-use crate::{gfx::Swapchain, sync::*, commands::CommandBuffer};
+use crate::{commands::CommandBuffer, sync::*, Swapchain};
 
 pub struct Queue {
     queue: vk::Queue,
