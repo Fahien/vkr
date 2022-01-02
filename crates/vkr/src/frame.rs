@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -314,8 +314,10 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
     }
 
-    pub fn bind(&mut self, pipeline: &Pipeline, model: &Model, camera_node: Handle<Node>) {
-        self.res.command_buffer.bind_pipeline(pipeline.graphics);
+    pub fn bind(&mut self, pipeline: &dyn Pipeline, model: &Model, camera_node: Handle<Node>) {
+        self.res
+            .command_buffer
+            .bind_pipeline(pipeline.get_pipeline());
 
         let width = self.buffer.width as f32;
         let height = self.buffer.height as f32;
@@ -345,11 +347,11 @@ impl Frame {
             .res
             .descriptors
             .view_sets
-            .get(&(pipeline.set_layouts[1], camera_node))
+            .get(&(pipeline.get_set_layouts()[1], camera_node))
         {
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline.layout, sets, 1);
+                .bind_descriptor_sets(pipeline.get_layout(), sets, 1);
 
             // If there is a descriptor set, there must be a buffer
             let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
@@ -360,7 +362,10 @@ impl Frame {
         } else {
             // Allocate and write desc set for camera view
             // Camera set layout is at index 1 (use a constant?)
-            let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[1]]);
+            let sets = self
+                .res
+                .descriptors
+                .allocate(&[pipeline.get_set_layouts()[1]]);
 
             if let Some(view_buffer) = self.res.view_buffers.get_mut(&camera_node) {
                 // Buffer already there, just make the set pointing to it
@@ -392,12 +397,12 @@ impl Frame {
 
             self.res
                 .command_buffer
-                .bind_descriptor_sets(pipeline.layout, &sets, 1);
+                .bind_descriptor_sets(pipeline.get_layout(), &sets, 1);
 
             self.res
                 .descriptors
                 .view_sets
-                .insert((pipeline.set_layouts[1], camera_node), sets);
+                .insert((pipeline.get_set_layouts()[1], camera_node), sets);
         }
     }
 

@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -13,7 +13,7 @@ pub struct Gui {
     /// Not common as camera and model, therefore we store it here
     set_layouts: Vec<vk::DescriptorSetLayout>,
 
-    pipeline: Pipeline,
+    pipeline: DefaultPipeline,
 
     sampler: Sampler,
     view: ImageView,
@@ -130,7 +130,7 @@ impl VertexInput for im::DrawVert {
     }
 }
 
-impl Pipeline {
+impl DefaultPipeline {
     fn gui(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
         const SHADERS: &[u8] = include_bytes!(env!("vkr_gui_shaders.spv"));
         let shader = ShaderModule::new(&dev.device, SHADERS);
@@ -143,6 +143,7 @@ impl Pipeline {
             .build();
 
         Self::new::<im::DrawVert>(
+            "Gui".to_string(),
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -216,7 +217,7 @@ impl Gui {
         let view = ImageView::new(&dev.device, &image);
         let sampler = Sampler::new(&dev.device);
 
-        let pipeline = Pipeline::gui(dev, pass, framebuffer_size.0, framebuffer_size.1);
+        let pipeline = DefaultPipeline::gui(dev, pass, framebuffer_size.0, framebuffer_size.1);
 
         let set_layouts = im::DrawVert::get_set_layouts(&dev.device);
 
@@ -335,11 +336,8 @@ impl Gui {
                 &self.sampler,
             )
         }
-        res.command_buffer.bind_descriptor_sets(
-            self.pipeline.layout,
-            &res.descriptors.gui_sets,
-            0,
-        );
+        res.command_buffer
+            .bind_descriptor_sets(self.pipeline.layout, &res.descriptors.gui_sets, 0);
 
         // Upload vertex and index buffers
         res.gui_vertex_buffer.upload_arr(&vertex_data);

@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -20,15 +20,15 @@ pub enum Pipelines {
 pub struct DefaultPipelines {
     /// When debug is set, it is used instead of the one requested by a mesh
     pub debug: Option<Pipelines>,
-    pub pipelines: [Pipeline; Pipelines::VARIANT_COUNT],
+    pub pipelines: [DefaultPipeline; Pipelines::VARIANT_COUNT],
 }
 
 impl DefaultPipelines {
     pub fn new(dev: &Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        let line = Pipeline::line(dev, pass, width, height);
-        let main = Pipeline::main(dev, pass, width, height);
-        let normal = Pipeline::normal(dev, pass, width, height);
-        let present = Pipeline::present(dev, pass, width, height);
+        let line = DefaultPipeline::line(dev, pass, width, height);
+        let main = DefaultPipeline::main(dev, pass, width, height);
+        let normal = DefaultPipeline::normal(dev, pass, width, height);
+        let present = DefaultPipeline::present(dev, pass, width, height);
         let debug = None;
 
         let pipelines = [line, present, normal, main];
@@ -36,33 +36,35 @@ impl DefaultPipelines {
         Self { debug, pipelines }
     }
 
-    pub fn get_for<T: VertexInput>(&self) -> &Pipeline {
+    pub fn get_for<T: VertexInput>(&self) -> &DefaultPipeline {
         self.get(T::get_pipeline())
     }
 
-    pub fn get_presentation(&self) -> &Pipeline {
+    pub fn get_presentation(&self) -> &DefaultPipeline {
         match self.debug {
             Some(variant) => self.get(variant),
             None => self.get(Pipelines::PRESENT),
         }
     }
 
-    pub fn get(&self, variant: Pipelines) -> &Pipeline {
+    pub fn get(&self, variant: Pipelines) -> &DefaultPipeline {
         &self.pipelines[variant as usize]
     }
 }
 
-pub struct Pipeline {
+pub struct DefaultPipeline {
     pub graphics: vk::Pipeline,
     /// A pipeline layout depends on set layouts, constants, etc, to be created.
     pub layout: vk::PipelineLayout,
     /// Set layouts do not really depend on anything
     pub set_layouts: Vec<vk::DescriptorSetLayout>,
     device: Rc<ash::Device>,
+    name: String,
 }
 
-impl Pipeline {
+impl DefaultPipeline {
     pub fn new<T: VertexInput>(
+        name: String,
         dev: &Dev,
         vert: vk::PipelineShaderStageCreateInfo,
         frag: vk::PipelineShaderStageCreateInfo,
@@ -76,7 +78,7 @@ impl Pipeline {
         let set_layouts = T::get_set_layouts(&dev.device);
         let constants = T::get_constants();
 
-        // Pipeline layout (device, descriptorset layouts, shader reflection?)
+        // DefaultPipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
             let create_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&set_layouts)
@@ -178,6 +180,7 @@ impl Pipeline {
             set_layouts,
             layout,
             device: Rc::clone(&dev.device),
+            name,
         }
     }
 
@@ -193,6 +196,7 @@ impl Pipeline {
             .build();
 
         Self::new::<Line>(
+            "Line".to_string(),
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -217,6 +221,7 @@ impl Pipeline {
             .build();
 
         Self::new::<Vertex>(
+            "Main".to_string(),
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -239,6 +244,7 @@ impl Pipeline {
         let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
 
         Self::new::<PresentVertex>(
+            "Normal".to_string(),
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -260,6 +266,7 @@ impl Pipeline {
         let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
 
         Self::new::<PresentVertex>(
+            "Present".to_string(),
             dev,
             shader.get_vert(&vs),
             shader.get_frag(&fs),
@@ -273,7 +280,7 @@ impl Pipeline {
     }
 }
 
-impl Drop for Pipeline {
+impl Drop for DefaultPipeline {
     fn drop(&mut self) {
         unsafe {
             for set_layout in &self.set_layouts {
@@ -282,5 +289,27 @@ impl Drop for Pipeline {
             self.device.destroy_pipeline_layout(self.layout, None);
             self.device.destroy_pipeline(self.graphics, None);
         }
+    }
+}
+
+impl Pipeline for DefaultPipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    fn get_set_layouts(&self) -> &[vk::DescriptorSetLayout] {
+        &self.set_layouts
+    }
+
+    fn get_layout(&self) -> vk::PipelineLayout {
+        self.layout
+    }
+
+    fn get_pipeline(&self) -> vk::Pipeline {
+        self.graphics
     }
 }
