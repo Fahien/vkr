@@ -10,7 +10,7 @@
 )]
 #![deny(warnings)]
 
-use spirv_std::glam::{vec4, Vec3, Vec4};
+use spirv_std::glam::{vec4, Vec2, Vec3, Vec4};
 
 // This file is parsed as a `syn::File`
 // This function will appear within its `items`
@@ -32,6 +32,6 @@ pub fn secondary_fs(out_color: &mut Vec4) {
 }
 
 #[spirv(vertex)]
-pub fn secondary_vs(in_pos: Vec3, #[spirv(position)] out_pos: &mut Vec4) {
-    *out_pos = vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+pub fn secondary_vs(in_pos: Vec3, in_uv: Vec2, #[spirv(position)] out_pos: &mut Vec4) {
+    *out_pos = vec4(in_pos.x, in_uv.y, in_pos.z, 1.0);
 }

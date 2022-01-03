@@ -15,10 +15,21 @@ pub fn header() -> TokenStream {
 }
 
 fn get_format(arg_type: &syn::Ident) -> TokenStream {
-    if arg_type == "Vec3" {
-        return quote! { vk::Format::R32G32B32_SFLOAT };
+    match arg_type.to_string().as_str() {
+        "Vec4" => quote! { vk::Format::R32G32B32A32_SFLOAT },
+        "Vec3" => quote! { vk::Format::R32G32B32_SFLOAT },
+        "Vec2" => quote! { vk::Format::R32G32_SFLOAT},
+        _ => todo!("Failed to get format for: {}", arg_type),
     }
-    todo!("Failed to get format for: {}", arg_type);
+}
+
+fn get_size(arg_type: &syn::Ident) -> usize {
+    match arg_type.to_string().as_str() {
+        "Vec4" => std::mem::size_of::<[f32; 4]>(),
+        "Vec3" => std::mem::size_of::<[f32; 3]>(),
+        "Vec2" => std::mem::size_of::<[f32; 2]>(),
+        _ => todo!("Failed to get size of: {}", arg_type),
+    }
 }
 
 pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
@@ -32,6 +43,18 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
     let fs = format!("{}_fs", pipeline.name.to_lowercase());
 
     // Generate bindings
+    let stride = pipeline
+        .arg_types
+        .iter()
+        .fold(0, |acc, ty| acc + get_size(ty));
+    let vertex_bindings = quote! {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(#stride as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    };
+
     let mut vertex_attributes = TokenStream::new();
 
     for (loc, arg_type) in pipeline.arg_types.iter().enumerate() {
@@ -74,11 +97,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 ];
 
                 let vertex_bindings = [
-                    vk::VertexInputBindingDescription::builder()
-                        .binding(0)
-                        .stride(std::mem::size_of::<[f32;3]>() as u32)
-                        .input_rate(vk::VertexInputRate::VERTEX)
-                        .build()
+                    #vertex_bindings
                 ];
                 let vertex_attributes = [
                     #vertex_attributes

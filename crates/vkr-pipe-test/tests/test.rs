@@ -27,8 +27,5 @@ fn build_simple_shader() {
     eprintln!("{}", secondary_pipeline.get_name());
     assert!(secondary_pipeline.get_name() == "Secondary");
 
-
-    assert!(1 == 1);
-
     dev.wait();
 }

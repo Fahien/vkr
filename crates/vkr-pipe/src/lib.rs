@@ -125,10 +125,9 @@ fn get_args_type(func: &syn::ItemFn) -> Vec<syn::Ident> {
             syn::FnArg::Typed(t) => match &*t.ty {
                 syn::Type::Path(p) => {
                     for seg in &p.path.segments {
-                        if seg.ident == "Vec3" {
-                            ret.push(seg.ident.clone());
-                        } else {
-                            todo!("Handle input {}", seg.ident);
+                        match seg.ident.to_string().as_str() {
+                            "Vec4" | "Vec3" | "Vec2" => ret.push(seg.ident.clone()),
+                            _ => todo!("Handle input {}: {}:{}", seg.ident, file!(), line!()),
                         }
                     }
                 }
