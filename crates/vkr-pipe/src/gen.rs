@@ -2,7 +2,9 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use crate::{Camelcase, CrateModule, Pipeline};
+use std::collections::HashSet;
+
+use crate::{Camelcase, CrateModule, Pipeline, Uniform};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -30,6 +32,41 @@ fn get_size(arg_type: &syn::Ident) -> usize {
         "Vec2" => std::mem::size_of::<[f32; 2]>(),
         _ => todo!("Failed to get size of: {}", arg_type),
     }
+}
+
+pub fn set_layout_bindings(uniforms: &[Uniform]) -> TokenStream {
+    let mut gen = quote! {};
+
+    for uniform in uniforms.iter() {
+        let binding = uniform.binding;
+        let descriptor_type = uniform.get_descriptor_type();
+        let stage = uniform.stage;
+        gen.extend(quote! {
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(#binding)
+                .descriptor_type(#descriptor_type)
+                .descriptor_count(1) // Count what?
+                .stage_flags(#stage)
+                .build(),
+        });
+    }
+
+    gen
+}
+
+pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
+    let mut gen = quote! {};
+
+    let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set ).collect();
+
+    for set in sets {
+        let write_set_sign = format!("write_set_{}", set).parse::<proc_macro2::TokenStream>().unwrap();
+        gen.extend(quote! {
+            pub fn #write_set_sign(&self) {}
+        });
+    }
+
+    gen
 }
 
 pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
@@ -72,17 +109,43 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
         vertex_attributes.extend(attribute);
     }
 
+    let set_layout_bindings = set_layout_bindings(&pipeline.uniforms);
+    let write_set_methods = write_set_methods(&pipeline.uniforms);
+
     quote! {
         pub struct #pipeline_name {
-            layout: vk::PipelineLayout,
             pipeline: vk::Pipeline,
+            layout: vk::PipelineLayout,
+            set_layouts: Vec<vk::DescriptorSetLayout>,
             device: Rc<Device>,
             name: String,
         }
 
         impl #pipeline_name {
-            pub fn new_layout(device: &Rc<Device>) -> vk::PipelineLayout {
-                let create_info = vk::PipelineLayoutCreateInfo::builder().build();
+            pub fn create_set_layout(
+                device: &Device,
+                bindings: &[vk::DescriptorSetLayoutBinding],
+            ) -> vk::DescriptorSetLayout {
+                let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                    .bindings(bindings)
+                    .build();
+                unsafe { device.create_descriptor_set_layout(&set_layout_info, None) }
+                    .expect("Failed to create Vulkan descriptor set layout")
+            }
+
+            pub fn new_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
+                let set_layout_bindings = [
+                    #set_layout_bindings
+                ];
+                vec![
+                    Self::create_set_layout(device, &set_layout_bindings)
+                ]
+            }
+
+            pub fn new_layout(device: &Rc<Device>, set_layouts: &[vk::DescriptorSetLayout]) -> vk::PipelineLayout {
+                let create_info = vk::PipelineLayoutCreateInfo::builder()
+                    .set_layouts(set_layouts)
+                    .build();
                 let layout = unsafe { device.create_pipeline_layout(&create_info, None) };
                 layout.expect("Failed to create Vulkan pipeline layout")
             }
@@ -226,19 +289,27 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
             pub fn new(shader_module: &ShaderModule, render_pass: vk::RenderPass) -> Self {
                 let name = String::from(#pipeline_str);
                 let device = shader_module.device.clone();
-                let layout = Self::new_layout(&shader_module.device);
+                let set_layouts = Self::new_set_layouts(&shader_module.device);
+                let layout = Self::new_layout(&shader_module.device, &set_layouts);
                 let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass);
 
                 Self {
-                    layout,
                     pipeline,
+                    layout,
+                    set_layouts,
                     device,
                     name
                 }
             }
+
+            #write_set_methods
         }
 
         impl Pipeline for #pipeline_name {
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+
             fn get_name(&self) -> &String {
                 &self.name
             }
@@ -259,8 +330,11 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
         impl Drop for #pipeline_name {
             fn drop(&mut self) {
                 unsafe {
-                    self.device.destroy_pipeline_layout(self.layout, None);
                     self.device.destroy_pipeline(self.pipeline, None);
+                    self.device.destroy_pipeline_layout(self.layout, None);
+                    for set_layout in &self.set_layouts {
+                        self.device.destroy_descriptor_set_layout(*set_layout, None);
+                    }
                 }
             }
         }

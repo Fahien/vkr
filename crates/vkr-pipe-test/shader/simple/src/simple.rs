@@ -10,7 +10,7 @@
 )]
 #![deny(warnings)]
 
-use spirv_std::glam::{vec4, Vec2, Vec3, Vec4};
+use spirv_std::glam::{vec4, Mat4, Vec2, Vec3, Vec4};
 
 // This file is parsed as a `syn::File`
 // This function will appear within its `items`
@@ -34,4 +34,19 @@ pub fn secondary_fs(out_color: &mut Vec4) {
 #[spirv(vertex)]
 pub fn secondary_vs(in_pos: Vec3, in_uv: Vec2, #[spirv(position)] out_pos: &mut Vec4) {
     *out_pos = vec4(in_pos.x, in_uv.y, in_pos.z, 1.0);
+}
+
+#[spirv(fragment)]
+pub fn uniform_fs(out_color: &mut Vec4) {
+    *out_color = vec4(1.0, 0.0, 0.0, 1.0)
+}
+
+#[spirv(vertex)]
+pub fn uniform_vs(
+    in_pos: Vec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] view: &Mat4,
+    #[spirv(uniform, descriptor_set = 1, binding = 0)] transform: &Mat4,
+    #[spirv(position)] out_pos: &mut Vec4,
+) {
+    *out_pos = *view * *transform * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
 }

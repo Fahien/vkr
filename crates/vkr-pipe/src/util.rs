@@ -51,6 +51,9 @@ fn test_get_prefix() {
 }
 
 /// Returns `Some(v)` with the inner value of an enum or `None`
+/// ```rust
+/// inner_value!(enum_value, EnumType(value) => value);
+/// ```
 macro_rules! inner_value {
     ($value:expr, $pattern:pat => $extracted_value:expr) => {
         match $value {

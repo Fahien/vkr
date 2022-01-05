@@ -27,5 +27,12 @@ fn build_simple_shader() {
     eprintln!("{}", secondary_pipeline.get_name());
     assert!(secondary_pipeline.get_name() == "Secondary");
 
+    let uniform_pipeline = cache.get(ShaderSimpleShader::Uniform);
+    assert!(uniform_pipeline.get_name() == "Uniform");
+
+    let uniform_pipeline = uniform_pipeline.as_any().downcast_ref::<PipelineUniform>().unwrap();
+    uniform_pipeline.write_set_0();
+    uniform_pipeline.write_set_1();
+
     dev.wait();
 }

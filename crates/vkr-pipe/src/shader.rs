@@ -2,19 +2,104 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-#[derive(Debug)]
+use quote::{quote, ToTokens};
+
+#[derive(Debug, Copy, Clone)]
 pub enum ShaderType {
     Vertex,
     Fragment,
 }
 
+impl ToTokens for ShaderType {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            ShaderType::Vertex => tokens.extend(quote! { vk::ShaderStageFlags::VERTEX }),
+            ShaderType::Fragment => tokens.extend(quote! { vk::ShaderStageFlags::FRAGMENT }),
+        }
+    }
+}
+
+pub struct Uniform {
+    /// Type of the argument
+    pub ident: syn::Ident,
+    pub descriptor_set: u32,
+    pub binding: u32,
+    pub stage: ShaderType,
+}
+
+impl Uniform {
+    pub fn new(ident: syn::Ident, descriptor_set: u32, binding: u32, stage: ShaderType) -> Self {
+        Self {
+            ident,
+            descriptor_set,
+            binding,
+            stage,
+        }
+    }
+
+    pub fn get_descriptor_type(&self) -> proc_macro2::TokenStream {
+        match self.ident.to_string().as_str() {
+            "Mat4" => quote! { vk::DescriptorType::UNIFORM_BUFFER },
+            "SampledImage" => quote! { vk::DescriptorType::COMBINED_IMAGE_SAMPLER },
+            unknown => todo!(
+                "Failed to get descriptor type for {}: {}:{}",
+                unknown,
+                file!(),
+                line!()
+            ),
+        }
+    }
+}
+
+pub struct PipelineBuilder {
+    pub name: String,
+    pub arg_types: Vec<syn::Ident>,
+    pub uniforms: Vec<Uniform>,
+}
+
+impl PipelineBuilder {
+    pub fn new() -> Self {
+        Self {
+            name: String::default(),
+            arg_types: Vec::default(),
+            uniforms: Vec::default(),
+        }
+    }
+
+    pub fn name(mut self, name: String) -> Self {
+        self.name = name;
+        self
+    }
+
+    pub fn arg_types(&mut self, arg_types: Vec<syn::Ident>) {
+        self.arg_types = arg_types;
+    }
+
+    pub fn add_uniforms(&mut self, uniforms: Vec<Uniform>) {
+        self.uniforms.extend(uniforms);
+    }
+
+    pub fn build(self) -> Pipeline {
+        Pipeline::new(self.name, self.arg_types, self.uniforms)
+    }
+}
+
 pub struct Pipeline {
     pub name: String,
     pub arg_types: Vec<syn::Ident>,
+    pub uniforms: Vec<Uniform>,
 }
 
 impl Pipeline {
-    pub fn new(name: String, arg_types: Vec<syn::Ident>) -> Self {
-        Self { name, arg_types }
+    pub fn builder() -> PipelineBuilder {
+        PipelineBuilder::new()
+    }
+
+    pub fn new(name: String, arg_types: Vec<syn::Ident>, uniforms: Vec<Uniform>) -> Self {
+        Self {
+            name,
+            arg_types,
+            uniforms,
+        }
     }
 }
