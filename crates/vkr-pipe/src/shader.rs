@@ -20,6 +20,7 @@ impl ToTokens for ShaderType {
 }
 
 pub struct Uniform {
+    pub name: syn::Ident,
     /// Type of the argument
     pub ident: syn::Ident,
     pub descriptor_set: u32,
@@ -28,8 +29,15 @@ pub struct Uniform {
 }
 
 impl Uniform {
-    pub fn new(ident: syn::Ident, descriptor_set: u32, binding: u32, stage: ShaderType) -> Self {
+    pub fn new(
+        name: syn::Ident,
+        ident: syn::Ident,
+        descriptor_set: u32,
+        binding: u32,
+        stage: ShaderType,
+    ) -> Self {
         Self {
+            name,
             ident,
             descriptor_set,
             binding,
@@ -41,6 +49,19 @@ impl Uniform {
         match self.ident.to_string().as_str() {
             "Mat4" => quote! { vk::DescriptorType::UNIFORM_BUFFER },
             "SampledImage" => quote! { vk::DescriptorType::COMBINED_IMAGE_SAMPLER },
+            unknown => todo!(
+                "Failed to get descriptor type for {}: {}:{}",
+                unknown,
+                file!(),
+                line!()
+            ),
+        }
+    }
+
+    pub fn get_write_set_type(&self) -> proc_macro2::TokenStream {
+        match self.ident.to_string().as_str() {
+            "Mat4" => quote! { &Buffer },
+            "SampledImage" => quote! { &Texture },
             unknown => todo!(
                 "Failed to get descriptor type for {}: {}:{}",
                 unknown,

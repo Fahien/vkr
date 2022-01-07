@@ -57,12 +57,35 @@ pub fn set_layout_bindings(uniforms: &[Uniform]) -> TokenStream {
 pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
     let mut gen = quote! {};
 
-    let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set ).collect();
+    let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set).collect();
 
     for set in sets {
-        let write_set_sign = format!("write_set_{}", set).parse::<proc_macro2::TokenStream>().unwrap();
+        let args = uniforms.iter().filter_map(|u| {
+            if u.descriptor_set == set {
+                let arg = format!("{}: {}", u.name, u.get_write_set_type())
+                    .parse::<proc_macro2::TokenStream>()
+                    .unwrap();
+                Some(arg)
+            } else {
+                None
+            }
+        });
+        let arguments = quote! {
+            &self
+            #( ,#args )*
+        };
+
+        let write_set_sign = format!("write_set_{}", set)
+            .parse::<proc_macro2::TokenStream>()
+            .unwrap();
         gen.extend(quote! {
-            pub fn #write_set_sign(&self) {}
+            /// We do not know whether descriptor sets are allocated together and stored in a vector
+            /// or they are allocated one by one, therefore we just expect one descriptor set here.
+            pub fn #write_set_sign(
+                #arguments
+            ) {
+                // TODO: calculate range by looking at shader argument and assert buffer size >= range
+            }
         });
     }
 

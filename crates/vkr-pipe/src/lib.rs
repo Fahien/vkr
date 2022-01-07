@@ -179,22 +179,41 @@ fn get_shader_type(spirv: &syn::MetaList) -> Option<ShaderType> {
     None
 }
 
-fn get_arg_segment(arg: &syn::FnArg) -> Option<syn::Ident> {
-    match arg {
-        syn::FnArg::Typed(t) => match &*t.ty {
+fn get_arg_name(arg: &syn::PatType) -> Option<syn::Ident> {
+    match &*arg.pat {
+        syn::Pat::Box(_) => todo!(),
+        syn::Pat::Ident(i) => return Some(i.ident.clone()),
+        syn::Pat::Lit(_) => todo!(),
+        syn::Pat::Macro(_) => todo!(),
+        syn::Pat::Or(_) => todo!(),
+        syn::Pat::Path(_) => todo!(),
+        syn::Pat::Range(_) => todo!(),
+        syn::Pat::Reference(_) => todo!(),
+        syn::Pat::Rest(_) => todo!(),
+        syn::Pat::Slice(_) => todo!(),
+        syn::Pat::Struct(_) => todo!(),
+        syn::Pat::Tuple(_) => todo!(),
+        syn::Pat::TupleStruct(_) => todo!(),
+        syn::Pat::Type(_) => todo!(),
+        syn::Pat::Verbatim(_) => todo!(),
+        syn::Pat::Wild(_) => todo!(),
+        syn::Pat::__TestExhaustive(_) => todo!(),
+    }
+}
+
+fn get_arg_segment(arg: &syn::PatType) -> Option<syn::Ident> {
+    match &*arg.ty {
+        syn::Type::Path(p) => {
+            if !p.path.segments.is_empty() {
+                return Some(p.path.segments[0].ident.clone());
+            }
+        }
+        syn::Type::Reference(r) => match &*r.elem {
             syn::Type::Path(p) => {
                 if !p.path.segments.is_empty() {
                     return Some(p.path.segments[0].ident.clone());
                 }
             }
-            syn::Type::Reference(r) => match &*r.elem {
-                syn::Type::Path(p) => {
-                    if !p.path.segments.is_empty() {
-                        return Some(p.path.segments[0].ident.clone());
-                    }
-                }
-                _ => (),
-            },
             _ => (),
         },
         _ => (),
@@ -242,16 +261,23 @@ fn get_uniforms(func: &syn::ItemFn) -> Vec<Uniform> {
 
     for arg in &func.sig.inputs {
         match arg {
-            syn::FnArg::Typed(t) => {
-                let spirv = get_spirv(&t.attrs);
+            syn::FnArg::Typed(arg) => {
+                let spirv = get_spirv(&arg.attrs);
                 if let Some(spirv) = spirv {
                     let path = get_meta_path(&spirv, "uniform");
                     if path.is_some() {
+                        let name = get_arg_name(arg).expect("Failed to get argument name");
                         let ident = get_arg_segment(arg).unwrap();
                         let desc_set = get_spirv_value(&spirv, "descriptor_set");
                         let binding = get_spirv_value(&spirv, "binding");
                         // TODO get stage
-                        uniforms.push(Uniform::new(ident, desc_set, binding, ShaderType::Vertex))
+                        uniforms.push(Uniform::new(
+                            name,
+                            ident,
+                            desc_set,
+                            binding,
+                            ShaderType::Vertex,
+                        ))
                     }
                 }
             }

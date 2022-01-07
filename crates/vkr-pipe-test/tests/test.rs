@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use vkr_core::Ctx;
+use vkr_core::{Buffer, Ctx};
 use vkr_pipe::*;
 
 pipewriter!("crates/vkr-pipe-test/shader/simple");
@@ -30,9 +30,16 @@ fn build_simple_shader() {
     let uniform_pipeline = cache.get(ShaderSimpleShader::Uniform);
     assert!(uniform_pipeline.get_name() == "Uniform");
 
-    let uniform_pipeline = uniform_pipeline.as_any().downcast_ref::<PipelineUniform>().unwrap();
-    uniform_pipeline.write_set_0();
-    uniform_pipeline.write_set_1();
+    let uniform_pipeline = uniform_pipeline
+        .as_any()
+        .downcast_ref::<PipelineUniform>()
+        .unwrap();
+
+    let view_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+    uniform_pipeline.write_set_0(&view_buffer);
+
+    let model_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+    uniform_pipeline.write_set_1(&model_buffer);
 
     dev.wait();
 }
