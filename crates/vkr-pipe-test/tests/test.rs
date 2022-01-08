@@ -43,8 +43,9 @@ fn build_simple_shader() {
     let model_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
     uniform_pipeline.write_set_1(set, &model_buffer);
 
+    let color_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
     let albedo = Texture::new(vk::ImageView::null(), vk::Sampler::null());
-    uniform_pipeline.write_set_2(set, &albedo);
+    uniform_pipeline.write_set_2(set, &color_buffer, &albedo);
 
     dev.wait();
 }

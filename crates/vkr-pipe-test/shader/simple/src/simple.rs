@@ -41,10 +41,11 @@ pub fn secondary_vs(in_pos: Vec3, in_uv: Vec2, #[spirv(position)] out_pos: &mut 
 
 #[spirv(fragment)]
 pub fn uniform_fs(
-    #[spirv(descriptor_set = 2, binding = 0)] albedo: &SampledImage<Image2d>,
+    #[spirv(uniform, descriptor_set = 2, binding = 0)] color: &Vec4,
+    #[spirv(descriptor_set = 2, binding = 1)] albedo: &SampledImage<Image2d>,
     out_color: &mut Vec4) {
-    let color: Vec4 = unsafe { albedo.sample(Vec2::new(0.0, 0.0)) };
-    *out_color = color;
+    let sample: Vec4 = unsafe { albedo.sample(Vec2::new(0.0, 0.0)) };
+    *out_color = *color * sample;
 }
 
 #[spirv(vertex)]

@@ -47,7 +47,9 @@ impl Uniform {
 
     pub fn get_descriptor_type(&self) -> proc_macro2::TokenStream {
         match self.ident.to_string().as_str() {
-            "Mat4" => quote! { vk::DescriptorType::UNIFORM_BUFFER },
+            "Vec2" | "Vec3" | "Vec4" | "Mat3" | "Mat4" => {
+                quote! { vk::DescriptorType::UNIFORM_BUFFER }
+            }
             "SampledImage" => quote! { vk::DescriptorType::COMBINED_IMAGE_SAMPLER },
             unknown => todo!(
                 "Failed to get descriptor type for {}: {}:{}",
@@ -60,7 +62,7 @@ impl Uniform {
 
     pub fn get_write_set_type(&self) -> proc_macro2::TokenStream {
         match self.ident.to_string().as_str() {
-            "Mat4" => quote! { &Buffer },
+            "Vec2" | "Vec3" | "Vec4" | "Mat3" | "Mat4" => quote! { &Buffer },
             "SampledImage" => quote! { &Texture },
             unknown => todo!(
                 "Failed to get descriptor type for {}: {}:{}",
@@ -71,6 +73,19 @@ impl Uniform {
         }
     }
 
+    pub fn get_range(&self) -> Option<usize> {
+        let f32_size = std::mem::size_of::<f32>();
+
+        match self.ident.to_string().as_str() {
+            "Vec2" => Some(f32_size * 2),
+            "Vec3" => Some(f32_size * 3),
+            "Vec4" => Some(f32_size * 4),
+            "Mat3" => Some(f32_size * 9),
+            "Mat4" => Some(f32_size * 16),
+            _ => None,
+        }
+    }
+
     /// Returns a token stream useful for constructing a `WriteDescriptorSet`.
     /// According to the type of the uniform, this will return a buffer_info call
     /// or an image_info call, complete with the argument.
@@ -78,14 +93,17 @@ impl Uniform {
         let name = &self.name;
 
         match self.ident.to_string().as_str() {
-            "Mat4" => quote! { .buffer_info(
-                &[
-                    vk::DescriptorBufferInfo::builder()
-                        .range((std::mem::size_of::<f32>() * 16) as vk::DeviceSize)
-                        .buffer(#name.buffer)
-                        .build()
-                ]
-            ) },
+            "Vec2" | "Vec3" | "Vec4" | "Mat3" | "Mat4" => {
+                let range = self.get_range().unwrap();
+                quote! { .buffer_info(
+                    &[
+                        vk::DescriptorBufferInfo::builder()
+                            .range(#range as vk::DeviceSize)
+                            .buffer(#name.buffer)
+                            .build()
+                    ]
+                ) }
+            }
             "SampledImage" => quote! { .image_info(
                 &[
                     vk::DescriptorImageInfo::builder()
