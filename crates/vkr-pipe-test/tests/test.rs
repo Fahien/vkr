@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use vkr_core::{Buffer, Ctx};
+use vkr_core::{Buffer, Ctx, DescriptorPool, Image, ImageView, Sampler};
 use vkr_pipe::*;
 
 pipewriter!("crates/vkr-pipe-test/shader/simple");
@@ -35,17 +35,27 @@ fn build_simple_shader() {
         .downcast_ref::<PipelineUniform>()
         .unwrap();
 
-    let set = vk::DescriptorSet::null();
+    let mut pool = DescriptorPool::new(&dev.device, 3, 3, 1, 1);
+    let sets = pool.allocate(&uniform_pipeline.set_layouts);
 
-    let view_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-    uniform_pipeline.write_set_0(set, &view_buffer);
+    let view_buffer =
+        Buffer::new::<[f32; 16]>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+    uniform_pipeline.write_set_0(sets[0], &view_buffer);
 
-    let model_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-    uniform_pipeline.write_set_1(set, &model_buffer);
+    let model_buffer =
+        Buffer::new::<[f32; 16]>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+    uniform_pipeline.write_set_1(sets[1], &model_buffer);
 
-    let color_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-    let albedo = Texture::new(vk::ImageView::null(), vk::Sampler::null());
-    uniform_pipeline.write_set_2(set, &color_buffer, &albedo);
+    let color_buffer =
+        Buffer::new::<[f32; 4]>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+
+    let white = [255, 255, 255, 255];
+    let white_image = Image::from_data(&dev, &white, 1, 1, vk::Format::R8G8B8A8_SRGB);
+
+    let white_view = ImageView::new(&dev.device, &white_image);
+    let white_sampler = Sampler::new(&dev.device);
+    let albedo = Texture::new(white_view.view, white_sampler.sampler);
+    uniform_pipeline.write_set_2(sets[2], &color_buffer, &albedo);
 
     dev.wait();
 }

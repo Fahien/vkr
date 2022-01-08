@@ -34,10 +34,12 @@ fn get_size(arg_type: &syn::Ident) -> usize {
     }
 }
 
-pub fn set_layout_bindings(uniforms: &[Uniform]) -> TokenStream {
+pub fn set_layout_bindings(uniforms: &[Uniform], set: u32) -> TokenStream {
     let mut gen = quote! {};
 
-    for uniform in uniforms.iter() {
+    let set_uniforms = uniforms.iter().filter(|u| u.descriptor_set == set);
+
+    for uniform in set_uniforms {
         let binding = uniform.binding;
         let descriptor_type = uniform.get_descriptor_type();
         let stage = uniform.stage;
@@ -54,12 +56,55 @@ pub fn set_layout_bindings(uniforms: &[Uniform]) -> TokenStream {
     gen
 }
 
+fn get_sorted_sets(uniforms: &[Uniform]) -> Vec<u32> {
+    let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set).collect();
+    let mut sets: Vec<_> = sets.into_iter().collect();
+    sets.sort();
+    sets
+}
+
+pub fn set_layouts_methods(uniforms: &[Uniform]) -> TokenStream {
+    let mut gen = quote! {
+        pub fn create_set_layout(
+            device: &Device,
+            bindings: &[vk::DescriptorSetLayoutBinding],
+        ) -> vk::DescriptorSetLayout {
+            let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(bindings)
+                .build();
+            unsafe { device.create_descriptor_set_layout(&set_layout_info, None) }
+                .expect("Failed to create Vulkan descriptor set layout")
+        }
+    };
+
+    let mut set_layouts = quote! {};
+    for set in get_sorted_sets(uniforms) {
+        let bindings = set_layout_bindings(uniforms, set);
+        set_layouts.extend(quote! {
+            Self::create_set_layout(
+                device,
+                &[
+                    #bindings
+                ]
+            ),
+        })
+    }
+
+    gen.extend(quote! {
+        pub fn new_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
+            vec![
+                #set_layouts
+            ]
+        }
+    });
+
+    gen
+}
+
 pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
     let mut gen = quote! {};
 
-    let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set).collect();
-
-    for set in sets {
+    for set in get_sorted_sets(uniforms) {
         let set_uniforms = uniforms.iter().filter(|u| u.descriptor_set == set);
         let mut writes = quote! {};
 
@@ -159,7 +204,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
         vertex_attributes.extend(attribute);
     }
 
-    let set_layout_bindings = set_layout_bindings(&pipeline.uniforms);
+    let set_layouts_methods = set_layouts_methods(&pipeline.uniforms);
     let write_set_methods = write_set_methods(&pipeline.uniforms);
 
     quote! {
@@ -172,25 +217,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
         }
 
         impl #pipeline_name {
-            pub fn create_set_layout(
-                device: &Device,
-                bindings: &[vk::DescriptorSetLayoutBinding],
-            ) -> vk::DescriptorSetLayout {
-                let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-                    .bindings(bindings)
-                    .build();
-                unsafe { device.create_descriptor_set_layout(&set_layout_info, None) }
-                    .expect("Failed to create Vulkan descriptor set layout")
-            }
-
-            pub fn new_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
-                let set_layout_bindings = [
-                    #set_layout_bindings
-                ];
-                vec![
-                    Self::create_set_layout(device, &set_layout_bindings)
-                ]
-            }
+            #set_layouts_methods
 
             pub fn new_layout(device: &Rc<Device>, set_layouts: &[vk::DescriptorSetLayout]) -> vk::PipelineLayout {
                 let create_info = vk::PipelineLayoutCreateInfo::builder()
