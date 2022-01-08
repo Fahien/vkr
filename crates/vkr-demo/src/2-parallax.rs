@@ -4,25 +4,19 @@
 
 use vkr::*;
 
-fn create_texture(
-    vkr: &Vkr,
-    model: &mut Model,
-    sampler: Handle<Sampler>,
-    path: &str,
-) -> Handle<Texture> {
+fn create_texture(vkr: &Vkr, model: &mut Model, sampler: &Sampler, path: &str) -> Handle<Texture> {
     let image = Image::load(&vkr.dev, path);
     let view = ImageView::new(&vkr.dev.device, &image);
+    let texture = Texture::new(view.view, sampler.sampler);
     model.images.push(image);
-    let view = model.views.push(view);
-
-    let texture = Texture::new(view, sampler);
+    model.views.push(view);
     model.textures.push(texture)
 }
 
 fn create_back(
     vkr: &Vkr,
     model: &mut Model,
-    sampler: Handle<Sampler>,
+    sampler: &Sampler,
     path: &str,
     aspect: f32,
     i: i32,
@@ -65,7 +59,6 @@ fn create_back(
 fn create_scene(vkr: &Vkr, model: &mut Model) -> Handle<Node> {
     // Use same sampler with repeat mode
     let sampler = Sampler::new(&vkr.dev.device);
-    let sampler = model.samplers.push(sampler);
 
     let (width, height) = vkr.win.as_ref().unwrap().window.drawable_size();
     let aspect = width as f32 / height as f32;
@@ -76,7 +69,7 @@ fn create_scene(vkr: &Vkr, model: &mut Model) -> Handle<Node> {
         let back = create_back(
             vkr,
             model,
-            sampler,
+            &sampler,
             &format!("res/image/city/back{}.png", i),
             aspect,
             i,
@@ -84,6 +77,7 @@ fn create_scene(vkr: &Vkr, model: &mut Model) -> Handle<Node> {
         scene.children.push(back);
     }
 
+    model.samplers.push(sampler);
     model.nodes.push(scene)
 }
 

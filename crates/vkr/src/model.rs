@@ -174,13 +174,7 @@ impl Material {
         vec![color, albedo]
     }
 
-    pub fn write_set(
-        device: &Device,
-        set: vk::DescriptorSet,
-        material: &Buffer,
-        albedo: &ImageView,
-        sampler: &Sampler,
-    ) {
+    pub fn write_set(device: &Device, set: vk::DescriptorSet, material: &Buffer, albedo: &Texture) {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .range(std::mem::size_of::<Color>() as vk::DeviceSize)
             .buffer(material.buffer)
@@ -197,7 +191,7 @@ impl Material {
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(albedo.view)
-            .sampler(sampler.sampler)
+            .sampler(albedo.sampler)
             .build();
 
         let image_write = vk::WriteDescriptorSet::builder()
