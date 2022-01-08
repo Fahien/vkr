@@ -57,11 +57,7 @@ fn get_pipelines(file: &syn::File) -> Vec<Pipeline> {
     let names: HashSet<String> = functions
         .clone()
         .filter(|func| {
-            let spirv = get_spirv(&func.attrs);
-            if let Some(meta) = spirv.as_ref() {
-                return matches!(get_shader_type(meta), Some(ShaderType::Vertex));
-            }
-            false
+            return matches!(get_shader_type(func), Some(ShaderType::Vertex));
         })
         .map(|func| get_prefix(&func.sig.ident.to_string()).to_camelcase())
         .collect();
@@ -75,10 +71,7 @@ fn get_pipelines(file: &syn::File) -> Vec<Pipeline> {
     // Go through all the functions of the file
     for func in functions {
         // Analyze spirv attribute
-        if let Some(spirv) = get_spirv(&func.attrs) {
-            // Collect input parameters
-            let shader_type = get_shader_type(&spirv);
-
+        if let Some(shader_type) = get_shader_type(func) {
             // Extract prefix of function
             let prefix = get_prefix(&func.sig.ident.to_string());
             // Convert to camelcase and use it to name the pipeline
@@ -86,7 +79,7 @@ fn get_pipelines(file: &syn::File) -> Vec<Pipeline> {
 
             let builder = builders.get_mut(&name).unwrap();
 
-            if matches!(shader_type, Some(ShaderType::Vertex)) {
+            if shader_type == ShaderType::Vertex {
                 let arg_types = get_args_type(func);
                 builder.arg_types(arg_types);
             }
@@ -144,33 +137,19 @@ fn get_meta_name_value<'m>(list: &'m syn::MetaList, ident: &str) -> Option<&'m s
     None
 }
 
-fn get_meta_path<'m>(list: &'m syn::MetaList, ident: &str) -> Option<&'m syn::Path> {
-    for nested in &list.nested {
-        if let syn::NestedMeta::Meta(meta) = nested {
-            if let syn::Meta::Path(path) = meta {
-                if let Some(id) = path.get_ident() {
-                    if id == ident {
-                        return Some(path);
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Analyzes a spirv `MetaList`, looking for vertex and fragment `Path`s
+/// Analyzes a function attributes, looking for vertex and fragment `Path`s
 /// and returns the corresponding shader type
-fn get_shader_type(spirv: &syn::MetaList) -> Option<ShaderType> {
-    // TODO use get_meta_path
-    for nested in &spirv.nested {
-        if let syn::NestedMeta::Meta(meta) = nested {
-            if let syn::Meta::Path(path) = meta {
-                if let Some(ident) = path.get_ident() {
-                    if ident == "vertex" {
-                        return Some(ShaderType::Vertex);
-                    } else if ident == "fragment" {
-                        return Some(ShaderType::Fragment);
+fn get_shader_type(func: &syn::ItemFn) -> Option<ShaderType> {
+    if let Some(spirv) = get_spirv(&func.attrs) {
+        for nested in &spirv.nested {
+            if let syn::NestedMeta::Meta(meta) = nested {
+                if let syn::Meta::Path(path) = meta {
+                    if let Some(ident) = path.get_ident() {
+                        if ident == "vertex" {
+                            return Some(ShaderType::Vertex);
+                        } else if ident == "fragment" {
+                            return Some(ShaderType::Fragment);
+                        }
                     }
                 }
             }
@@ -248,36 +227,34 @@ fn get_args_type(func: &syn::ItemFn) -> Vec<syn::Ident> {
     ret
 }
 
-fn get_spirv_value(spirv: &syn::MetaList, id: &str) -> u32 {
-    let desc_set = get_meta_name_value(&spirv, id).unwrap();
-    inner_value!(&desc_set.lit, syn::Lit::Int(i) => i)
-        .unwrap()
-        .base10_parse::<u32>()
-        .unwrap()
+fn get_spirv_value(spirv: &syn::MetaList, id: &str) -> Option<u32> {
+    if let Some(desc_set) = get_meta_name_value(&spirv, id) {
+        Some(
+            inner_value!(&desc_set.lit, syn::Lit::Int(i) => i)
+                .unwrap()
+                .base10_parse::<u32>()
+                .unwrap(),
+        )
+    } else {
+        None
+    }
 }
 
 fn get_uniforms(func: &syn::ItemFn) -> Vec<Uniform> {
     let mut uniforms = vec![];
+
+    let shader_type = get_shader_type(func).expect("Can not get uniforms from this function");
 
     for arg in &func.sig.inputs {
         match arg {
             syn::FnArg::Typed(arg) => {
                 let spirv = get_spirv(&arg.attrs);
                 if let Some(spirv) = spirv {
-                    let path = get_meta_path(&spirv, "uniform");
-                    if path.is_some() {
+                    if let Some(desc_set) = get_spirv_value(&spirv, "descriptor_set") {
                         let name = get_arg_name(arg).expect("Failed to get argument name");
                         let ident = get_arg_segment(arg).unwrap();
-                        let desc_set = get_spirv_value(&spirv, "descriptor_set");
-                        let binding = get_spirv_value(&spirv, "binding");
-                        // TODO get stage
-                        uniforms.push(Uniform::new(
-                            name,
-                            ident,
-                            desc_set,
-                            binding,
-                            ShaderType::Vertex,
-                        ))
+                        let binding = get_spirv_value(&spirv, "binding").unwrap();
+                        uniforms.push(Uniform::new(name, ident, desc_set, binding, shader_type))
                     }
                 }
             }

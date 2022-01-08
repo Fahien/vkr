@@ -10,7 +10,10 @@
 )]
 #![deny(warnings)]
 
-use spirv_std::glam::{vec4, Mat4, Vec2, Vec3, Vec4};
+use spirv_std::{
+    glam::{vec4, Mat4, Vec2, Vec3, Vec4},
+    image::{Image2d, SampledImage}
+};
 
 // This file is parsed as a `syn::File`
 // This function will appear within its `items`
@@ -37,8 +40,11 @@ pub fn secondary_vs(in_pos: Vec3, in_uv: Vec2, #[spirv(position)] out_pos: &mut 
 }
 
 #[spirv(fragment)]
-pub fn uniform_fs(out_color: &mut Vec4) {
-    *out_color = vec4(1.0, 0.0, 0.0, 1.0)
+pub fn uniform_fs(
+    #[spirv(descriptor_set = 2, binding = 0)] albedo: &SampledImage<Image2d>,
+    out_color: &mut Vec4) {
+    let color: Vec4 = unsafe { albedo.sample(Vec2::new(0.0, 0.0)) };
+    *out_color = color;
 }
 
 #[spirv(vertex)]

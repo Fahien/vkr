@@ -4,7 +4,7 @@
 
 use quote::{quote, ToTokens};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ShaderType {
     Vertex,
     Fragment,

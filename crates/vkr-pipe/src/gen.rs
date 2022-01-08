@@ -12,7 +12,7 @@ pub fn header() -> TokenStream {
     quote! {
         use std::{ffi::CString, rc::Rc};
         use ash::{vk, Device};
-        use vkr_core::{Dev, Pass, ShaderModule, Pipeline};
+        use vkr_core::{Dev, Pass, ShaderModule, Pipeline, Texture};
     }
 }
 
