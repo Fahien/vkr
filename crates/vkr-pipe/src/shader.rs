@@ -70,6 +70,39 @@ impl Uniform {
             ),
         }
     }
+
+    /// Returns a token stream useful for constructing a `WriteDescriptorSet`.
+    /// According to the type of the uniform, this will return a buffer_info call
+    /// or an image_info call, complete with the argument.
+    pub fn get_info(&self) -> proc_macro2::TokenStream {
+        let name = &self.name;
+
+        match self.ident.to_string().as_str() {
+            "Mat4" => quote! { .buffer_info(
+                &[
+                    vk::DescriptorBufferInfo::builder()
+                        .range((std::mem::size_of::<f32>() * 16) as vk::DeviceSize)
+                        .buffer(#name.buffer)
+                        .build()
+                ]
+            ) },
+            "SampledImage" => quote! { .image_info(
+                &[
+                    vk::DescriptorImageInfo::builder()
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                        .image_view(#name.view)
+                        .sampler(#name.sampler)
+                        .build()
+                ]
+            ) },
+            unknown => todo!(
+                "Failed to get descriptor type for {}: {}:{}",
+                unknown,
+                file!(),
+                line!()
+            ),
+        }
+    }
 }
 
 pub struct PipelineBuilder {

@@ -35,11 +35,16 @@ fn build_simple_shader() {
         .downcast_ref::<PipelineUniform>()
         .unwrap();
 
+    let set = vk::DescriptorSet::null();
+
     let view_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-    uniform_pipeline.write_set_0(&view_buffer);
+    uniform_pipeline.write_set_0(set, &view_buffer);
 
     let model_buffer = Buffer::new::<u32>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-    uniform_pipeline.write_set_1(&model_buffer);
+    uniform_pipeline.write_set_1(set, &model_buffer);
+
+    let albedo = Texture::new(vk::ImageView::null(), vk::Sampler::null());
+    uniform_pipeline.write_set_2(set, &albedo);
 
     dev.wait();
 }

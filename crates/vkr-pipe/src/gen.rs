@@ -60,6 +60,24 @@ pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
     let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set).collect();
 
     for set in sets {
+        let set_uniforms = uniforms.iter().filter(|u| u.descriptor_set == set);
+        let mut writes = quote! {};
+
+        for uniform in set_uniforms {
+            let binding = uniform.binding;
+            let descriptor_type = uniform.get_descriptor_type();
+            let info = uniform.get_info();
+            writes.extend(quote! {
+                vk::WriteDescriptorSet::builder()
+                    .dst_set(set)
+                    .dst_binding(#binding)
+                    .dst_array_element(0)
+                    .descriptor_type(#descriptor_type)
+                    #info
+                    .build(),
+            });
+        }
+
         let args = uniforms.iter().filter_map(|u| {
             if u.descriptor_set == set {
                 let arg = format!("{}: {}", u.name, u.get_write_set_type())
@@ -70,8 +88,10 @@ pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
                 None
             }
         });
+
         let arguments = quote! {
-            &self
+            &self,
+            set: vk::DescriptorSet
             #( ,#args )*
         };
 
@@ -85,6 +105,13 @@ pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
                 #arguments
             ) {
                 // TODO: calculate range by looking at shader argument and assert buffer size >= range
+                let writes = [
+                    #writes
+                ];
+
+                unsafe {
+                    self.device.update_descriptor_sets(&writes, &[]);
+                }
             }
         });
     }
