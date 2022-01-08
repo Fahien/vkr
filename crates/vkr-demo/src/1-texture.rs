@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -45,11 +45,13 @@ pub fn main() {
 
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = ImageView::new(&vkr.dev.device, &image);
+    let sampler = Sampler::new(&vkr.dev.device);
+    let texture = Texture::new(view.view, sampler.sampler);
     model.images.push(image);
-    let view = model.views.push(view);
-    let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
-    let texture = Texture::new(view, sampler);
+    model.views.push(view);
+    model.samplers.push(sampler);
     let texture = model.textures.push(texture);
+
     let material = Material::textured(texture);
     let material = model.materials.push(material);
     let mut rect_primitive = Primitive::quad(&vkr.dev.allocator, [1.0, 1.0]);

@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -10,10 +10,13 @@ pub fn main() {
     let mut model = Model::new();
 
     let image = Image::load(&vkr.dev, "res/image/test.png");
-    let view = model.views.push(ImageView::new(&vkr.dev.device, &image));
+    let view = ImageView::new(&vkr.dev.device, &image);
+    let sampler = Sampler::new(&vkr.dev.device);
+    let texture = Texture::new(view.view, sampler.sampler);
     model.images.push(image);
-    let sampler = model.samplers.push(Sampler::new(&vkr.dev.device));
-    let lena_texture = model.textures.push(Texture::new(view, sampler));
+    model.views.push(view);
+    model.samplers.push(sampler);
+    let lena_texture = model.textures.push(texture);
 
     let mut green_material = Material::textured(lena_texture);
     green_material.color = Color::new(0.8, 0.6, 0.7, 0.3);
@@ -62,7 +65,8 @@ pub fn main() {
         frame.draw::<Vertex>(&vkr.pipelines, &model, cube_node);
 
         vkr.end_scene(&mut frame);
-        vkr.gui.draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
+        vkr.gui
+            .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
         vkr.end_frame(frame);
     }
 
