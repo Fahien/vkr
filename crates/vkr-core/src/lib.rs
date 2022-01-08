@@ -49,3 +49,6 @@ pub use pass::*;
 
 pub mod pipeline;
 pub use pipeline::*;
+
+pub mod texture;
+pub use texture::*;

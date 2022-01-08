@@ -142,8 +142,10 @@ impl Drop for Framebuffer {
 /// Container of fallback resources for a frame such as
 /// A white 1x1 pixel texture (image, view, and sampler)
 pub struct Fallback {
+    white_texture: Texture,
     _white_image: Image,
-    white_view: ImageView,
+    _white_view: ImageView,
+
     /// A default sampler
     pub white_sampler: Sampler,
     white_material: Material,
@@ -157,8 +159,8 @@ impl Fallback {
         let white_image = Image::from_data(&dev, &white, 1, 1, vk::Format::R8G8B8A8_SRGB);
 
         let white_view = ImageView::new(&dev.device, &white_image);
-
         let white_sampler = Sampler::new(&dev.device);
+        let white_texture = Texture::new(white_view.view, white_sampler.sampler);
 
         let white_material = Material::new(Color::white());
 
@@ -175,8 +177,9 @@ impl Fallback {
         );
 
         Self {
+            white_texture,
             _white_image: white_image,
-            white_view,
+            _white_view: white_view,
             white_sampler,
             white_material,
             present_buffer,
@@ -569,18 +572,10 @@ impl Frame {
 
                     material_buffer.upload(material);
 
-                    let (albedo_view, albedo_sampler) = match model.textures.get(material.albedo) {
-                        Some(texture) => {
-                            let view = model.views.get(texture.view).unwrap();
-                            let sampler = model.samplers.get(texture.sampler).unwrap();
-                            (view, sampler)
-                        }
-                        _ => (
-                            // Bind a default white albedo
-                            &self.res.fallback.white_view,
-                            &self.res.fallback.white_sampler,
-                        ),
-                    };
+                    let texture = model
+                        .textures
+                        .get(material.albedo)
+                        .unwrap_or(&self.res.fallback.white_texture);
 
                     let sets = self
                         .res
@@ -591,8 +586,7 @@ impl Frame {
                         &self.device,
                         sets[0],
                         &material_buffer,
-                        albedo_view,
-                        albedo_sampler,
+                        texture,
                     );
 
                     self.res

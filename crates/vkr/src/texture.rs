@@ -1,19 +1,6 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
-
-use crate::*;
-
-pub struct Texture {
-    pub view: Handle<ImageView>,
-    pub sampler: Handle<Sampler>,
-}
-
-impl Texture {
-    pub fn new(view: Handle<ImageView>, sampler: Handle<Sampler>) -> Self {
-        Self { view, sampler }
-    }
-}
 
 #[cfg(test)]
 mod test {
