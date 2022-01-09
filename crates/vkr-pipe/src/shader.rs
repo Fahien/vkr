@@ -51,6 +51,7 @@ impl Uniform {
                 quote! { vk::DescriptorType::UNIFORM_BUFFER }
             }
             "SampledImage" => quote! { vk::DescriptorType::COMBINED_IMAGE_SAMPLER },
+            "Image" => quote! { vk::DescriptorType::INPUT_ATTACHMENT },
             unknown => todo!(
                 "Failed to get descriptor type for {}: {}:{}",
                 unknown,
@@ -63,7 +64,7 @@ impl Uniform {
     pub fn get_write_set_type(&self) -> proc_macro2::TokenStream {
         match self.ident.to_string().as_str() {
             "Vec2" | "Vec3" | "Vec4" | "Mat3" | "Mat4" => quote! { &Buffer },
-            "SampledImage" => quote! { &Texture },
+            "Image" | "SampledImage" => quote! { &Texture },
             unknown => todo!(
                 "Failed to get descriptor type for {}: {}:{}",
                 unknown,
@@ -104,7 +105,7 @@ impl Uniform {
                     ]
                 ) }
             }
-            "SampledImage" => quote! { .image_info(
+            "Image" | "SampledImage" => quote! { .image_info(
                 &[
                     vk::DescriptorImageInfo::builder()
                         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)

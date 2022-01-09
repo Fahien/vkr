@@ -35,7 +35,7 @@ fn build_simple_shader() {
         .downcast_ref::<PipelineUniform>()
         .unwrap();
 
-    let mut pool = DescriptorPool::new(&dev.device, 3, 3, 1, 1);
+    let mut pool = DescriptorPool::new(&dev.device, 4, 3, 1, 1);
     let sets = pool.allocate(&uniform_pipeline.set_layouts);
 
     let view_buffer =

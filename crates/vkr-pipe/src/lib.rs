@@ -198,7 +198,25 @@ fn get_arg_type(arg: &syn::PatType) -> Option<syn::Ident> {
                     return Some(p.path.segments[0].ident.clone());
                 }
             }
-            _ => eprintln!("Unhandled TypeReference"),
+            syn::Type::Macro(m) => {
+                if let Some(ident) = m.mac.path.get_ident() {
+                    return Some(ident.clone())
+                }
+            }
+            syn::Type::Array(_) => eprintln!("Array"),
+            syn::Type::BareFn(_) => eprintln!("BF"),
+            syn::Type::Group(_) => eprintln!("G"),
+            syn::Type::ImplTrait(_) => eprintln!("IT"),
+            syn::Type::Infer(_) => eprintln!("In"),
+            syn::Type::Never(_) => eprintln!("Nev"),
+            syn::Type::Paren(_) => eprintln!("Pare"),
+            syn::Type::Ptr(_) => eprintln!("Ptr"),
+            syn::Type::Reference(_) => eprintln!("Ref"),
+            syn::Type::Slice(_) => eprintln!("Slic"),
+            syn::Type::TraitObject(_) => eprintln!("Trai"),
+            syn::Type::Tuple(_) => eprintln!("Tup"),
+            syn::Type::Verbatim(_) => eprintln!("Verb"),
+            syn::Type::__TestExhaustive(_) => eprintln!("Test"),
         },
         _ => eprintln!("Unhandled Type"),
     }
