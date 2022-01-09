@@ -314,6 +314,13 @@ impl Frame {
             .build();
         self.res.command_buffer.set_scissor(&scissor);
     }
+    
+    /// Commands are always associated to frames, that is why this function exists
+    pub fn bind_compute(&mut self, pipeline: &Pipeline) {
+        self.res.command_buffer.bind_pipeline(pipeline);
+
+        
+    }
 
     pub fn bind(&mut self, pipeline: &Pipeline, model: &Model, camera_node: Handle<Node>) {
         self.res.command_buffer.bind_pipeline(pipeline);
