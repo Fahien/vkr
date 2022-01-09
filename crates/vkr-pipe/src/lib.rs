@@ -77,7 +77,12 @@ fn get_pipelines(file: &syn::File) -> Vec<Pipeline> {
             // Convert to camelcase and use it to name the pipeline
             let name = prefix.to_camelcase();
 
-            let builder = builders.get_mut(&name).unwrap();
+            let builder = builders.get_mut(&name).expect(&format!(
+                "Failed to get builder name for {}: {}:{}",
+                name,
+                file!(),
+                line!(),
+            ));
 
             if shader_type == ShaderType::Vertex {
                 let arg_types = get_args_type(func);
@@ -100,7 +105,7 @@ fn get_spirv(attrs: &[syn::Attribute]) -> Option<syn::MetaList> {
         // which are lists
         .filter_map(|meta| inner_value!(meta, syn::Meta::List(l) => l))
         // which idents are spirv
-        .filter(|list| list.path.get_ident().unwrap() == "spirv")
+        .filter(|list| list.path.get_ident().is_some() && list.path.get_ident().unwrap() == "spirv")
         .next() // and take first
 }
 
@@ -180,7 +185,7 @@ fn get_arg_name(arg: &syn::PatType) -> Option<syn::Ident> {
     }
 }
 
-fn get_arg_segment(arg: &syn::PatType) -> Option<syn::Ident> {
+fn get_arg_type(arg: &syn::PatType) -> Option<syn::Ident> {
     match &*arg.ty {
         syn::Type::Path(p) => {
             if !p.path.segments.is_empty() {
@@ -193,9 +198,9 @@ fn get_arg_segment(arg: &syn::PatType) -> Option<syn::Ident> {
                     return Some(p.path.segments[0].ident.clone());
                 }
             }
-            _ => (),
+            _ => eprintln!("Unhandled TypeReference"),
         },
-        _ => (),
+        _ => eprintln!("Unhandled Type"),
     }
     None
 }
@@ -252,8 +257,18 @@ fn get_uniforms(func: &syn::ItemFn) -> Vec<Uniform> {
                 if let Some(spirv) = spirv {
                     if let Some(desc_set) = get_spirv_value(&spirv, "descriptor_set") {
                         let name = get_arg_name(arg).expect("Failed to get argument name");
-                        let ident = get_arg_segment(arg).unwrap();
-                        let binding = get_spirv_value(&spirv, "binding").unwrap();
+                        let ident = get_arg_type(arg).expect(&format!(
+                            "Failed to get segment for arg {}: {}:{}",
+                            name,
+                            file!(),
+                            line!()
+                        ));
+                        let binding = get_spirv_value(&spirv, "binding").expect(&format!(
+                            "Failed to get binding for arg {}: {}:{}",
+                            name,
+                            file!(),
+                            line!()
+                        ));
                         uniforms.push(Uniform::new(name, ident, desc_set, binding, shader_type))
                     }
                 }
