@@ -189,6 +189,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
     let mut vertex_attributes = TokenStream::new();
 
+    let mut offset = 0;
     for (loc, arg_type) in pipeline.arg_types.iter().enumerate() {
         let format = get_format(arg_type);
 
@@ -197,9 +198,11 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 .binding(0)
                 .location(#loc as u32)
                 .format(#format)
-                .offset(0)
+                .offset(#offset as u32)
                 .build(),
         };
+
+        offset += get_size(arg_type);
 
         vertex_attributes.extend(attribute);
     }
