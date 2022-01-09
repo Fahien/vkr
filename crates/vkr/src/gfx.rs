@@ -2,59 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{extensions::ext::DebugUtils, vk};
-use std::{borrow::Cow, ffi::CStr};
-
 use crate::*;
-
-unsafe extern "system" fn vk_debug(
-    _message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _user_data: *mut std::os::raw::c_void,
-) -> vk::Bool32 {
-    let callback_data = *p_callback_data;
-    let message = if callback_data.p_message.is_null() {
-        Cow::from("No message")
-    } else {
-        CStr::from_ptr(callback_data.p_message).to_string_lossy()
-    };
-    eprintln!("{:?}", message);
-    ash::vk::FALSE
-}
-
-pub struct Debug {
-    loader: DebugUtils,
-    messenger: vk::DebugUtilsMessengerEXT,
-}
-
-impl Debug {
-    fn new(ctx: &Ctx) -> Self {
-        let loader = DebugUtils::new(&ctx.entry, &ctx.instance);
-        let messenger = unsafe {
-            loader
-                .create_debug_utils_messenger(
-                    &vk::DebugUtilsMessengerCreateInfoEXT::builder()
-                        .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
-                        .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
-                        .pfn_user_callback(Some(vk_debug)),
-                    None,
-                )
-                .expect("Failed to create Vulkan debug messenger")
-        };
-
-        Self { loader, messenger }
-    }
-}
-
-impl Drop for Debug {
-    fn drop(&mut self) {
-        unsafe {
-            self.loader
-                .destroy_debug_utils_messenger(self.messenger, None);
-        }
-    }
-}
 
 pub struct Vkr {
     pub pipelines: DefaultPipelines,
@@ -63,7 +11,6 @@ pub struct Vkr {
     pub pass: Pass,           // How about multiple passes?
     pub dev: Dev,
     pub surface: Surface,
-    pub debug: Debug,
     pub ctx: Ctx,
     pub win: Option<Win>,
     pub resized: bool, // Whether the window has been resized or not
@@ -77,7 +24,6 @@ impl Vkr {
         let (width, height) = win.window.drawable_size();
 
         let ctx = Ctx::builder().win(&win).build();
-        let debug = Debug::new(&ctx);
 
         let surface = Surface::new(&win, &ctx);
         let mut dev = Dev::new(&ctx, Some(&surface));
@@ -96,7 +42,6 @@ impl Vkr {
             pass,
             dev,
             surface,
-            debug,
             ctx,
             win: Some(win),
             resized: false,
