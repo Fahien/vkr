@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 use ash::*;
-use std::{borrow::Borrow, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
+use vkr_util::Handle;
 
 use crate::*;
 
@@ -192,285 +193,13 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
     }
 
-    pub fn bind(&mut self, pipeline: &dyn Pipeline, model: &Model, camera_node: Handle<Node>) {
-        self.res
-            .command_buffer
-            .bind_pipeline(pipeline.get_pipeline());
-
-        let width = self.buffer.width as f32;
-        let height = self.buffer.height as f32;
-        let viewport = vk::Viewport::builder()
-            .width(width)
-            .height(height)
-            .max_depth(0.0)
-            .min_depth(1.0)
-            .build();
-        self.res.command_buffer.set_viewport(&viewport);
-
-        let scissor = vk::Rect2D::builder()
-            .extent(
-                vk::Extent2D::builder()
-                    .width(self.buffer.width)
-                    .height(self.buffer.height)
-                    .build(),
-            )
-            .build();
-        self.res.command_buffer.set_scissor(&scissor);
-
-        let node = model.nodes.get(camera_node).unwrap();
-        self.current_view = node.trs.get_view_matrix();
-        let camera = model.cameras.get(node.camera).unwrap();
-
-        if let Some(sets) = self
-            .res
-            .descriptors
-            .view_sets
-            .get(&(pipeline.get_set_layouts()[1], camera_node))
-        {
-            self.res
-                .command_buffer
-                .bind_descriptor_sets(pipeline.get_layout(), sets, 1);
-
-            // If there is a descriptor set, there must be a buffer
-            let view_buffer = self.res.view_buffers.get_mut(&camera_node).unwrap();
-            view_buffer.upload(&self.current_view);
-
-            let proj_buffer = self.res.proj_buffers.get_mut(&node.camera).unwrap();
-            proj_buffer.upload(&camera.proj);
-        } else {
-            // Allocate and write desc set for camera view
-            // Camera set layout is at index 1 (use a constant?)
-            let sets = self
-                .res
-                .descriptors
-                .allocate(&[pipeline.get_set_layouts()[1]]);
-
-            if let Some(_) = self.res.view_buffers.get_mut(&camera_node) {
-                // Buffer already there, just make the set pointing to it
-                // TODO: write sets?
-                // Camera::write_set_view(self.device.borrow(), sets[0], &view_buffer);
-            } else {
-                if let Some(_) = self.res.proj_buffers.get_mut(&node.camera) {
-                    // Buffer already there, just make the set pointing to it
-                    // TODO: Write sets?
-                    // Camera::write_set_proj(self.device.borrow(), sets[0], &proj_buffer);
-                } else {
-                    // Create a new buffer for this camera proj matrix
-                    let mut proj_buffer = Buffer::new::<na::Matrix4<f32>>(
-                        &self.allocator,
-                        vk::BufferUsageFlags::UNIFORM_BUFFER,
-                    );
-                    proj_buffer.upload(&camera.proj);
-                    self.res.proj_buffers.insert(node.camera, proj_buffer);
-                }
-
-                // Create a new buffer for this node's view matrix
-                let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &self.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                view_buffer.upload(&self.current_view);
-                self.res.view_buffers.insert(camera_node, view_buffer);
-
-                camera.write_set(self.device.borrow(), sets[0], self, camera_node);
-            }
-
-            self.res
-                .command_buffer
-                .bind_descriptor_sets(pipeline.get_layout(), &sets, 1);
-
-            self.res
-                .descriptors
-                .view_sets
-                .insert((pipeline.get_set_layouts()[1], camera_node), sets);
-        }
-    }
-
     pub fn draw_pipe(&mut self, pipeline: &dyn Pipeline, model: &Model, node: Handle<Node>) {
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
             self.draw_pipe(pipeline, model, child);
         }
 
-        pipeline.draw(&self.res, model, node);
-    }
-
-    pub fn draw<T: VertexInput>(
-        &mut self,
-        pipelines: &DefaultPipelines,
-        model: &Model,
-        node: Handle<Node>,
-    ) {
-        let pipeline = pipelines.get_for::<T>();
-        self.res.command_buffer.bind_pipeline(pipeline.graphics);
-
-        let children = model.nodes.get(node).unwrap().children.clone();
-        for child in children {
-            self.draw::<T>(pipelines, model, child);
-        }
-
-        let cnode = model.nodes.get(node).unwrap();
-
-        let mesh = model.meshes.get(cnode.mesh);
-        if mesh.is_none() {
-            return ();
-        }
-        let mesh = mesh.unwrap();
-
-        let model_view_matrix = (self.current_view * cnode.trs.get_matrix())
-            .try_inverse()
-            .unwrap()
-            .transpose();
-
-        if let Some(sets) = self
-            .res
-            .descriptors
-            .model_sets
-            .get(&(pipeline.set_layouts[0], node))
-        {
-            // If there is a descriptor set, there must be a uniform buffer
-            let ubo = self.res.model_buffers.get_mut(&node).unwrap();
-            ubo.upload(&cnode.trs.get_matrix());
-
-            let model_view_buffer = self.res.model_view_buffers.get_mut(&node).unwrap();
-            model_view_buffer.upload(&model_view_matrix);
-
-            self.res
-                .command_buffer
-                .bind_descriptor_sets(pipeline.layout, sets, 0);
-        } else {
-            // Check the model buffer already exists
-            let model_buffer = match self.res.model_buffers.get_mut(&node) {
-                Some(b) => b,
-                None => {
-                    // Create a new uniform buffer for this node's model matrix
-                    let buffer = Buffer::new::<na::Matrix4<f32>>(
-                        &self.allocator,
-                        vk::BufferUsageFlags::UNIFORM_BUFFER,
-                    );
-                    self.res.model_buffers.insert(node, buffer);
-                    self.res.model_buffers.get_mut(&node).unwrap()
-                }
-            };
-            model_buffer.upload(&cnode.trs.get_matrix());
-
-            // Check whether the view-model buffer already exists
-            let model_view_buffer = match self.res.model_view_buffers.get_mut(&node) {
-                Some(b) => b,
-                None => {
-                    // Create a new uniform buffer for this node's model view matrix
-                    let buffer = Buffer::new::<na::Matrix4<f32>>(
-                        &self.allocator,
-                        vk::BufferUsageFlags::UNIFORM_BUFFER,
-                    );
-                    self.res.model_view_buffers.insert(node, buffer);
-                    self.res.model_view_buffers.get_mut(&node).unwrap()
-                }
-            };
-
-            // Allocate and write descriptors
-            let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[0]]);
-            T::write_set_model(self.device.borrow(), sets[0], &model_buffer);
-            T::write_set_model_view(self.device.borrow(), sets[0], &model_view_buffer);
-
-            self.res
-                .command_buffer
-                .bind_descriptor_sets(pipeline.layout, &sets, 0);
-
-            self.res
-                .descriptors
-                .model_sets
-                .insert((pipeline.set_layouts[0], node), sets);
-        }
-
-        for hprimitive in &mesh.primitives {
-            let primitive = model.primitives.get(*hprimitive).unwrap();
-
-            // Does this pipeline support materials at all?
-            if pipeline.set_layouts.len() > 2 {
-                // How about grouping by material?
-                let material = match model.materials.get(primitive.material) {
-                    Some(m) => m,
-                    None => &self.res.fallback.white_material,
-                };
-
-                if let Some(sets) = self
-                    .res
-                    .descriptors
-                    .material_sets
-                    .get(&(pipeline.set_layouts[2], primitive.material))
-                {
-                    // If there is a descriptor set, there must be a uniform buffer
-                    let ubo = self
-                        .res
-                        .material_buffers
-                        .get_mut(&primitive.material)
-                        .unwrap();
-                    ubo.upload(material);
-
-                    // @todo Use a constant or something that is not a magic number (2)
-                    self.res
-                        .command_buffer
-                        .bind_descriptor_sets(pipeline.layout, sets, 2);
-                } else {
-                    // Check if material uniform buffer already exists
-                    let material_buffer =
-                        match self.res.material_buffers.get_mut(&primitive.material) {
-                            Some(buffer) => buffer,
-                            None => {
-                                // Create a new uniform buffer for this material
-                                let material_buffer = Buffer::new::<Color>(
-                                    &self.allocator,
-                                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                                );
-
-                                self.res
-                                    .material_buffers
-                                    .insert(primitive.material, material_buffer);
-
-                                self.res
-                                    .material_buffers
-                                    .get_mut(&primitive.material)
-                                    .unwrap()
-                            }
-                        };
-
-                    material_buffer.upload(material);
-
-                    let texture = model
-                        .textures
-                        .get(material.albedo)
-                        .unwrap_or(&self.res.fallback.white_texture);
-
-                    let sets = self.res.descriptors.allocate(&[pipeline.set_layouts[2]]); // 1 is for material
-                    Material::write_set(&self.device, sets[0], &material_buffer, texture);
-
-                    self.res
-                        .command_buffer
-                        .bind_descriptor_sets(pipeline.layout, &sets, 2);
-
-                    self.res
-                        .descriptors
-                        .material_sets
-                        .insert((pipeline.set_layouts[2], primitive.material), sets);
-                }
-            }
-
-            self.res
-                .command_buffer
-                .bind_vertex_buffer(&primitive.vertices);
-
-            if let Some(indices) = &primitive.indices {
-                // Draw indexed if primitive has indices
-                self.res.command_buffer.bind_index_buffer(indices);
-
-                let index_count = indices.size as u32 / std::mem::size_of::<u16>() as u32;
-                self.res.command_buffer.draw_indexed(index_count, 0, 0);
-            } else {
-                // Draw without indices
-                self.res.command_buffer.draw(primitive.vertex_count);
-            }
-        }
+        pipeline.draw(self, model, node);
     }
 
     pub fn end(&self) {
@@ -506,6 +235,7 @@ impl Drop for Frame {
     }
 }
 
+#[cfg(feature= "win" )]
 pub trait Frames {
     fn next_frame(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass)
         -> Option<Frame>;
@@ -518,6 +248,7 @@ struct OffscreenFrames {
     _images: Vec<vk::Image>,
 }
 
+#[cfg(feature= "win" )]
 impl Frames for OffscreenFrames {
     fn next_frame(
         &mut self,
@@ -576,6 +307,7 @@ impl SwapchainFrames {
         }
     }
 
+    #[cfg(feature= "win" )]
     pub fn recreate(&mut self, win: &Win, surface: &Surface, dev: &Dev, pass: &Pass) {
         dev.wait();
         self.current = 0;
@@ -593,6 +325,7 @@ impl SwapchainFrames {
     }
 }
 
+#[cfg(feature= "win" )]
 impl Frames for SwapchainFrames {
     fn next_frame(
         &mut self,

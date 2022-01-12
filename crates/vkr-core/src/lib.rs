@@ -47,11 +47,26 @@ pub use sync::*;
 pub mod pass;
 pub use pass::*;
 
+pub mod mesh;
+pub use mesh::*;
+
+pub mod model;
+pub use model::*;
+
 pub mod pipeline;
 pub use pipeline::*;
 
 pub mod texture;
 pub use texture::*;
 
+pub mod descriptor;
+pub use descriptor::*;
+
 pub mod descriptors;
 pub use descriptors::*;
+
+pub mod framecache;
+pub use framecache::*;
+
+pub mod frame;
+pub use frame::*;

@@ -312,4 +312,8 @@ impl Pipeline for DefaultPipeline {
     fn get_pipeline(&self) -> vk::Pipeline {
         self.graphics
     }
+
+    fn draw(&self, frame: &mut Frame, model: &Model, node: Handle<Node>) {
+        
+    }
 }
