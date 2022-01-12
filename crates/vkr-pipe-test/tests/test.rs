@@ -7,6 +7,36 @@ use vkr_pipe::*;
 
 pipewriter!("crates/vkr-pipe-test/shader/simple");
 
+impl PipelineUniform {
+    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        println!("Bind");
+    }
+
+    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        println!("Draw");
+    }
+}
+
+impl PipelineMain {
+    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        println!("Bind");
+    }
+
+    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        println!("Draw");
+    }
+}
+
+impl PipelineSecondary {
+    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        println!("Bind");
+    }
+
+    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        println!("Draw");
+    }
+}
+
 #[test]
 fn load_simple_shader() {
     const SHADERS: &[u8] = include_bytes!(env!("simple_shader.spv"));
@@ -15,7 +45,7 @@ fn load_simple_shader() {
 
 #[test]
 fn build_simple_shader() {
-    let ctx = Ctx::builder().build();
+    let ctx = Ctx::builder().debug(true).build();
     let dev = Dev::new(&ctx, None);
 
     let mut cache = PipelineCache::new(&dev);
@@ -35,7 +65,7 @@ fn build_simple_shader() {
         .downcast_ref::<PipelineUniform>()
         .unwrap();
 
-    let mut pool = DescriptorPool::new(&dev.device, 4, 3, 1, 1);
+    let mut pool = DescriptorPool::new(&dev.device, 4, 3, 1, 2);
     let sets = pool.allocate(&uniform_pipeline.set_layouts);
 
     let view_buffer =

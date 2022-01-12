@@ -12,7 +12,8 @@ pub fn header() -> TokenStream {
     quote! {
         use std::{ffi::CString, rc::Rc};
         use ash::{vk, Device};
-        use vkr_core::{Dev, Pass, ShaderModule, Pipeline, Texture};
+        use vkr_core::{Dev, Pass, ShaderModule, Pipeline, Texture, Frame, Model, Node};
+        use vkr_util::Handle;
     }
 }
 
@@ -404,6 +405,14 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
             fn get_pipeline(&self) -> vk::Pipeline {
                 self.pipeline
+            }
+
+            fn bind(&self, frame: &mut Frame, model: &Model, node: Handle<Node>) {
+                self.bind_impl(frame, model, node)
+            }
+
+            fn draw(&self, frame: &mut Frame, model: &Model, node: Handle<Node>) {
+                self.draw_impl(frame, model, node)
             }
         }
 

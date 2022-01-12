@@ -823,6 +823,7 @@ dependencies = [
  "spirv-builder",
  "vkr-core 0.4.1 (git+https://github.com/fahien/vkr.git?branch=restructure)",
  "vkr-pipe",
+ "vkr-util",
 ]
 
 [[package]]
