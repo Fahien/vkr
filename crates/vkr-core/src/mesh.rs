@@ -2,10 +2,82 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::vk;
+use ash::{vk, Device};
 use std::{cell::RefCell, rc::Rc};
+use vkr_util::Handle;
 
 use crate::*;
+
+#[repr(C)]
+pub struct Material {
+    pub color: Color,
+    pub albedo: Handle<Texture>,
+}
+
+impl Material {
+    pub fn new(color: Color) -> Self {
+        let albedo = Handle::none();
+        Self { color, albedo }
+    }
+
+    pub fn textured(albedo: Handle<Texture>) -> Self {
+        let color = Color::white();
+        Self { color, albedo }
+    }
+
+    pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
+        let color = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // color
+            .descriptor_count(1) // Referring the shader?
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let albedo = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        vec![color, albedo]
+    }
+
+    pub fn write_set(device: &Device, set: vk::DescriptorSet, material: &Buffer, albedo: &Texture) {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .range(std::mem::size_of::<Color>() as vk::DeviceSize)
+            .buffer(material.buffer)
+            .build();
+
+        let buffer_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(albedo.view)
+            .sampler(albedo.sampler)
+            .build();
+
+        let image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&[image_info])
+            .build();
+
+        let writes = vec![buffer_write, image_write];
+
+        unsafe {
+            device.update_descriptor_sets(&writes, &[]);
+        }
+    }
+}
 
 pub struct Primitive {
     pub vertex_count: u32,

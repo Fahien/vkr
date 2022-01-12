@@ -19,14 +19,5 @@ pub use pipeline::*;
 pub mod gfx;
 pub use gfx::*;
 
-mod descriptor;
-pub use descriptor::*;
-
-pub mod mesh;
-pub use mesh::*;
-
 mod gui;
 pub use gui::*;
-
-mod frame;
-pub use frame::*;
