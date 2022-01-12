@@ -753,6 +753,7 @@ dependencies = [
  "enum-ordinalize",
  "imgui",
  "memoffset",
+ "nalgebra",
  "png",
  "sdl2",
  "spirv-builder",

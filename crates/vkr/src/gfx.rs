@@ -158,7 +158,7 @@ impl Vkr {
         if frame.res.pipeline_cache.descriptors.present_sets.is_empty() {
             frame.res.pipeline_cache.descriptors.present_sets =
                 frame.res.pipeline_cache.descriptors.allocate(&set_layouts);
-            PresentVertex::write_set(
+            write_present_set(
                 &self.dev.device,
                 frame.res.pipeline_cache.descriptors.present_sets[0],
                 &frame.buffer.albedo_view,
@@ -197,7 +197,8 @@ impl Vkr {
             let camera_node = model.nodes.get(camera_node).unwrap();
             let camera = model.cameras.get_mut(camera_node.camera).unwrap();
             if let Some(win) = self.win.as_ref() {
-                camera.update(win);
+                let (width, height) = win.window.drawable_size();
+                camera.update(width, height);
             }
         }
     }

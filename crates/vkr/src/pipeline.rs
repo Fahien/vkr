@@ -4,13 +4,10 @@
 
 use ash::{vk, Device};
 use std::{ffi::CString, rc::Rc};
-use vkr_core::{Pass, Pipeline};
+use vkr_core::{Frame, Line, Model, Node, Pass, Pipeline, ShaderModule, Vertex};
+use vkr_util::Handle;
 
-use crate::{
-    model::{Line, Vertex, VertexInput},
-    shader::ShaderModule,
-    Descriptors, PresentVertex,
-};
+use crate::{model::VertexInput, PresentVertex};
 
 use enum_ordinalize::*;
 use variant_count::*;
@@ -44,27 +41,14 @@ impl DefaultPipelines {
     }
 
     pub fn get_mut_presentation(&mut self) -> &mut DefaultPipeline {
-        &mut self.pipelines[Pipelines::PRESENT as usize]
+        match self.debug {
+            Some(index) => &mut self.pipelines[index as usize],
+            None => &mut self.pipelines[Pipelines::PRESENT as usize],
+        }
     }
 
     pub fn get_mut<T: VertexInput>(&mut self) -> &mut DefaultPipeline {
-        match self.debug {
-            Some(index) => &mut self.pipelines[index as usize],
-            None => &mut self.pipelines[T::get_pipeline() as usize],
-        }
-    }
-}
-
-pub struct PipelineCache {
-    /// List of descriptors, one for each swapchain image
-    pub descriptors: Descriptors,
-}
-
-impl PipelineCache {
-    pub fn new(device: &Rc<Device>) -> Self {
-        Self {
-            descriptors: Descriptors::new(device),
-        }
+        &mut self.pipelines[T::get_pipeline() as usize]
     }
 }
 
@@ -327,4 +311,8 @@ impl Pipeline for DefaultPipeline {
     fn get_pipeline(&self) -> vk::Pipeline {
         self.graphics
     }
+
+    fn draw(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
+
+    fn bind(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 }
