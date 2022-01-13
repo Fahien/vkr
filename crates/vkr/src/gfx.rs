@@ -23,7 +23,7 @@ impl Vkr {
 
         let (width, height) = win.window.drawable_size();
 
-        let ctx = Ctx::builder().win(&win).build();
+        let ctx = Ctx::builder().debug(true).win(&win).build();
 
         let surface = Surface::new(&win, &ctx);
         let mut dev = Dev::new(&ctx, Some(&surface));

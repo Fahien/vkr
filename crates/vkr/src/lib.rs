@@ -6,25 +6,7 @@ pub use imgui as im;
 pub use nalgebra as na;
 pub use sdl2 as sdl;
 
-pub use vkr_core::{
-    buffer::*,
-    commands::*,
-    ctx::*,
-    image::*,
-    dev::*,
-    pass::*,
-    framecache::*,
-    model::*,
-    pipeline::*,
-    mesh::*,
-    swapchain::*,
-    win::*,
-    surface::*,
-    sync::*,
-    shader::*,
-    sampler::*,
-    texture::*,
-};
+pub use vkr_core::*;
 pub use vkr_util::*;
 
 pub mod texture;
@@ -40,7 +22,4 @@ pub mod gfx;
 pub use gfx::*;
 
 mod gui;
-pub use gui::*;
-
-mod frame;
-pub use frame::*;
+use gui::*;

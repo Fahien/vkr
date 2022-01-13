@@ -141,12 +141,16 @@ impl Drop for Framebuffer {
 }
 
 pub struct Frame {
+    /// List of nodes with cameras to render. At the beginning of a frame is empty.
+    /// Then it is populated with calling `udpate()`, and TODO: cleared after submitting rendering commands.
+    camera_nodes: Vec<Handle<Node>>,
+
     /// Used to compute the model-view matrix when rendering a mesh
     pub current_view: na::Matrix4<f32>,
     pub buffer: Framebuffer,
     pub res: FrameCache,
     /// A frame should be able to allocate a uniform buffer on draw
-    allocator: Rc<RefCell<vk_mem::Allocator>>,
+    pub allocator: Rc<RefCell<vk_mem::Allocator>>,
     pub device: Rc<Device>,
 }
 
@@ -156,6 +160,7 @@ impl Frame {
         let res = FrameCache::new(dev);
 
         Frame {
+            camera_nodes: vec![],
             current_view: na::Matrix4::identity(),
             buffer,
             res,
@@ -193,13 +198,54 @@ impl Frame {
         self.res.command_buffer.set_scissor(&scissor);
     }
 
-    pub fn draw_pipe(&mut self, pipeline: &dyn Pipeline, model: &Model, node: Handle<Node>) {
+    /// Ideally it should not modify the model
+    pub fn update(&mut self, model: &Model, node_handle: Handle<Node>) {
+        let node = model.nodes.get(node_handle).unwrap();
+
+        let children = node.children.clone();
+        for child in children {
+            self.update(model, child);
+        }
+
+        // Add this camera to the list of cameras to render
+        if node.camera.valid() {
+            self.camera_nodes.push(node_handle);
+        }
+
+        // TODO collect more info such as pipelines for each material
+    }
+
+    pub fn bind_pipe(&mut self, pipeline: &dyn Pipeline, model: &Model, node: Handle<Node>) {
+        pipeline.bind(self, model, node);
+    }
+
+    pub fn draw_pipe_recursive(
+        &mut self,
+        pipeline: &dyn Pipeline,
+        model: &Model,
+        node: Handle<Node>,
+    ) {
         let children = model.nodes.get(node).unwrap().children.clone();
         for child in children {
             self.draw_pipe(pipeline, model, child);
         }
 
         pipeline.draw(self, model, node);
+    }
+
+    pub fn draw_pipe(&mut self, pipeline: &dyn Pipeline, model: &Model, node: Handle<Node>) {
+        // TODO: This function should just prepare stuff for drawing
+        // Actual drawing should happen later, which means Pipeline trait can call this function
+        // and then call another one to submit render commands.
+        // In this function we can collect useful information, such as the camera
+        // The the second function, we bind the camera, and then draw everything enqueued for rendering
+        // We can even optimize some stuff with this approach.
+
+        let camera_nodes = self.camera_nodes.clone();
+        for camera_node_handle in camera_nodes {
+            pipeline.bind(self, model, camera_node_handle);
+            self.draw_pipe_recursive(pipeline, model, node);
+        }
     }
 
     pub fn end(&self) {
@@ -213,6 +259,9 @@ impl Frame {
         swapchain: &Swapchain,
         image_index: u32,
     ) -> Result<(), vk::Result> {
+        // TODO: move this clear somewhere else, but do not keep it in the middle of recording/submitting commands
+        self.camera_nodes.clear();
+
         dev.graphics_queue.submit_draw(
             &self.res.command_buffer,
             self.res.image_ready.semaphore,

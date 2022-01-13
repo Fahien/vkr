@@ -789,7 +789,12 @@ dependencies = [
 name = "vkr-demo"
 version = "0.4.1"
 dependencies = [
+ "ash",
+ "spirv-builder",
  "vkr",
+ "vkr-core",
+ "vkr-pipe",
+ "vkr-util",
 ]
 
 [[package]]

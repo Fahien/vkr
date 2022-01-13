@@ -11,6 +11,7 @@ use crate::{Frame, Model, Node};
 
 pub trait Pipeline: Any {
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn get_name(&self) -> &String;
     fn get_set_layouts(&self) -> &[vk::DescriptorSetLayout];
     fn get_layout(&self) -> vk::PipelineLayout;

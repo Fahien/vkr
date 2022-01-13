@@ -7,6 +7,13 @@ license = "MIT"
 
 [dependencies]
 vkr = { path = "../vkr" }
+vkr-core = { path = "../vkr-core" }
+vkr-util = { path = "../vkr-util" }
+vkr-pipe = { path = "../vkr-pipe" }
+ash = "0.33"
+
+[build-dependencies]
+spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag = "v0.4.0-alpha.12" }
 
 [[bin]]
 name = "1-texture"

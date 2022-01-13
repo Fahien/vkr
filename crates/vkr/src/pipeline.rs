@@ -296,6 +296,10 @@ impl Pipeline for DefaultPipeline {
         self
     }
 
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn get_name(&self) -> &String {
         &self.name
     }
@@ -312,7 +316,7 @@ impl Pipeline for DefaultPipeline {
         self.graphics
     }
 
-    fn draw(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
-
     fn bind(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
+
+    fn draw(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 }
