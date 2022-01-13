@@ -16,8 +16,13 @@ pub struct Png {
 impl Png {
     /// Opens a PNG file without loading data yet
     pub fn open(path: &str) -> Self {
+        let current_dir = std::env::current_dir().expect("Failed to get current dir");
         let path = Path::new(path);
-        let file = File::open(path).unwrap();
+        let file = File::open(path).expect(&format!(
+            "Failed to load PNG file: {}/{}",
+            current_dir.display(),
+            path.display()
+        ));
 
         let decoder = png::Decoder::new(file);
         let (info, reader) = decoder.read_info().unwrap();
