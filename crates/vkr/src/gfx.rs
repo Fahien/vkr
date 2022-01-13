@@ -23,7 +23,7 @@ impl Vkr {
 
         let (width, height) = win.window.drawable_size();
 
-        let ctx = Ctx::builder().win(&win).build();
+        let ctx = Ctx::builder().debug(true).win(&win).build();
 
         let surface = Surface::new(&win, &ctx);
         let mut dev = Dev::new(&ctx, Some(&surface));
@@ -157,7 +157,7 @@ impl Vkr {
                 .res
                 .descriptors
                 .allocate(&present_pipeline.set_layouts);
-            PresentVertex::write_set(
+            write_present_set(
                 &self.dev.device,
                 frame.res.descriptors.present_sets[0],
                 &frame.buffer.albedo_view,
@@ -196,7 +196,8 @@ impl Vkr {
             let camera_node = model.nodes.get(camera_node).unwrap();
             let camera = model.cameras.get_mut(camera_node.camera).unwrap();
             if let Some(win) = self.win.as_ref() {
-                camera.update(win);
+                let (width, height) = win.window.drawable_size();
+                camera.update(width, height);
             }
         }
     }

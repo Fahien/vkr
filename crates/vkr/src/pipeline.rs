@@ -313,7 +313,7 @@ impl Pipeline for DefaultPipeline {
         self.graphics
     }
 
-    fn draw(&self, frame: &mut Frame, model: &Model, node: Handle<Node>) {
-        
-    }
+    fn bind(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
+
+    fn draw(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 }

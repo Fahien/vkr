@@ -21,6 +21,3 @@ pub use gfx::*;
 
 mod gui;
 use gui::*;
-
-mod frame;
-use frame::*;
