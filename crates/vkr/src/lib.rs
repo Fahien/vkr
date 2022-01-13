@@ -20,4 +20,4 @@ pub mod gfx;
 pub use gfx::*;
 
 mod gui;
-pub use gui::*;
+use gui::*;

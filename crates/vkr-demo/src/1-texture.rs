@@ -4,10 +4,19 @@
 
 use vkr::*;
 
+
+mod pipe;
+use pipe::*;
+
 pub fn main() {
     let win = Win::new("Texture", 480, 480);
     let mut vkr = Vkr::new(win);
     let mut model = Model::new();
+
+    let mut pipeline_cache = pipe::PipelineCache::new(&vkr.dev);
+    let main_pipeline = pipeline_cache.get(ShaderVkrMainShaders::Main);
+
+    let mut root = Node::new();
 
     let lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
@@ -63,6 +72,7 @@ pub fn main() {
     rect.trs.translate(&na::Vector3::new(0.0, 0.3, -0.2));
     rect.mesh = rect_mesh;
     let rect = model.nodes.push(rect);
+    root.children.push(rect);
 
     let camera = Camera::orthographic(-1.0, 1.0, -1.0, 1.0, 0.1, 1.0);
     let camera = model.cameras.push(camera);
@@ -70,6 +80,9 @@ pub fn main() {
     camera_node.camera = camera;
     camera_node.trs.translate(&na::Vector3::new(0.3, 0.3, 0.0));
     let camera_node = model.nodes.push(camera_node);
+    root.children.push(camera_node);
+
+    let root = model.nodes.push(root);
 
     'running: loop {
         if !vkr.handle_events() {
@@ -119,10 +132,8 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
 
-        frame.bind(vkr.pipelines.get_mut::<Line>(), &model, camera_node);
-        frame.draw::<Line>(vkr.pipelines.get_mut::<Line>(), &model, lines);
-        frame.bind(vkr.pipelines.get_mut::<Vertex>(), &model, camera_node);
-        frame.draw::<Vertex>(vkr.pipelines.get_mut::<Vertex>(), &model, rect);
+        frame.update(&model, root);
+        frame.draw_pipe(main_pipeline.as_ref(), &model, root);
 
         vkr.end_scene(&mut frame);
         vkr.gui
