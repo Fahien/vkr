@@ -261,6 +261,12 @@ impl Vkr {
         let win = self.win.as_ref().unwrap();
 
         if self.resized {
+            let present_pipeline = self.pipelines.get_mut_presentation();
+            for index in 0..self.sfs.frames.len() {
+                let cache = present_pipeline.get_cache(index);
+                cache.descriptors.free(&cache.descriptors.present_sets);
+                cache.descriptors.present_sets.clear();
+            }
             self.gui.set_drawable_size(win);
             self.sfs.recreate(win, &self.surface, &self.dev, &self.pass);
         }

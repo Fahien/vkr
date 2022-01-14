@@ -727,8 +727,6 @@ impl SwapchainFrames {
         self.swapchain.recreate(&surface, &dev, width, height);
         for i in 0..self.swapchain.images.len() {
             let frame = self.frames[i].as_mut().unwrap();
-            frame.res.descriptors.free(&frame.res.descriptors.present_sets);
-            frame.res.descriptors.present_sets.clear();
             frame.buffer = Framebuffer::new(&dev, &self.swapchain.images[i], &pass);
         }
     }
