@@ -14,6 +14,9 @@ use pipeline::*;
 mod gfx;
 use gfx::*;
 
+mod descriptor;
+use descriptor::*;
+
 mod frame;
 use frame::*;
 
