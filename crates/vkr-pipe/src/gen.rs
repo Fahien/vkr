@@ -10,7 +10,7 @@ use quote::quote;
 
 pub fn header() -> TokenStream {
     quote! {
-        use std::{ffi::CString, rc::Rc};
+        use std::{collections::HashMap, ffi::CString, rc::Rc};
         use ash::{vk, Device};
         use vkr_core::{Dev, Pass, ShaderModule, Pipeline, Texture, Frame, Model, Node};
         use vkr_util::Handle;
@@ -208,11 +208,95 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
         vertex_attributes.extend(attribute);
     }
 
+    let pipeline_cache_name = format!("PipelineCache{}", pipeline.name.to_camelcase())
+        .parse::<proc_macro2::TokenStream>()
+        .expect("Failed to parse shader name");
+
+    let pipeline_cache = quote! {
+        pub struct #pipeline_cache_name {
+            sets: HashMap<usize, Vec<vk::DescriptorSet>>,
+            pool: vk::DescriptorPool,
+            pub device: Rc<Device>,
+        }
+
+        impl #pipeline_cache_name {
+            pub fn new(device: &Rc<Device>) -> Self {
+                let pool = unsafe {
+                    // Support 1 model matrix, 1 view matrix, 1 proj matrix?
+                    let uniform_count = 32;
+                    let uniform_pool_size = vk::DescriptorPoolSize::builder()
+                        .descriptor_count(uniform_count)
+                        .ty(vk::DescriptorType::UNIFORM_BUFFER)
+                        .build();
+
+                    // Support 1 material and a gui texture?
+                    let sampler_count = 16;
+                    let sampler_pool_size = vk::DescriptorPoolSize::builder()
+                        .descriptor_count(sampler_count)
+                        .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                        .build();
+
+                    // Support 3 input attachments
+                    let input_count = 3;
+                    let input_pool_size = vk::DescriptorPoolSize::builder()
+                        .descriptor_count(input_count)
+                        .ty(vk::DescriptorType::INPUT_ATTACHMENT)
+                        .build();
+
+                    let set_count = 16; // 5 nodes, 1 camera, 5 materials, 1 gui?
+                    let pool_sizes = vec![uniform_pool_size, sampler_pool_size, input_pool_size];
+
+                    let create_info = vk::DescriptorPoolCreateInfo::builder()
+                        .pool_sizes(&pool_sizes)
+                        .max_sets(set_count)
+                        .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
+                        .build();
+
+                    device.create_descriptor_pool(&create_info, None)
+                        .expect("Failed to create Vulkan descriptor pool")
+                };
+
+                Self {
+                    sets: HashMap::new(),
+                    pool,
+                    device: device.clone(),
+                }
+            }
+
+            pub fn allocate(&mut self, layouts: &[vk::DescriptorSetLayout]) -> Vec<vk::DescriptorSet> {
+                let create_info = vk::DescriptorSetAllocateInfo::builder()
+                    .descriptor_pool(self.pool)
+                    .set_layouts(layouts)
+                    .build();
+
+                unsafe { self.device.allocate_descriptor_sets(&create_info) }
+                    .expect("Failed to allocate Vulkan descriptor sets")
+            }
+
+            pub fn free(&self, descriptors: &[vk::DescriptorSet]) {
+                unsafe {
+                    self.device
+                        .free_descriptor_sets(self.pool, descriptors)
+                        .expect("msFailed to free descriptor sets");
+                }
+            }
+        }
+
+        impl Drop for #pipeline_cache_name {
+            fn drop(&mut self) {
+                unsafe { self.device.destroy_descriptor_pool(self.pool, None) };
+            }
+        }
+    };
+
     let set_layouts_methods = set_layouts_methods(&pipeline.uniforms);
     let write_set_methods = write_set_methods(&pipeline.uniforms);
 
     quote! {
+        #pipeline_cache
+
         pub struct #pipeline_name {
+            caches: Vec<#pipeline_cache_name>,
             pipeline: vk::Pipeline,
             layout: vk::PipelineLayout,
             set_layouts: Vec<vk::DescriptorSetLayout>,
@@ -375,6 +459,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass);
 
                 Self {
+                    caches: vec![],
                     pipeline,
                     layout,
                     set_layouts,
@@ -383,11 +468,23 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 }
             }
 
+            pub fn get_cache(&mut self, index: usize) -> &mut #pipeline_cache_name {
+                while index >= self.caches.len() {
+                    self.caches.push(#pipeline_cache_name::new(&self.device));
+                }
+
+                &mut self.caches[index]
+            }
+
             #write_set_methods
         }
 
         impl Pipeline for #pipeline_name {
             fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
                 self
             }
 
@@ -528,6 +625,14 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 }
 
                 self.pipelines[shader as usize].as_ref().unwrap()
+            }
+
+            pub fn get_mut(&mut self, shader: #enum_name) -> &mut Box<dyn Pipeline> {
+                if self.pipelines[shader as usize].is_none() {
+                    self.create_pipeline(shader)
+                }
+
+                self.pipelines[shader as usize].as_mut().unwrap()
             }
         }
     }

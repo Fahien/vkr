@@ -768,8 +768,8 @@ dependencies = [
  "spirv-builder",
  "variant_count",
  "vk-mem",
- "vkr-core 0.4.1",
- "vkr-util 0.4.1",
+ "vkr-core",
+ "vkr-util",
 ]
 
 [[package]]
@@ -782,20 +782,7 @@ dependencies = [
  "png",
  "sdl2",
  "vk-mem",
- "vkr-util 0.4.1",
-]
-
-[[package]]
-name = "vkr-core"
-version = "0.4.1"
-source = "git+https://github.com/fahien/vkr.git?branch=restructure#8286c72b9ecac72aa0bbc7253c064440e36c9fa8"
-dependencies = [
- "ash",
- "byteorder",
- "nalgebra",
- "png",
- "vk-mem",
- "vkr-util 0.4.1 (git+https://github.com/fahien/vkr.git?branch=restructure)",
+ "vkr-util",
 ]
 
 [[package]]
@@ -821,7 +808,7 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "spirv-builder",
- "vkr-core 0.4.1 (git+https://github.com/fahien/vkr.git?branch=restructure)",
+ "vkr-core",
  "vkr-pipe",
  "vkr-util",
 ]
@@ -829,11 +816,6 @@ dependencies = [
 [[package]]
 name = "vkr-util"
 version = "0.4.1"
-
-[[package]]
-name = "vkr-util"
-version = "0.4.1"
-source = "git+https://github.com/fahien/vkr.git?branch=restructure#8286c72b9ecac72aa0bbc7253c064440e36c9fa8"
 
 [[package]]
 name = "wasi"

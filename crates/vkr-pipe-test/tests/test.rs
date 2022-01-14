@@ -2,6 +2,8 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+use std::any::Any;
+
 use vkr_core::{Buffer, Ctx, DescriptorPool, Image, ImageView, Sampler};
 use vkr_pipe::*;
 
@@ -43,6 +45,10 @@ fn load_simple_shader() {
     assert!(!SHADERS.is_empty());
 }
 
+fn as_uni(pipeline: &mut dyn Any) -> &mut PipelineUniform {
+    pipeline.downcast_mut().expect("Failed")
+}
+
 #[test]
 fn build_simple_shader() {
     let ctx = Ctx::builder().debug(true).build();
@@ -57,13 +63,10 @@ fn build_simple_shader() {
     eprintln!("{}", secondary_pipeline.get_name());
     assert!(secondary_pipeline.get_name() == "Secondary");
 
-    let uniform_pipeline = cache.get(ShaderSimpleShader::Uniform);
+    let uniform_pipeline = cache.get_mut(ShaderSimpleShader::Uniform);
     assert!(uniform_pipeline.get_name() == "Uniform");
 
-    let uniform_pipeline = uniform_pipeline
-        .as_any()
-        .downcast_ref::<PipelineUniform>()
-        .unwrap();
+    let uniform_pipeline = as_uni(uniform_pipeline.as_any_mut());
 
     let mut pool = DescriptorPool::new(&dev.device, 4, 3, 1, 2);
     let sets = pool.allocate(&uniform_pipeline.set_layouts);
@@ -86,6 +89,8 @@ fn build_simple_shader() {
     let white_sampler = Sampler::new(&dev.device);
     let albedo = Texture::new(white_view.view, white_sampler.sampler);
     uniform_pipeline.write_set_2(sets[2], &color_buffer, &albedo);
+
+    let _cache = uniform_pipeline.get_cache(0);
 
     dev.wait();
 }
