@@ -8,8 +8,9 @@ use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
     ffi::{c_void, CStr, CString},
+    ops::Deref,
     os::raw::c_char,
-    rc::Rc, ops::Deref,
+    rc::Rc,
 };
 
 use crate::model::Vertex;
