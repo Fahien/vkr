@@ -423,7 +423,7 @@ checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
 [[package]]
 name = "pipewriter"
 version = "0.1.0"
-source = "git+https://github.com/Fahien/pipewriter.git?branch=main#86611246f33bef7bf67df44ee789bd878de0d30b"
+source = "git+https://github.com/Fahien/pipewriter.git?branch=main#0d3b7e12dea324a75baa1d654dd58df929f0a28a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -773,6 +773,7 @@ dependencies = [
  "enum-ordinalize",
  "imgui",
  "memoffset",
+ "pipewriter",
  "png",
  "sdl2",
  "spirv-builder",

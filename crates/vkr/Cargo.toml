@@ -16,6 +16,7 @@ enum-ordinalize = "3.1.10"
 variant_count = "1.1.0"
 vkr-util = { path = "../vkr-util" }
 vkr-core = { path = "../vkr-core" }
+pipewriter = { git = "https://github.com/Fahien/pipewriter.git", branch = "main"}
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag = "v0.4.0-alpha.12" }
