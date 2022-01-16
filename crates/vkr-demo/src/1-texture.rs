@@ -135,8 +135,8 @@ pub fn main() {
         frame.draw_pipe(main_pipeline.as_ref(), &model, root);
 
         vkr.end_scene(&mut frame);
-        vkr.gui
-            .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
+        //vkr.gui
+        //    .draw_debug_window(delta, &mut frame, &model, camera_node);
 
         vkr.end_frame(frame);
     }

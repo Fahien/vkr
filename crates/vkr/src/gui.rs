@@ -2,18 +2,23 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{vk, Device};
 use im::internal::RawWrapper;
 use memoffset::offset_of;
-use std::{ffi::CString, rc::Rc};
 
 use crate::*;
+
+vkr_pipe::pipewriter!("crates/shader/gui");
+
+impl PipelineGui {
+    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
+    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
+}
 
 pub struct Gui {
     /// Not common as camera and model, therefore we store it here
     set_layouts: Vec<vk::DescriptorSetLayout>,
 
-    pipeline: DefaultPipeline,
+    pipeline_pool: PipelinePool,
 
     sampler: Sampler,
     view: ImageView,
@@ -130,33 +135,6 @@ impl VertexInput for im::DrawVert {
     }
 }
 
-impl DefaultPipeline {
-    fn gui(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_gui_shaders.spv"));
-        let shader = ShaderModule::new(device, SHADERS);
-        let vs = CString::new("gui_vs").expect("Failed to create entrypoint");
-        let fs = CString::new("gui_fs").expect("Failed to create entrypoint");
-
-        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&states)
-            .build();
-
-        Self::new::<im::DrawVert>(
-            "Gui".to_string(),
-            device,
-            shader.get_vert(&vs),
-            shader.get_frag(&fs),
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            &dynamic_state,
-            pass,
-            width,
-            height,
-            1,
-        )
-    }
-}
-
 impl Gui {
     fn build_font(dev: &Dev, ctx: &mut im::Context) -> Image {
         let mut fonts = ctx.fonts();
@@ -176,7 +154,7 @@ impl Gui {
         Image::from_data(dev, font.data, font.width, font.height, format)
     }
 
-    pub fn new(win: &Win, dev: &Dev, pass: &Pass) -> Self {
+    pub fn new(win: &Win, dev: &Dev, _pass: &Pass) -> Self {
         let mut ctx = im::Context::create();
 
         let framebuffer_size = win.window.drawable_size();
@@ -217,13 +195,13 @@ impl Gui {
         let view = ImageView::new(&dev.device, &image);
         let sampler = Sampler::new(&dev.device);
 
-        let pipeline = DefaultPipeline::gui(&dev.device, pass, framebuffer_size.0, framebuffer_size.1);
+        let pipeline_pool = PipelinePool::new(dev);
 
         let set_layouts = im::DrawVert::get_set_layouts(&dev.device);
 
         Self {
             set_layouts,
-            pipeline,
+            pipeline_pool,
             sampler,
             view,
             _image: image,
@@ -298,10 +276,12 @@ impl Gui {
             index_data.extend_from_slice(idx_buffer);
         }
 
+        let pipeline = self.pipeline_pool.get(ShaderVkrGuiShaders::Gui);
+
         // Bind GUI pipeline
         frame_cache
             .command_buffer
-            .bind_pipeline(self.pipeline.graphics);
+            .bind_pipeline(pipeline.get_pipeline());
 
         let viewport = vk::Viewport::builder()
             .width(self.width)
@@ -318,7 +298,7 @@ impl Gui {
         let shift = na::Vector3::new(-1.0, -1.0, 0.0);
         transform.append_translation_mut(&shift);
 
-        let layout = self.pipeline.layout;
+        let layout = pipeline.get_layout();
 
         let constants = unsafe {
             std::slice::from_raw_parts(
@@ -415,7 +395,6 @@ impl Gui {
         &mut self,
         delta: f32,
         frame: &mut Frame,
-        pipelines: &mut DefaultPipelines,
         model: &Model,
         camera: Handle<Node>,
     ) {
@@ -430,32 +409,33 @@ impl Gui {
                 .bg_alpha(0.33)
                 .build(ui, || {
                     // Pipeline
-                    let mut current = if pipelines.debug.is_none() {
-                        0
-                    } else {
-                        pipelines.debug.unwrap() as usize
-                    };
+                    //let mut current = if pipelines.debug.is_none() {
+                    //    0
+                    //} else {
+                    //    pipelines.debug.unwrap() as usize
+                    //};
+
                     ui.text("Pipeline:");
 
-                    let items = [
+                    let _items = [
                         im::im_str!("None"),
                         im::im_str!("Albedo"),
                         im::im_str!("Normal"),
                     ];
                     ui.text(" · ");
                     ui.same_line(0.0);
-                    if im::ComboBox::new(im::im_str!("")).build_simple(
-                        &ui,
-                        &mut current,
-                        &items,
-                        &|&s| s.into(),
-                    ) {
-                        if current == 0 {
-                            pipelines.debug = None;
-                        } else {
-                            pipelines.debug = Pipelines::from_ordinal(current as i8);
-                        }
-                    }
+                    //if im::ComboBox::new(im::im_str!("")).build_simple(
+                    //    &ui,
+                    //    &mut current,
+                    //    &items,
+                    //    &|&s| s.into(),
+                    //) {
+                    //    if current == 0 {
+                    //        pipelines.debug = None;
+                    //    } else {
+                    //        pipelines.debug = Pipelines::from_ordinal(current as i8);
+                    //    }
+                    //}
 
                     // Camera
                     let camera_node = model.nodes.get(camera).unwrap();

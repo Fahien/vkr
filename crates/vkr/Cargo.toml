@@ -17,6 +17,7 @@ variant_count = "1.1.0"
 nalgebra = "0.25.3"
 vkr-util = { path = "../vkr-util" }
 vkr-core = { path = "../vkr-core" }
+vkr-pipe = { path = "../vkr-pipe" }
 
 [build-dependencies]
 spirv-builder = { git = "https://github.com/EmbarkStudios/rust-gpu", tag = "v0.4.0-alpha.12" }

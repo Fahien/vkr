@@ -14,8 +14,8 @@
 use spirv_std::macros::spirv;
 
 use spirv_std::{
-    glam::{vec4, IVec2, Mat4, Vec2, Vec3, Vec4},
-    image::{Image, Image2d, SampledImage},
+    glam::{vec4, Mat4, Vec2, Vec3, Vec4},
+    image::{Image2d, SampledImage},
 };
 
 #[allow(unused_attributes)]
@@ -89,41 +89,4 @@ pub fn main_vs(
 
     uv.x = in_uv.x;
     uv.y = in_uv.y;
-}
-
-#[allow(unused_attributes)]
-#[spirv(fragment)]
-pub fn normal_fs(
-    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] albedo: &Image!(subpass, type=f32, sampled=false),
-    #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] normal: &Image!(subpass, type=f32, sampled=false),
-    out_color: &mut Vec4,
-) {
-    let _frag: Vec4 = albedo.read_subpass(IVec2::new(0, 0));
-    let norm: Vec4 = normal.read_subpass(IVec2::new(0, 0));
-    out_color.x = (norm.x * 2.0) - 1.0;
-    out_color.y = (norm.y * 2.0) - 1.0;
-    out_color.z = (norm.z * 2.0) - 1.0;
-    out_color.w = 1.0;
-}
-
-#[spirv(vertex)]
-pub fn normal_vs(in_pos: Vec2, #[spirv(position, invariant)] out_pos: &mut Vec4) {
-    *out_pos = vec4(in_pos.x, in_pos.y, 0.0, 1.0);
-}
-
-#[allow(unused_attributes)]
-#[spirv(fragment)]
-pub fn present_fs(
-    #[spirv(descriptor_set = 0, binding = 0, input_attachment_index = 0)] albedo: &Image!(subpass, type=f32, sampled=false),
-    #[spirv(descriptor_set = 0, binding = 1, input_attachment_index = 1)] normal: &Image!(subpass, type=f32, sampled=false),
-    out_color: &mut Vec4,
-) {
-    let frag: Vec4 = albedo.read_subpass(IVec2::new(0, 0));
-    let _norm: Vec4 = normal.read_subpass(IVec2::new(0, 0));
-    *out_color = frag;
-}
-
-#[spirv(vertex)]
-pub fn present_vs(in_pos: Vec2, #[spirv(position, invariant)] out_pos: &mut Vec4) {
-    *out_pos = vec4(in_pos.x, in_pos.y, 0.0, 1.0);
 }

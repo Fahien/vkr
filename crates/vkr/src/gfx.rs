@@ -5,7 +5,7 @@
 use crate::*;
 
 pub struct Vkr {
-    pub pipelines: DefaultPipelines,
+    pub pipelines: PipelinePool,
     pub gui: Gui,
     pub sfs: SwapchainFrames, // Use box of frames?
     pub pass: Pass,           // How about multiple passes?
@@ -33,7 +33,7 @@ impl Vkr {
 
         let gui = Gui::new(&win, &dev, &pass);
 
-        let pipelines = DefaultPipelines::new(&dev.device, &pass, width, height);
+        let pipelines = PipelinePool::new(&dev);
 
         Self {
             pipelines,
@@ -147,35 +147,9 @@ impl Vkr {
     pub fn end_scene(&mut self, frame: &mut Frame) {
         frame.res.command_buffer.next_subpass();
 
-        let present_pipeline = self.pipelines.get_mut_presentation();
-        frame
-            .res
-            .command_buffer
-            .bind_pipeline(present_pipeline.graphics);
-
-        let pipeline_layout = present_pipeline.layout;
-        let set_layouts = present_pipeline.set_layouts.clone();
-        if frame.res.pipeline_cache.descriptors.present_sets.is_empty() {
-            frame.res.pipeline_cache.descriptors.present_sets =
-                frame.res.pipeline_cache.descriptors.allocate(&set_layouts);
-            write_present_set(
-                &self.dev.device,
-                frame.res.pipeline_cache.descriptors.present_sets[0],
-                &frame.buffer.albedo_view,
-                &frame.buffer.normal_view,
-                &frame.res.fallback.white_sampler,
-            );
-        }
-        frame.res.command_buffer.bind_descriptor_sets(
-            pipeline_layout,
-            &frame.res.pipeline_cache.descriptors.present_sets,
-            0,
-        );
-        frame
-            .res
-            .command_buffer
-            .bind_vertex_buffer(&frame.res.fallback.present_buffer);
-        frame.res.command_buffer.draw(3);
+        let present_pipeline = self.pipelines.get(ShaderVkrPresentShaders::Present);
+        let model = Model::new();
+        present_pipeline.draw(frame, &model, Handle::none());
     }
 
     pub fn end_frame(&mut self, frame: Frame) {

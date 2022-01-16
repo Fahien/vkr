@@ -769,6 +769,7 @@ dependencies = [
  "variant_count",
  "vk-mem",
  "vkr-core",
+ "vkr-pipe",
  "vkr-util",
 ]
 

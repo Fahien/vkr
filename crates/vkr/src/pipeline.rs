@@ -2,13 +2,6 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use ash::{vk, Device};
-use std::{ffi::CString, rc::Rc};
-use vkr_core::{Frame, Line, Model, Node, Pass, Pipeline, ShaderModule, Vertex};
-use vkr_util::Handle;
-
-use crate::{model::VertexInput, PresentVertex};
-
 use enum_ordinalize::*;
 use variant_count::*;
 
@@ -20,303 +13,51 @@ pub enum Pipelines {
     MAIN,
 }
 
-/// Collection of built-in pipelines
-pub struct DefaultPipelines {
-    /// When debug is set, it is used instead of the one requested by a mesh
-    pub debug: Option<Pipelines>,
-    pub pipelines: [DefaultPipeline; Pipelines::VARIANT_COUNT],
+vkr_pipe::pipewriter!("crates/shader/present");
+
+impl PipelineNormal {
+    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
+    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 }
 
-impl DefaultPipelines {
-    pub fn new(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        let line = DefaultPipeline::line(device, pass, width, height);
-        let main = DefaultPipeline::main(device, pass, width, height);
-        let normal = DefaultPipeline::normal(device, pass, width, height);
-        let present = DefaultPipeline::present(device, pass, width, height);
-        let debug = None;
+impl PipelinePresent {
+    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 
-        let pipelines = [line, present, normal, main];
+    fn draw_impl(&self, frame: &mut Frame, _model: &Model, _node: Handle<Node>) {
+        frame.res.command_buffer.bind_pipeline(self.pipeline);
 
-        Self { debug, pipelines }
-    }
+        let pipeline_layout = self.get_layout();
+        let set_layouts = self.get_set_layouts().clone();
+        if frame.res.pipeline_cache.descriptors.present_sets.is_empty() {
+            frame.res.pipeline_cache.descriptors.present_sets =
+                frame.res.pipeline_cache.descriptors.allocate(&set_layouts);
 
-    pub fn get_mut_presentation(&mut self) -> &mut DefaultPipeline {
-        match self.debug {
-            Some(index) => &mut self.pipelines[index as usize],
-            None => &mut self.pipelines[Pipelines::PRESENT as usize],
+            let albedo_texture = Texture::new(
+                frame.buffer.albedo_view.view,
+                frame.res.fallback.white_sampler.sampler,
+            );
+            let normal_texture = Texture::new(
+                frame.buffer.normal_view.view,
+                frame.res.fallback.white_sampler.sampler,
+            );
+
+            self.write_set_0(
+                frame.res.pipeline_cache.descriptors.present_sets[0],
+                &albedo_texture,
+                &normal_texture,
+            );
         }
-    }
 
-    pub fn get_mut<T: VertexInput>(&mut self) -> &mut DefaultPipeline {
-        &mut self.pipelines[T::get_pipeline() as usize]
-    }
-}
-
-pub struct DefaultPipeline {
-    pub graphics: vk::Pipeline,
-    /// A pipeline layout depends on set layouts, constants, etc, to be created.
-    pub layout: vk::PipelineLayout,
-    /// Set layouts do not really depend on anything
-    pub set_layouts: Vec<vk::DescriptorSetLayout>,
-    device: Rc<Device>,
-    name: String,
-}
-
-impl DefaultPipeline {
-    pub fn new<T: VertexInput>(
-        name: String,
-        device: &Rc<Device>,
-        vert: vk::PipelineShaderStageCreateInfo,
-        frag: vk::PipelineShaderStageCreateInfo,
-        topology: vk::PrimitiveTopology,
-        dynamic_state: &vk::PipelineDynamicStateCreateInfo,
-        pass: &Pass,
-        width: u32,
-        height: u32,
-        subpass: u32,
-    ) -> Self {
-        let set_layouts = T::get_set_layouts(device);
-        let constants = T::get_constants();
-
-        // DefaultPipeline layout (device, descriptorset layouts, shader reflection?)
-        let layout = {
-            let create_info = vk::PipelineLayoutCreateInfo::builder()
-                .set_layouts(&set_layouts)
-                .push_constant_ranges(&constants)
-                .build();
-            unsafe { device.create_pipeline_layout(&create_info, None) }
-                .expect("Failed to create Vulkan pipeline layout")
-        };
-
-        // Graphics pipeline (shaders, renderpass)
-        let graphics = {
-            let vertex_binding = T::get_bindings();
-            let vertex_attributes = T::get_attributes();
-
-            let vertex_binding = [vertex_binding];
-
-            let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_attributes)
-                .vertex_binding_descriptions(&vertex_binding)
-                .build();
-
-            let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::builder()
-                .topology(topology)
-                .primitive_restart_enable(false)
-                .build();
-
-            let raster_state = vk::PipelineRasterizationStateCreateInfo::builder()
-                .depth_clamp_enable(false)
-                .rasterizer_discard_enable(false)
-                .polygon_mode(vk::PolygonMode::FILL)
-                .cull_mode(vk::CullModeFlags::NONE)
-                .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
-                .depth_bias_enable(false)
-                .line_width(1.0)
-                .build();
-
-            let viewport = [vk::Viewport::builder()
-                .x(0.0)
-                .y(0.0)
-                .width(width as f32)
-                .height(height as f32)
-                .min_depth(1.0)
-                .max_depth(0.0)
-                .build()];
-
-            let scissor = [vk::Rect2D::builder()
-                .offset(vk::Offset2D::builder().x(0).y(0).build())
-                .extent(vk::Extent2D::builder().width(width).height(height).build())
-                .build()];
-
-            let view_state = vk::PipelineViewportStateCreateInfo::builder()
-                .viewports(&viewport)
-                .scissors(&scissor)
-                .build();
-
-            let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
-                .rasterization_samples(vk::SampleCountFlags::TYPE_1)
-                .sample_shading_enable(false)
-                .alpha_to_coverage_enable(false)
-                .alpha_to_one_enable(false)
-                .build();
-
-            let depth_state = T::get_depth_state();
-
-            let blend_attachment = T::get_color_blend(subpass);
-
-            let blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-                .logic_op_enable(false)
-                .attachments(&blend_attachment)
-                .build();
-
-            let stages = [vert, frag];
-
-            let create_info = [vk::GraphicsPipelineCreateInfo::builder()
-                .stages(&stages)
-                .vertex_input_state(&vertex_input)
-                .input_assembly_state(&input_assembly)
-                .viewport_state(&view_state)
-                .rasterization_state(&raster_state)
-                .multisample_state(&multisample_state)
-                .depth_stencil_state(&depth_state)
-                .color_blend_state(&blend_state)
-                .dynamic_state(&dynamic_state)
-                .render_pass(pass.render)
-                .subpass(subpass)
-                .layout(layout)
-                .build()];
-
-            let pipelines = unsafe {
-                device.create_graphics_pipelines(vk::PipelineCache::null(), &create_info, None)
-            }
-            .expect("Failed to create Vulkan graphics pipeline");
-            pipelines[0]
-        };
-
-        Self {
-            graphics,
-            set_layouts,
-            layout,
-            device: device.clone(),
-            name,
-        }
-    }
-
-    pub fn line(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
-        let shader = ShaderModule::new(device, SHADERS);
-        let vs = CString::new("line_vs").expect("Failed to create entrypoint");
-        let fs = CString::new("line_fs").expect("Failed to create entrypoint");
-
-        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&states)
-            .build();
-
-        Self::new::<Line>(
-            "Line".to_string(),
-            device,
-            shader.get_vert(&vs),
-            shader.get_frag(&fs),
-            vk::PrimitiveTopology::LINE_STRIP,
-            &dynamic_state,
-            pass,
-            width,
-            height,
+        frame.res.command_buffer.bind_descriptor_sets(
+            pipeline_layout,
+            &frame.res.pipeline_cache.descriptors.present_sets,
             0,
-        )
+        );
+        frame
+            .res
+            .command_buffer
+            .bind_vertex_buffer(&frame.res.fallback.present_buffer);
+
+        frame.res.command_buffer.draw(3)
     }
-
-    pub fn main(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
-        let shader = ShaderModule::new(device, SHADERS);
-        let vs = CString::new("main_vs").expect("Failed to create entrypoint");
-        let fs = CString::new("main_fs").expect("Failed to create entrypoint");
-
-        let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&states)
-            .build();
-
-        Self::new::<Vertex>(
-            "Main".to_string(),
-            device,
-            shader.get_vert(&vs),
-            shader.get_frag(&fs),
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            &dynamic_state,
-            pass,
-            width,
-            height,
-            0,
-        )
-    }
-
-    /// Returns a graphics pipeline which draws the normals of primitive's surfaces as a color
-    pub fn normal(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
-        let shader = ShaderModule::new(device, SHADERS);
-        let vs = CString::new("present_vs").expect("Failed to create entrypoint");
-        let fs = CString::new("normal_fs").expect("Failed to create entrypoint");
-
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
-
-        Self::new::<PresentVertex>(
-            "Normal".to_string(),
-            device,
-            shader.get_vert(&vs),
-            shader.get_frag(&fs),
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            &dynamic_state,
-            pass,
-            width,
-            height,
-            1,
-        )
-    }
-
-    pub fn present(device: &Rc<Device>, pass: &Pass, width: u32, height: u32) -> Self {
-        const SHADERS: &[u8] = include_bytes!(env!("vkr_main_shaders.spv"));
-        let shader = ShaderModule::new(device, SHADERS);
-        let vs = CString::new("present_vs").expect("Failed to create entrypoint");
-        let fs = CString::new("present_fs").expect("Failed to create entry point");
-
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
-
-        Self::new::<PresentVertex>(
-            "Present".to_string(),
-            device,
-            shader.get_vert(&vs),
-            shader.get_frag(&fs),
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            &dynamic_state,
-            pass,
-            width,
-            height,
-            1,
-        )
-    }
-}
-
-impl Drop for DefaultPipeline {
-    fn drop(&mut self) {
-        unsafe {
-            for set_layout in &self.set_layouts {
-                self.device.destroy_descriptor_set_layout(*set_layout, None);
-            }
-            self.device.destroy_pipeline_layout(self.layout, None);
-            self.device.destroy_pipeline(self.graphics, None);
-        }
-    }
-}
-
-impl Pipeline for DefaultPipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    fn get_name(&self) -> &String {
-        &self.name
-    }
-
-    fn get_set_layouts(&self) -> &[vk::DescriptorSetLayout] {
-        &self.set_layouts
-    }
-
-    fn get_layout(&self) -> vk::PipelineLayout {
-        self.layout
-    }
-
-    fn get_pipeline(&self) -> vk::Pipeline {
-        self.graphics
-    }
-
-    fn bind(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
-
-    fn draw(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 }

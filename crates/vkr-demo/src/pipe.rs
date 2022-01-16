@@ -12,16 +12,6 @@ impl PipelineLine {
     fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
 }
 
-impl PipelineNormal {
-    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
-    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
-}
-
-impl PipelinePresent {
-    fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
-    fn draw_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
-}
-
 impl PipelineMain {
     fn bind_impl(&self, frame: &mut Frame, model: &Model, camera_node: Handle<Node>) {
         frame.res.command_buffer.bind_pipeline(self.get_pipeline());
