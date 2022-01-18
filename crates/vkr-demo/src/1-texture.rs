@@ -13,7 +13,7 @@ pub fn main() {
     let mut model = Model::new();
 
     let mut pipeline_cache = pipe::PipelineCache::new(&vkr.dev);
-    let main_pipeline = pipeline_cache.get(ShaderVkrMainShaders::Main);
+    let main_pipeline = pipeline_cache.get(ShaderVkrMainShaders::Main, 0);
 
     let mut root = Node::new();
 

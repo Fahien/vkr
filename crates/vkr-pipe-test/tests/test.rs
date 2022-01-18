@@ -56,14 +56,14 @@ fn build_simple_shader() {
 
     let mut cache = PipelineCache::new(&dev);
 
-    let main_pipeline = cache.get(ShaderSimpleShader::Main);
+    let main_pipeline = cache.get(ShaderSimpleShader::Main, 0);
     assert!(main_pipeline.get_name() == "Main");
 
-    let secondary_pipeline = cache.get(ShaderSimpleShader::Secondary);
+    let secondary_pipeline = cache.get(ShaderSimpleShader::Secondary, 0);
     eprintln!("{}", secondary_pipeline.get_name());
     assert!(secondary_pipeline.get_name() == "Secondary");
 
-    let uniform_pipeline = cache.get_mut(ShaderSimpleShader::Uniform);
+    let uniform_pipeline = cache.get_mut(ShaderSimpleShader::Uniform, 0);
     assert!(uniform_pipeline.get_name() == "Uniform");
 
     let uniform_pipeline = as_uni(uniform_pipeline.as_any_mut());

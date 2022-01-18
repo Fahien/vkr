@@ -125,7 +125,6 @@ impl Vkr {
         let win = self.win.as_ref().unwrap();
 
         if self.resized {
-            
             self.gui.set_drawable_size(win);
             self.sfs.recreate(win, &self.surface, &self.dev, &self.pass);
         }
@@ -147,7 +146,7 @@ impl Vkr {
     pub fn end_scene(&mut self, frame: &mut Frame) {
         frame.res.command_buffer.next_subpass();
 
-        let present_pipeline = self.pipelines.get(ShaderVkrPresentShaders::Present);
+        let present_pipeline = self.pipelines.get(ShaderVkrPresentShaders::Present, 1);
         let model = Model::new();
         present_pipeline.draw(frame, &model, Handle::none());
     }

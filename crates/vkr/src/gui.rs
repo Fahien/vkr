@@ -276,7 +276,7 @@ impl Gui {
             index_data.extend_from_slice(idx_buffer);
         }
 
-        let pipeline = self.pipeline_pool.get(ShaderVkrGuiShaders::Gui);
+        let pipeline = self.pipeline_pool.get(ShaderVkrGuiShaders::Gui, 1);
 
         // Bind GUI pipeline
         frame_cache

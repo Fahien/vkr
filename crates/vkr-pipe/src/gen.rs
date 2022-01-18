@@ -315,7 +315,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 layout.expect("Failed to create Vulkan pipeline layout")
             }
 
-            pub fn new_impl(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass) -> vk::Pipeline {
+            pub fn new_impl(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass, subpass: u32) -> vk::Pipeline {
                 let vs_entry = CString::new(vs).expect("Failed to create vertex entry point");
                 let fs_entry = CString::new(fs).expect("Failed to create vertex entry point");
 
@@ -388,7 +388,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     .alpha_to_one_enable(false)
                     .build();
 
-                let blend_attachments = [
+                let mut blend_attachments = vec![
                     vk::PipelineColorBlendAttachmentState::builder()
                         .blend_enable(true)
                         .color_write_mask(
@@ -402,22 +402,11 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                         .src_alpha_blend_factor(vk::BlendFactor::ONE)
                         .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
                         .color_blend_op(vk::BlendOp::ADD)
-                        .build(),
-                    vk::PipelineColorBlendAttachmentState::builder()
-                        .blend_enable(true)
-                        .color_write_mask(
-                            vk::ColorComponentFlags::R
-                                | vk::ColorComponentFlags::G
-                                | vk::ColorComponentFlags::B,
-                        )
-                        .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-                        .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-                        .color_blend_op(vk::BlendOp::ADD)
-                        .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                        .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-                        .color_blend_op(vk::BlendOp::ADD)
-                        .build()
-                ];
+                        .build()];
+
+                if subpass == 0 {
+                    blend_attachments.push(blend_attachments[0]);
+                }
 
                 let blend = vk::PipelineColorBlendStateCreateInfo::builder()
                     .logic_op_enable(false)
@@ -433,7 +422,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     .stages(&stages)
                     .layout(layout)
                     .render_pass(render_pass)
-                    .subpass(0)
+                    .subpass(subpass)
                     .vertex_input_state(&vertex_input)
                     .input_assembly_state(&input_assembly)
                     .depth_stencil_state(&depth_stencil)
@@ -451,12 +440,12 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 pipeline
             }
 
-            pub fn new(shader_module: &ShaderModule, render_pass: vk::RenderPass) -> Self {
+            pub fn new(shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Self {
                 let name = String::from(#pipeline_str);
                 let device = shader_module.device.clone();
                 let set_layouts = Self::new_set_layouts(&shader_module.device);
                 let layout = Self::new_layout(&shader_module.device, &set_layouts);
-                let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass);
+                let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass, subpass);
 
                 Self {
                     caches: vec![],
@@ -544,7 +533,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
     let pipeline_new = pipelines.iter().map(|m| {
         format!(
             "Shader{0}::{1} => {{
-                Box::new(Pipeline{1}::new(shader_module, render_pass))
+                Box::new(Pipeline{1}::new(shader_module, render_pass, subpass))
             }}",
             crate_module.name.to_camelcase(),
             m.name.to_camelcase(),
@@ -555,8 +544,10 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
 
     let pipeline_count = pipelines.len();
 
+    let max_subpasses = 4usize;
+    let nones = (0..max_subpasses - 1).fold("None".to_string(), |acc, _| format!("{}, None", acc));
     let pipeline_init = pipelines.iter().map(|_| {
-        "None"
+        format!("[{}]", nones)
             .parse::<TokenStream>()
             .expect("Failed to parse shader name")
     });
@@ -568,7 +559,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
         }
 
         impl #enum_name {
-            fn create_pipeline(&self, shader_module: &ShaderModule, render_pass: vk::RenderPass) -> Box<dyn Pipeline> {
+            fn create_pipeline(&self, shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Box<dyn Pipeline> {
                 match self {
                     #( #pipeline_new, )*
                 }
@@ -577,7 +568,8 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
 
         pub struct PipelinePool {
             pass: Pass,
-            pipelines: [Option<Box<dyn Pipeline>>;#pipeline_count],
+            // Each entry in the array is a vector, where each vector position corresponds to the subpass index
+            pipelines: [[Option<Box<dyn Pipeline>>;#max_subpasses];#pipeline_count],
             shader_module: Option<ShaderModule>,
             device: Rc<Device>,
         }
@@ -610,29 +602,29 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 self.shader_module.as_ref().unwrap()
             }
 
-            fn create_pipeline(&mut self, shader: #enum_name) {
-                assert!(self.pipelines[shader as usize].is_none());
+            fn create_pipeline(&mut self, shader: #enum_name, subpass: u32) {
+                assert!(self.pipelines[shader as usize][subpass as usize].is_none());
 
                 let render_pass = self.pass.render;
                 let shader_module = self.get_shader_module();
-                let pipeline = shader.create_pipeline(shader_module, render_pass);
-                self.pipelines[shader as usize] = Some(pipeline);
+                let pipeline = shader.create_pipeline(shader_module, render_pass, subpass);
+                self.pipelines[shader as usize][subpass as usize] = Some(pipeline);
             }
 
-            pub fn get(&mut self, shader: #enum_name) -> &Box<dyn Pipeline> {
-                if self.pipelines[shader as usize].is_none() {
-                    self.create_pipeline(shader)
+            pub fn get(&mut self, shader: #enum_name, subpass: u32) -> &Box<dyn Pipeline> {
+                if self.pipelines[shader as usize][subpass as usize].is_none() {
+                    self.create_pipeline(shader, subpass)
                 }
 
-                self.pipelines[shader as usize].as_ref().unwrap()
+                self.pipelines[shader as usize][subpass as usize].as_ref().unwrap()
             }
 
-            pub fn get_mut(&mut self, shader: #enum_name) -> &mut Box<dyn Pipeline> {
-                if self.pipelines[shader as usize].is_none() {
-                    self.create_pipeline(shader)
+            pub fn get_mut(&mut self, shader: #enum_name, subpass: u32) -> &mut Box<dyn Pipeline> {
+                if self.pipelines[shader as usize][subpass as usize].is_none() {
+                    self.create_pipeline(shader, subpass)
                 }
 
-                self.pipelines[shader as usize].as_mut().unwrap()
+                self.pipelines[shader as usize][subpass as usize].as_mut().unwrap()
             }
         }
     }
