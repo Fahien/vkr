@@ -5,6 +5,11 @@
 use enum_ordinalize::*;
 use variant_count::*;
 
+use crate::VertexInput;
+
+vkr_pipe::pipewriter!("crates/shader/present");
+
+
 #[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
 pub enum Pipelines {
     LINE,
@@ -12,8 +17,6 @@ pub enum Pipelines {
     NORMAL,
     MAIN,
 }
-
-vkr_pipe::pipewriter!("crates/shader/present");
 
 impl PipelineNormal {
     fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}

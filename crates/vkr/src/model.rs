@@ -23,7 +23,7 @@ pub trait VertexInput {
         Pipelines::MAIN
     }
 
-    fn get_bindings() -> vk::VertexInputBindingDescription;
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription>;
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription>;
 
@@ -122,12 +122,12 @@ pub trait VertexInput {
 }
 
 impl VertexInput for Point {
-    fn get_bindings() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(std::mem::size_of::<Point>() as u32)
             .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
+            .build()]
     }
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
@@ -182,7 +182,7 @@ impl VertexInput for Line {
         Pipelines::LINE
     }
 
-    fn get_bindings() -> vk::VertexInputBindingDescription {
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
         Point::get_bindings()
     }
 
@@ -197,7 +197,13 @@ impl VertexInput for Line {
 
 pub trait Binding {
     fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding>;
-    fn write_set(&self, device: &Device, set: vk::DescriptorSet, frame: &crate::frame::Frame, node: Handle<Node>);
+    fn write_set(
+        &self,
+        device: &Device,
+        set: vk::DescriptorSet,
+        frame: &crate::frame::Frame,
+        node: Handle<Node>,
+    );
 }
 
 impl Binding for Camera {
@@ -264,7 +270,6 @@ impl Binding for Camera {
         }
     }
 }
-
 
 pub fn write_view_set(device: &Device, set: vk::DescriptorSet, view: &Buffer) {
     let buffer_info = vk::DescriptorBufferInfo::builder()
@@ -355,12 +360,12 @@ impl VertexInput for PresentVertex {
         Pipelines::PRESENT
     }
 
-    fn get_bindings() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(std::mem::size_of::<Self>() as u32)
             .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
+            .build()]
     }
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
@@ -397,12 +402,12 @@ impl VertexInput for PresentVertex {
 }
 
 impl VertexInput for Vertex {
-    fn get_bindings() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(std::mem::size_of::<Vertex>() as u32)
             .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
+            .build()]
     }
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {

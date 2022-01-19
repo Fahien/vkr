@@ -37,10 +37,10 @@ pub struct Gui {
 }
 
 impl VertexInput for im::DrawVert {
-    fn get_bindings() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
             .stride(std::mem::size_of::<Self>() as u32)
-            .build()
+            .build()]
     }
 
     fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
@@ -276,7 +276,9 @@ impl Gui {
             index_data.extend_from_slice(idx_buffer);
         }
 
-        let pipeline = self.pipeline_pool.get(ShaderVkrGuiShaders::Gui, 1);
+        let pipeline = self
+            .pipeline_pool
+            .get::<im::DrawVert>(ShaderVkrGuiShaders::Gui, 1);
 
         // Bind GUI pipeline
         frame_cache

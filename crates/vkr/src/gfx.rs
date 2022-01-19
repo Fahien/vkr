@@ -146,7 +146,7 @@ impl Vkr {
     pub fn end_scene(&mut self, frame: &mut Frame) {
         frame.res.command_buffer.next_subpass();
 
-        let present_pipeline = self.pipelines.get(ShaderVkrPresentShaders::Present, 1);
+        let present_pipeline = self.pipelines.get::<PresentVertex>(ShaderVkrPresentShaders::Present, 1);
         let model = Model::new();
         present_pipeline.draw(frame, &model, Handle::none());
     }
