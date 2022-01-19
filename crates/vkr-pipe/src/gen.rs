@@ -2,11 +2,11 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::collections::HashSet;
-
-use crate::{Camelcase, CrateModule, Pipeline, Uniform};
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::collections::HashSet;
+
+use crate::{shader::UniformType, Camelcase, CrateModule, Pipeline, Uniform};
 
 pub fn header() -> TokenStream {
     quote! {
@@ -17,28 +17,12 @@ pub fn header() -> TokenStream {
     }
 }
 
-fn get_format(arg_type: &syn::Ident) -> TokenStream {
-    match arg_type.to_string().as_str() {
-        "Vec4" => quote! { vk::Format::R32G32B32A32_SFLOAT },
-        "Vec3" => quote! { vk::Format::R32G32B32_SFLOAT },
-        "Vec2" => quote! { vk::Format::R32G32_SFLOAT},
-        _ => todo!("Failed to get format for: {}", arg_type),
-    }
-}
-
-fn get_size(arg_type: &syn::Ident) -> usize {
-    match arg_type.to_string().as_str() {
-        "Vec4" => std::mem::size_of::<[f32; 4]>(),
-        "Vec3" => std::mem::size_of::<[f32; 3]>(),
-        "Vec2" => std::mem::size_of::<[f32; 2]>(),
-        _ => todo!("Failed to get size of: {}", arg_type),
-    }
-}
-
 pub fn set_layout_bindings(uniforms: &[Uniform], set: u32) -> TokenStream {
     let mut gen = quote! {};
 
-    let set_uniforms = uniforms.iter().filter(|u| u.descriptor_set == set);
+    let set_uniforms = uniforms
+        .iter()
+        .filter(|u| matches!(u.descriptor_set, Some(s) if s == set));
 
     for uniform in set_uniforms {
         let binding = uniform.binding;
@@ -57,8 +41,32 @@ pub fn set_layout_bindings(uniforms: &[Uniform], set: u32) -> TokenStream {
     gen
 }
 
+pub fn push_constant_ranges(uniforms: &[Uniform]) -> TokenStream {
+    let mut gen = quote! {};
+
+    let set_uniforms = uniforms
+        .iter()
+        .filter(|u| u.uniform_type == UniformType::PushConstant);
+
+    for uniform in set_uniforms {
+        let range = uniform
+            .get_range()
+            .expect("Failed to get push constant range");
+        let stage = uniform.stage;
+        gen.extend(quote! {
+            vk::PushConstantRange::builder()
+            .offset(0)
+            .stage_flags(#stage)
+            .size(#range as u32)
+            .build(),
+        });
+    }
+
+    gen
+}
+
 fn get_sorted_sets(uniforms: &[Uniform]) -> Vec<u32> {
-    let sets: HashSet<_> = uniforms.iter().map(|u| u.descriptor_set).collect();
+    let sets: HashSet<_> = uniforms.iter().filter_map(|u| u.descriptor_set).collect();
     let mut sets: Vec<_> = sets.into_iter().collect();
     sets.sort();
     sets
@@ -106,7 +114,9 @@ pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
     let mut gen = quote! {};
 
     for set in get_sorted_sets(uniforms) {
-        let set_uniforms = uniforms.iter().filter(|u| u.descriptor_set == set);
+        let set_uniforms = uniforms
+            .iter()
+            .filter(|u| matches!(u.descriptor_set, Some(s) if s == set));
         let mut writes = quote! {};
 
         for uniform in set_uniforms {
@@ -125,14 +135,13 @@ pub fn write_set_methods(uniforms: &[Uniform]) -> TokenStream {
         }
 
         let args = uniforms.iter().filter_map(|u| {
-            if u.descriptor_set == set {
+            if matches! (u.descriptor_set, Some(s) if s == set) {
                 let arg = format!("{}: {}", u.name, u.get_write_set_type())
                     .parse::<proc_macro2::TokenStream>()
                     .unwrap();
-                Some(arg)
-            } else {
-                None
+                return Some(arg);
             }
+            None
         });
 
         let arguments = quote! {
@@ -174,39 +183,6 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
 
     let vs = format!("{}_vs", pipeline.name.to_lowercase());
     let fs = format!("{}_fs", pipeline.name.to_lowercase());
-
-    // Generate bindings
-    let stride = pipeline
-        .arg_types
-        .iter()
-        .fold(0, |acc, ty| acc + get_size(ty));
-    let vertex_bindings = quote! {
-        vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride(#stride as u32)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
-    };
-
-    let mut vertex_attributes = TokenStream::new();
-
-    let mut offset = 0;
-    for (loc, arg_type) in pipeline.arg_types.iter().enumerate() {
-        let format = get_format(arg_type);
-
-        let attribute = quote! {
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(#loc as u32)
-                .format(#format)
-                .offset(#offset as u32)
-                .build(),
-        };
-
-        offset += get_size(arg_type);
-
-        vertex_attributes.extend(attribute);
-    }
 
     let pipeline_cache_name = format!("PipelineCache{}", pipeline.name.to_camelcase())
         .parse::<proc_macro2::TokenStream>()
@@ -290,6 +266,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
     };
 
     let set_layouts_methods = set_layouts_methods(&pipeline.uniforms);
+    let push_constants = push_constant_ranges(&pipeline.uniforms);
     let write_set_methods = write_set_methods(&pipeline.uniforms);
 
     quote! {
@@ -308,14 +285,22 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
             #set_layouts_methods
 
             pub fn new_layout(device: &Rc<Device>, set_layouts: &[vk::DescriptorSetLayout]) -> vk::PipelineLayout {
-                let create_info = vk::PipelineLayoutCreateInfo::builder()
-                    .set_layouts(set_layouts)
-                    .build();
+                let push_constants = [
+                    #push_constants
+                ];
+
+                let mut create_info = vk::PipelineLayoutCreateInfo::builder()
+                    .set_layouts(set_layouts);
+                if push_constants.len() > 0 {
+                    create_info = create_info.
+                    push_constant_ranges(&push_constants);
+                }
+                let create_info = create_info.build();
                 let layout = unsafe { device.create_pipeline_layout(&create_info, None) };
                 layout.expect("Failed to create Vulkan pipeline layout")
             }
 
-            pub fn new_impl(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass, subpass: u32) -> vk::Pipeline {
+            pub fn new_impl<V: VertexInput>(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass, subpass: u32) -> vk::Pipeline {
                 let vs_entry = CString::new(vs).expect("Failed to create vertex entry point");
                 let fs_entry = CString::new(fs).expect("Failed to create vertex entry point");
 
@@ -324,12 +309,8 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     shader_module.get_frag(&fs_entry)
                 ];
 
-                let vertex_bindings = [
-                    #vertex_bindings
-                ];
-                let vertex_attributes = [
-                    #vertex_attributes
-                ];
+                let vertex_bindings = V::get_bindings();
+                let vertex_attributes = V::get_attributes();
                 let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
                     .vertex_attribute_descriptions(&vertex_attributes)
                     .vertex_binding_descriptions(&vertex_bindings)
@@ -440,12 +421,12 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 pipeline
             }
 
-            pub fn new(shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Self {
+            pub fn new<V: VertexInput>(shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Self {
                 let name = String::from(#pipeline_str);
                 let device = shader_module.device.clone();
                 let set_layouts = Self::new_set_layouts(&shader_module.device);
                 let layout = Self::new_layout(&shader_module.device, &set_layouts);
-                let pipeline = Self::new_impl(layout, shader_module, #vs, #fs, render_pass, subpass);
+                let pipeline = Self::new_impl::<V>(layout, shader_module, #vs, #fs, render_pass, subpass);
 
                 Self {
                     caches: vec![],
@@ -533,7 +514,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
     let pipeline_new = pipelines.iter().map(|m| {
         format!(
             "Shader{0}::{1} => {{
-                Box::new(Pipeline{1}::new(shader_module, render_pass, subpass))
+                Box::new(Pipeline{1}::new::<V>(shader_module, render_pass, subpass))
             }}",
             crate_module.name.to_camelcase(),
             m.name.to_camelcase(),
@@ -559,7 +540,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
         }
 
         impl #enum_name {
-            fn create_pipeline(&self, shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Box<dyn Pipeline> {
+            fn create_pipeline<V: VertexInput>(&self, shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Box<dyn Pipeline> {
                 match self {
                     #( #pipeline_new, )*
                 }
@@ -602,26 +583,26 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 self.shader_module.as_ref().unwrap()
             }
 
-            fn create_pipeline(&mut self, shader: #enum_name, subpass: u32) {
+            fn create_pipeline<V: VertexInput>(&mut self, shader: #enum_name, subpass: u32) {
                 assert!(self.pipelines[shader as usize][subpass as usize].is_none());
 
                 let render_pass = self.pass.render;
                 let shader_module = self.get_shader_module();
-                let pipeline = shader.create_pipeline(shader_module, render_pass, subpass);
+                let pipeline = shader.create_pipeline::<V>(shader_module, render_pass, subpass);
                 self.pipelines[shader as usize][subpass as usize] = Some(pipeline);
             }
 
-            pub fn get(&mut self, shader: #enum_name, subpass: u32) -> &Box<dyn Pipeline> {
+            pub fn get<V: VertexInput>(&mut self, shader: #enum_name, subpass: u32) -> &Box<dyn Pipeline> {
                 if self.pipelines[shader as usize][subpass as usize].is_none() {
-                    self.create_pipeline(shader, subpass)
+                    self.create_pipeline::<V>(shader, subpass)
                 }
 
                 self.pipelines[shader as usize][subpass as usize].as_ref().unwrap()
             }
 
-            pub fn get_mut(&mut self, shader: #enum_name, subpass: u32) -> &mut Box<dyn Pipeline> {
+            pub fn get_mut<V: VertexInput>(&mut self, shader: #enum_name, subpass: u32) -> &mut Box<dyn Pipeline> {
                 if self.pipelines[shader as usize][subpass as usize].is_none() {
-                    self.create_pipeline(shader, subpass)
+                    self.create_pipeline::<V>(shader, subpass)
                 }
 
                 self.pipelines[shader as usize][subpass as usize].as_mut().unwrap()

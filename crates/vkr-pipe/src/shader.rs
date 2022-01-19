@@ -19,22 +19,32 @@ impl ToTokens for ShaderType {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum UniformType {
+    UniformBuffer,
+    CombinedImageSampler,
+    InputAttachment,
+    PushConstant,
+}
+
 pub struct Uniform {
     pub name: syn::Ident,
     /// Type of the argument
     pub ident: syn::Ident,
-    pub descriptor_set: u32,
-    pub binding: u32,
+    pub descriptor_set: Option<u32>,
+    pub binding: Option<u32>,
     pub stage: ShaderType,
+    pub uniform_type: UniformType,
 }
 
 impl Uniform {
     pub fn new(
         name: syn::Ident,
         ident: syn::Ident,
-        descriptor_set: u32,
-        binding: u32,
+        descriptor_set: Option<u32>,
+        binding: Option<u32>,
         stage: ShaderType,
+        uniform_type: UniformType,
     ) -> Self {
         Self {
             name,
@@ -42,18 +52,19 @@ impl Uniform {
             descriptor_set,
             binding,
             stage,
+            uniform_type,
         }
     }
 
     pub fn get_descriptor_type(&self) -> proc_macro2::TokenStream {
-        match self.ident.to_string().as_str() {
-            "Vec2" | "Vec3" | "Vec4" | "Mat3" | "Mat4" => {
-                quote! { vk::DescriptorType::UNIFORM_BUFFER }
+        match self.uniform_type {
+            UniformType::UniformBuffer => quote! { vk::DescriptorType::UNIFORM_BUFFER },
+            UniformType::CombinedImageSampler => {
+                quote! { vk::DescriptorType::COMBINED_IMAGE_SAMPLER }
             }
-            "SampledImage" => quote! { vk::DescriptorType::COMBINED_IMAGE_SAMPLER },
-            "Image" => quote! { vk::DescriptorType::INPUT_ATTACHMENT },
+            UniformType::InputAttachment => quote! { vk::DescriptorType::INPUT_ATTACHMENT },
             unknown => todo!(
-                "Failed to get descriptor type for {}: {}:{}",
+                "Failed to get descriptor type for {:?}: {}:{}",
                 unknown,
                 file!(),
                 line!()

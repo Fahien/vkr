@@ -17,6 +17,9 @@ use shader::*;
 mod module;
 use module::*;
 
+mod spirv;
+use spirv::*;
+
 mod gen;
 
 #[proc_macro]
@@ -127,21 +130,6 @@ fn dump_meta<'m>(list: &'m syn::MetaList) {
     }
 }
 
-fn get_meta_name_value<'m>(list: &'m syn::MetaList, ident: &str) -> Option<&'m syn::MetaNameValue> {
-    for nested in &list.nested {
-        if let syn::NestedMeta::Meta(meta) = nested {
-            if let syn::Meta::NameValue(name_value) = meta {
-                if let Some(id) = name_value.path.get_ident() {
-                    if id == ident {
-                        return Some(name_value);
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
 /// Analyzes a function attributes, looking for vertex and fragment `Path`s
 /// and returns the corresponding shader type
 fn get_shader_type(func: &syn::ItemFn) -> Option<ShaderType> {
@@ -200,7 +188,7 @@ fn get_arg_type(arg: &syn::PatType) -> Option<syn::Ident> {
             }
             syn::Type::Macro(m) => {
                 if let Some(ident) = m.mac.path.get_ident() {
-                    return Some(ident.clone())
+                    return Some(ident.clone());
                 }
             }
             syn::Type::Array(_) => eprintln!("Array"),
@@ -250,19 +238,6 @@ fn get_args_type(func: &syn::ItemFn) -> Vec<syn::Ident> {
     ret
 }
 
-fn get_spirv_value(spirv: &syn::MetaList, id: &str) -> Option<u32> {
-    if let Some(desc_set) = get_meta_name_value(&spirv, id) {
-        Some(
-            inner_value!(&desc_set.lit, syn::Lit::Int(i) => i)
-                .unwrap()
-                .base10_parse::<u32>()
-                .unwrap(),
-        )
-    } else {
-        None
-    }
-}
-
 fn get_uniforms(func: &syn::ItemFn) -> Vec<Uniform> {
     let mut uniforms = vec![];
 
@@ -271,24 +246,23 @@ fn get_uniforms(func: &syn::ItemFn) -> Vec<Uniform> {
     for arg in &func.sig.inputs {
         match arg {
             syn::FnArg::Typed(arg) => {
-                let spirv = get_spirv(&arg.attrs);
+                let spirv = Spirv::parse(&arg.attrs);
                 if let Some(spirv) = spirv {
-                    if let Some(desc_set) = get_spirv_value(&spirv, "descriptor_set") {
-                        let name = get_arg_name(arg).expect("Failed to get argument name");
-                        let ident = get_arg_type(arg).expect(&format!(
-                            "Failed to get segment for arg {}: {}:{}",
-                            name,
-                            file!(),
-                            line!()
-                        ));
-                        let binding = get_spirv_value(&spirv, "binding").expect(&format!(
-                            "Failed to get binding for arg {}: {}:{}",
-                            name,
-                            file!(),
-                            line!()
-                        ));
-                        uniforms.push(Uniform::new(name, ident, desc_set, binding, shader_type))
-                    }
+                    let name = get_arg_name(arg).expect("Failed to get argument name");
+                    let ident = get_arg_type(arg).expect(&format!(
+                        "Failed to get segment for arg {}: {}:{}",
+                        name,
+                        file!(),
+                        line!()
+                    ));
+                    uniforms.push(Uniform::new(
+                        name,
+                        ident,
+                        spirv.descriptor_set,
+                        spirv.binding,
+                        shader_type,
+                        spirv.uniform_type,
+                    ))
                 }
             }
             _ => (),
