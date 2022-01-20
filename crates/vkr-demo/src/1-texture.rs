@@ -13,7 +13,7 @@ pub fn main() {
     let mut model = Model::new();
 
     let mut pipeline_cache = pipe::PipelineCache::new(&vkr.dev);
-    let main_pipeline = pipeline_cache.get(ShaderVkrMainShaders::Main, 0);
+    let main_pipeline = pipeline_cache.get::<Vertex>(ShaderVkrMainShaders::Main, 0);
 
     let mut root = Node::new();
 
@@ -135,8 +135,8 @@ pub fn main() {
         frame.draw_pipe(main_pipeline.as_ref(), &model, root);
 
         vkr.end_scene(&mut frame);
-        //vkr.gui
-        //    .draw_debug_window(delta, &mut frame, &model, camera_node);
+        vkr.gui
+            .draw_debug_window(delta, &mut frame, &model, camera_node);
 
         vkr.end_frame(frame);
     }
