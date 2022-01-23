@@ -5,7 +5,8 @@
 use crate::*;
 
 pub struct Vkr {
-    pub pipelines: PipelinePool,
+    pub default_pipelines: PipelinePoolVkrMainShaders,
+    pub present_pipelines: PipelinePoolVkrPresentShaders,
     pub gui: Gui,
     pub sfs: SwapchainFrames, // Use box of frames?
     pub pass: Pass,           // How about multiple passes?
@@ -33,10 +34,12 @@ impl Vkr {
 
         let gui = Gui::new(&win, &dev, &pass);
 
-        let pipelines = PipelinePool::new(&dev);
+        let present_pipelines = PipelinePoolVkrPresentShaders::new(&dev);
+        let default_pipelines = PipelinePoolVkrMainShaders::new(&dev);
 
         Self {
-            pipelines,
+            default_pipelines,
+            present_pipelines,
             gui,
             sfs,
             pass,
@@ -146,7 +149,11 @@ impl Vkr {
     pub fn end_scene(&mut self, frame: &mut Frame) {
         frame.res.command_buffer.next_subpass();
 
-        let present_pipeline = self.pipelines.get::<PresentVertex>(ShaderVkrPresentShaders::Present, 1);
+        let present_pipeline = self.present_pipelines.get(
+            &VertexInputDescription::new::<PresentVertex>(),
+            ShaderVkrPresentShaders::Present as usize,
+            1,
+        );
         let model = Model::new();
         present_pipeline.draw(frame, &model, Handle::none());
     }

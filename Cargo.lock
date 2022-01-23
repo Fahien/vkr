@@ -759,7 +759,6 @@ name = "vkr"
 version = "0.4.1"
 dependencies = [
  "ash",
- "enum-ordinalize",
  "imgui",
  "memoffset",
  "nalgebra",
@@ -779,6 +778,8 @@ version = "0.4.1"
 dependencies = [
  "ash",
  "byteorder",
+ "enum-ordinalize",
+ "memoffset",
  "nalgebra",
  "png",
  "sdl2",

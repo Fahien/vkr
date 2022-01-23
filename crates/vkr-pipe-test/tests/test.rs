@@ -4,7 +4,7 @@
 
 use std::any::Any;
 
-use vkr_core::{Buffer, Ctx, DescriptorPool, Image, ImageView, Sampler};
+use vkr_core::{Buffer, Ctx, DescriptorPool, Image, ImageView, Sampler, PipelinePool, VertexInputDescription, Vertex};
 use vkr_pipe::*;
 
 pipewriter!("crates/vkr-pipe-test/shader/simple");
@@ -54,16 +54,18 @@ fn build_simple_shader() {
     let ctx = Ctx::builder().debug(true).build();
     let dev = Dev::new(&ctx, None);
 
-    let mut cache = PipelineCache::new(&dev);
+    let mut cache = PipelinePoolSimpleShader::new(&dev);
 
-    let main_pipeline = cache.get(ShaderSimpleShader::Main, 0);
+    let vertex_input = VertexInputDescription::new::<Vertex>();
+
+    let main_pipeline = cache.get(&vertex_input, ShaderSimpleShader::Main as usize, 0);
     assert!(main_pipeline.get_name() == "Main");
 
-    let secondary_pipeline = cache.get(ShaderSimpleShader::Secondary, 0);
+    let secondary_pipeline = cache.get(&vertex_input, ShaderSimpleShader::Secondary as usize, 0);
     eprintln!("{}", secondary_pipeline.get_name());
     assert!(secondary_pipeline.get_name() == "Secondary");
 
-    let uniform_pipeline = cache.get_mut(ShaderSimpleShader::Uniform, 0);
+    let uniform_pipeline = cache.get_mut(&vertex_input, ShaderSimpleShader::Uniform as usize, 0);
     assert!(uniform_pipeline.get_name() == "Uniform");
 
     let uniform_pipeline = as_uni(uniform_pipeline.as_any_mut());

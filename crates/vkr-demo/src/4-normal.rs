@@ -9,7 +9,9 @@ pub fn main() {
     let mut vkr = Vkr::new(win);
     let mut model = Model::new();
 
-    let cube_primitive = Primitive::cube(&vkr.dev.allocator);
+    let mut cube_primitive = Primitive::cube(&vkr.dev.allocator);
+    let material = Material::new(Color::white());
+    cube_primitive.material = model.materials.push(material);
     let cube_primitive = model.primitives.push(cube_primitive);
 
     let cube_mesh = Mesh::new(vec![cube_primitive]);
@@ -48,12 +50,12 @@ pub fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         let mut frame = frame.unwrap();
-        frame.bind(vkr.pipelines.get_mut::<Vertex>(), &model, camera_node);
-        frame.draw::<Vertex>(vkr.pipelines.get_mut::<Vertex>(), &model, cube_node);
+        frame.update(&model, camera_node);
+        frame.draw_pipe(&mut vkr.default_pipelines, &model, cube_node);
 
         vkr.end_scene(&mut frame);
         vkr.gui
-            .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
+            .draw_debug_window(delta, &mut frame, &model, camera_node);
         vkr.end_frame(frame);
     }
 

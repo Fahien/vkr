@@ -2,21 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use enum_ordinalize::*;
-use variant_count::*;
-
-use crate::VertexInput;
-
 vkr_pipe::pipewriter!("crates/shader/present");
-
-
-#[derive(Debug, Clone, Copy, VariantCount, Ordinalize)]
-pub enum Pipelines {
-    LINE,
-    PRESENT,
-    NORMAL,
-    MAIN,
-}
 
 impl PipelineNormal {
     fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}

@@ -140,6 +140,7 @@ impl Drop for Framebuffer {
     }
 }
 
+/// Frame struct is in vkr-core as it is a pipewriter pipeline dependency
 pub struct Frame {
     /// List of nodes with cameras to render. At the beginning of a frame is empty.
     /// Then it is populated with calling `udpate()`, and TODO: cleared after submitting rendering commands.
@@ -215,25 +216,49 @@ impl Frame {
         // TODO collect more info such as pipelines for each material
     }
 
-    pub fn bind_pipe(&mut self, pipeline: &dyn Pipeline, model: &Model, node: Handle<Node>) {
-        pipeline.bind(self, model, node);
+    pub fn bind_pipe_recursive(&mut self, model: &Model, node_handle: Handle<Node>) {
+        let children = model.nodes.get(node_handle).unwrap().children.clone();
+        for child in children {
+            self.bind_pipe_recursive( model, child);
+        }
+
+        let node = model.nodes.get(node_handle).unwrap();
+        if let Some(_) = model.cameras.get(node.camera) {
+            // TODO what?
+        }
+    }
+
+    pub fn bind_pipe(&mut self, model: &Model, node_handle: Handle<Node>) {
+
+        self.bind_pipe_recursive(model, node_handle);
     }
 
     pub fn draw_pipe_recursive(
         &mut self,
-        pipeline: &dyn Pipeline,
+        pipeline_pool: &mut dyn PipelinePool,
         model: &Model,
-        node: Handle<Node>,
+        node_handle: Handle<Node>,
     ) {
-        let children = model.nodes.get(node).unwrap().children.clone();
+        let children = model.nodes.get(node_handle).unwrap().children.clone();
         for child in children {
-            self.draw_pipe(pipeline, model, child);
+            self.draw_pipe(pipeline_pool, model, child);
         }
 
-        pipeline.draw(self, model, node);
+        let node = model.nodes.get(node_handle).unwrap();
+        if let Some(mesh) = model.meshes.get(node.mesh) {
+            for primitive in &mesh.primitives {
+                let primitive = model.primitives.get(*primitive).unwrap();
+                if let Some(material) = model.materials.get(primitive.material) {
+                    let pipeline = pipeline_pool.get(&primitive.vertex_input_type.get_vertex_input(), material.pipeline, 0);
+                    pipeline.bind(self, model, self.camera_nodes[0]);
+                    pipeline.draw(self, model, node_handle);
+                }
+            }
+        }
     }
 
-    pub fn draw_pipe(&mut self, pipeline: &dyn Pipeline, model: &Model, node: Handle<Node>) {
+    /// Pipeline pool can not be a member of Frame or we would end up with a pipeline for each frame, which is not needed.
+    pub fn draw_pipe(&mut self, pipeline_pool: &mut dyn PipelinePool, model: &Model, node: Handle<Node>) {
         // TODO: This function should just prepare stuff for drawing
         // Actual drawing should happen later, which means Pipeline trait can call this function
         // and then call another one to submit render commands.
@@ -242,9 +267,10 @@ impl Frame {
         // We can even optimize some stuff with this approach.
 
         let camera_nodes = self.camera_nodes.clone();
-        for camera_node_handle in camera_nodes {
-            pipeline.bind(self, model, camera_node_handle);
-            self.draw_pipe_recursive(pipeline, model, node);
+        for _ in camera_nodes {
+            // TODO for each pipeline bound in this frame
+            // bind camera to that pipeline
+            self.draw_pipe_recursive(pipeline_pool, model, node);
         }
     }
 

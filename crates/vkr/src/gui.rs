@@ -15,10 +15,7 @@ impl PipelineGui {
 }
 
 pub struct Gui {
-    /// Not common as camera and model, therefore we store it here
-    set_layouts: Vec<vk::DescriptorSetLayout>,
-
-    pipeline_pool: PipelinePool,
+    pipeline_pool: PipelinePoolVkrGuiShaders,
 
     sampler: Sampler,
     view: ImageView,
@@ -36,14 +33,12 @@ pub struct Gui {
     device: Rc<Device>,
 }
 
-impl VertexInput for im::DrawVert {
-    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
-        vec![vk::VertexInputBindingDescription::builder()
-            .stride(std::mem::size_of::<Self>() as u32)
-            .build()]
-    }
+fn get_imgui_vertex_input_description() -> VertexInputDescription {
+    let bindings = vec![vk::VertexInputBindingDescription::builder()
+        .stride(std::mem::size_of::<im::DrawVert>() as u32)
+        .build()];
 
-    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
+    let attributes = {
         let pos = vk::VertexInputAttributeDescription::builder()
             .location(0)
             .format(vk::Format::R32G32_SFLOAT)
@@ -63,75 +58,33 @@ impl VertexInput for im::DrawVert {
             .build();
 
         vec![pos, uv, col]
+    };
+
+    VertexInputDescription {
+        topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+        bindings,
+        attributes,
     }
+}
 
-    fn get_set_layouts(device: &Device) -> Vec<vk::DescriptorSetLayout> {
-        let bindings = vec![vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build()];
+fn write_set_image(device: &Device, set: vk::DescriptorSet, view: &ImageView, sampler: &Sampler) {
+    let image_info = vk::DescriptorImageInfo::builder()
+        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .sampler(sampler.sampler)
+        .image_view(view.view)
+        .build();
 
-        vec![create_set_layout(device, &bindings)]
-    }
+    let image_write = vk::WriteDescriptorSet::builder()
+        .dst_set(set)
+        .dst_binding(0)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+        .image_info(&[image_info])
+        .build();
 
-    fn get_constants() -> Vec<vk::PushConstantRange> {
-        vec![vk::PushConstantRange::builder()
-            .offset(0)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .size(std::mem::size_of::<na::Matrix4<f32>>() as u32)
-            .build()]
-    }
-
-    fn write_set_image(
-        device: &Device,
-        set: vk::DescriptorSet,
-        view: &ImageView,
-        sampler: &Sampler,
-    ) {
-        let image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .sampler(sampler.sampler)
-            .image_view(view.view)
-            .build();
-
-        let image_write = vk::WriteDescriptorSet::builder()
-            .dst_set(set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&[image_info])
-            .build();
-
-        let writes = vec![image_write];
-        unsafe {
-            device.update_descriptor_sets(&writes, &[]);
-        }
-    }
-
-    fn get_depth_state() -> vk::PipelineDepthStencilStateCreateInfo {
-        vk::PipelineDepthStencilStateCreateInfo::builder()
-            .depth_test_enable(false)
-            .depth_write_enable(false)
-            .depth_bounds_test_enable(false)
-            .stencil_test_enable(false)
-            .build()
-    }
-
-    fn get_color_blend(subpass: u32) -> Vec<vk::PipelineColorBlendAttachmentState> {
-        assert!(subpass == 1);
-        vec![vk::PipelineColorBlendAttachmentState::builder()
-            .blend_enable(true)
-            .color_write_mask(
-                vk::ColorComponentFlags::R
-                    | vk::ColorComponentFlags::G
-                    | vk::ColorComponentFlags::B,
-            )
-            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            .src_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            .build()]
+    let writes = vec![image_write];
+    unsafe {
+        device.update_descriptor_sets(&writes, &[]);
     }
 }
 
@@ -195,12 +148,9 @@ impl Gui {
         let view = ImageView::new(&dev.device, &image);
         let sampler = Sampler::new(&dev.device);
 
-        let pipeline_pool = PipelinePool::new(dev);
-
-        let set_layouts = im::DrawVert::get_set_layouts(&dev.device);
+        let pipeline_pool = PipelinePoolVkrGuiShaders::new(dev);
 
         Self {
-            set_layouts,
             pipeline_pool,
             sampler,
             view,
@@ -276,9 +226,11 @@ impl Gui {
             index_data.extend_from_slice(idx_buffer);
         }
 
-        let pipeline = self
-            .pipeline_pool
-            .get::<im::DrawVert>(ShaderVkrGuiShaders::Gui, 1);
+        let pipeline = self.pipeline_pool.get(
+            &get_imgui_vertex_input_description(),
+            ShaderVkrGuiShaders::Gui as usize,
+            1,
+        );
 
         // Bind GUI pipeline
         frame_cache
@@ -320,9 +272,9 @@ impl Gui {
             frame_cache.pipeline_cache.descriptors.gui_sets = frame_cache
                 .pipeline_cache
                 .descriptors
-                .allocate(&self.set_layouts);
+                .allocate(&pipeline.get_set_layouts());
 
-            im::DrawVert::write_set_image(
+            write_set_image(
                 &self.device,
                 frame_cache.pipeline_cache.descriptors.gui_sets[0],
                 &self.view,
@@ -455,15 +407,5 @@ impl Gui {
                     ));
                 });
         });
-    }
-}
-
-impl Drop for Gui {
-    fn drop(&mut self) {
-        unsafe {
-            for set_layout in &self.set_layouts {
-                self.device.destroy_descriptor_set_layout(*set_layout, None);
-            }
-        }
     }
 }

@@ -62,11 +62,11 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
         frame.update(&model, camera_node);
-        frame.draw_pipe(vkr.pipelines.get_mut::<Vertex>(), &model, cube_node);
+        frame.draw_pipe(&mut vkr.default_pipelines, &model, cube_node);
 
         vkr.end_scene(&mut frame);
         vkr.gui
-            .draw_debug_window(delta, &mut frame, &mut vkr.pipelines, &model, camera_node);
+            .draw_debug_window(delta, &mut frame, &model, camera_node);
         vkr.end_frame(frame);
     }
 

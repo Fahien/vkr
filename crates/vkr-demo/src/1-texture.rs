@@ -4,20 +4,16 @@
 
 use vkr::*;
 
-mod pipe;
-use pipe::*;
-
 pub fn main() {
     let win = Win::new("Texture", 480, 480);
     let mut vkr = Vkr::new(win);
     let mut model = Model::new();
 
-    let mut pipeline_cache = pipe::PipelineCache::new(&vkr.dev);
-    let main_pipeline = pipeline_cache.get::<Vertex>(ShaderVkrMainShaders::Main, 0);
-
     let mut root = Node::new();
 
-    let lines_primitive = {
+    let mut line_material = Material::new(Color::white());
+    line_material.pipeline = vkr::default::ShaderVkrMainShaders::Line as usize;
+    let mut lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
         let lines_vertices = vec![
             Point::new(
@@ -41,8 +37,9 @@ pub fn main() {
                 Color::new(1.0, 1.0, 0.0, 1.0),
             ),
         ];
-        Primitive::new(&vkr.dev.allocator, &lines_vertices)
+        Primitive::new(&vkr.dev.allocator, VertexInputType::Point, &lines_vertices)
     };
+    lines_primitive.material = model.materials.push(line_material);
     let lines_primitive = model.primitives.push(lines_primitive);
     let lines_mesh = Mesh::new(vec![lines_primitive]);
     let lines_mesh = model.meshes.push(lines_mesh);
@@ -50,6 +47,7 @@ pub fn main() {
     lines.trs.translate(&na::Vector3::new(0.0, 0.0, -0.5));
     lines.mesh = lines_mesh;
     let lines = model.nodes.push(lines);
+    root.children.push(lines);
 
     let image = Image::load(&vkr.dev, "res/image/test.png");
     let view = ImageView::new(&vkr.dev.device, &image);
@@ -60,7 +58,8 @@ pub fn main() {
     model.samplers.push(sampler);
     let texture = model.textures.push(texture);
 
-    let material = Material::textured(texture);
+    let mut material = Material::textured(texture);
+    material.pipeline = vkr::ShaderVkrMainShaders::Main as usize;
     let material = model.materials.push(material);
     let mut rect_primitive = Primitive::quad(&vkr.dev.allocator, [1.0, 1.0]);
     rect_primitive.material = material;
@@ -132,7 +131,7 @@ pub fn main() {
         let mut frame = frame.unwrap();
 
         frame.update(&model, root);
-        frame.draw_pipe(main_pipeline.as_ref(), &model, root);
+        frame.draw_pipe(&mut vkr.default_pipelines, &model, root);
 
         vkr.end_scene(&mut frame);
         vkr.gui

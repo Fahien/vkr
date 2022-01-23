@@ -20,30 +20,6 @@ use spirv_std::{
 
 #[allow(unused_attributes)]
 #[spirv(fragment)]
-pub fn line_fs(color: Vec4, out_color: &mut Vec4, out_normal: &mut Vec4) {
-    *out_color = color;
-    *out_normal = vec4(0.0, 0.0, 1.0, 1.0);
-}
-
-#[allow(unused_attributes)]
-#[spirv(vertex)]
-pub fn line_vs(
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] model: &Mat4,
-    #[spirv(uniform, descriptor_set = 0, binding = 1)] _model_view: &Mat4,
-    #[spirv(uniform, descriptor_set = 1, binding = 0)] view: &Mat4,
-    #[spirv(uniform, descriptor_set = 1, binding = 1)] proj: &Mat4,
-    in_pos: Vec3,
-    in_color: Vec4,
-    _in_normal: Vec3,
-    color: &mut Vec4,
-    #[spirv(position)] out_pos: &mut Vec4,
-) {
-    *out_pos = *proj * *view * *model * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
-    *color = in_color;
-}
-
-#[allow(unused_attributes)]
-#[spirv(fragment)]
 pub fn main_fs(
     #[spirv(uniform, descriptor_set = 2, binding = 0)] material_color: &Vec4,
     #[spirv(descriptor_set = 2, binding = 1)] material_albedo: &SampledImage<Image2d>,
@@ -89,4 +65,26 @@ pub fn main_vs(
 
     uv.x = in_uv.x;
     uv.y = in_uv.y;
+}
+
+#[spirv(fragment)]
+pub fn line_fs(color: Vec4, out_color: &mut Vec4, out_normal: &mut Vec4) {
+    *out_color = color;
+    *out_normal = vec4(0.0, 0.0, 1.0, 1.0);
+}
+
+#[spirv(vertex)]
+pub fn line_vs(
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] model: &Mat4,
+    #[spirv(uniform, descriptor_set = 0, binding = 1)] _model_view: &Mat4,
+    #[spirv(uniform, descriptor_set = 1, binding = 0)] view: &Mat4,
+    #[spirv(uniform, descriptor_set = 1, binding = 1)] proj: &Mat4,
+    in_pos: Vec3,
+    in_color: Vec4,
+    _in_normal: Vec3,
+    color: &mut Vec4,
+    #[spirv(position)] out_pos: &mut Vec4,
+) {
+    *out_pos = *proj * *view * *model * vec4(in_pos.x, in_pos.y, in_pos.z, 1.0);
+    *color = in_color;
 }

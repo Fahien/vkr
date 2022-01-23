@@ -12,7 +12,6 @@ memoffset = "0.6.1"
 vk-mem = { git = "https://github.com/Fahien/vk-mem-rs", branch = "main" }
 png = "0.16.8"
 imgui = "0.7.0"
-enum-ordinalize = "3.1.10"
 variant_count = "1.1.0"
 nalgebra = "0.25.3"
 vkr-util = { path = "../vkr-util" }

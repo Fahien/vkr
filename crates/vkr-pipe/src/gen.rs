@@ -300,7 +300,7 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 layout.expect("Failed to create Vulkan pipeline layout")
             }
 
-            pub fn new_impl<V: VertexInput>(layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass, subpass: u32) -> vk::Pipeline {
+            pub fn new_impl(vertex_input_desc: &vkr_core::VertexInputDescription, layout: vk::PipelineLayout, shader_module: &ShaderModule, vs: &str, fs: &str, render_pass: vk::RenderPass, subpass: u32) -> vk::Pipeline {
                 let vs_entry = CString::new(vs).expect("Failed to create vertex entry point");
                 let fs_entry = CString::new(fs).expect("Failed to create vertex entry point");
 
@@ -309,15 +309,13 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                     shader_module.get_frag(&fs_entry)
                 ];
 
-                let vertex_bindings = V::get_bindings();
-                let vertex_attributes = V::get_attributes();
                 let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                    .vertex_attribute_descriptions(&vertex_attributes)
-                    .vertex_binding_descriptions(&vertex_bindings)
+                    .vertex_attribute_descriptions(&vertex_input_desc.attributes)
+                    .vertex_binding_descriptions(&vertex_input_desc.bindings)
                     .build();
 
                 let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::builder()
-                    .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                    .topology(vertex_input_desc.topology)
                     .primitive_restart_enable(false)
                     .build();
 
@@ -421,12 +419,12 @@ pub fn pipeline(pipeline: &Pipeline) -> TokenStream {
                 pipeline
             }
 
-            pub fn new<V: VertexInput>(shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Self {
+            pub fn new(vertex_input: &vkr_core::VertexInputDescription, shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Self {
                 let name = String::from(#pipeline_str);
                 let device = shader_module.device.clone();
                 let set_layouts = Self::new_set_layouts(&shader_module.device);
                 let layout = Self::new_layout(&shader_module.device, &set_layouts);
-                let pipeline = Self::new_impl::<V>(layout, shader_module, #vs, #fs, render_pass, subpass);
+                let pipeline = Self::new_impl(vertex_input, layout, shader_module, #vs, #fs, render_pass, subpass);
 
                 Self {
                     caches: vec![],
@@ -511,10 +509,16 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
             .expect("Failed to parse shader name")
     });
 
+    let from_impl = pipelines.iter().enumerate().map(|(i, p)|
+        format!("if n == {} {{ return Shader{}::{} }}", i, crate_module.name.to_camelcase(), p.name.to_camelcase())
+        .parse::<TokenStream>()
+        .expect("Failed to create from implementation")
+    );
+
     let pipeline_new = pipelines.iter().map(|m| {
         format!(
             "Shader{0}::{1} => {{
-                Box::new(Pipeline{1}::new::<V>(shader_module, render_pass, subpass))
+                Box::new(Pipeline{1}::new(vertex_input, shader_module, render_pass, subpass))
             }}",
             crate_module.name.to_camelcase(),
             m.name.to_camelcase(),
@@ -533,6 +537,10 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
             .expect("Failed to parse shader name")
     });
 
+    let pipeline_pool_name = format!("PipelinePool{}", crate_module.name.to_camelcase())
+        .parse::<TokenStream>()
+        .unwrap();
+
     quote! {
         #[derive(Copy,Clone,Debug)]
         pub enum #enum_name {
@@ -540,14 +548,21 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
         }
 
         impl #enum_name {
-            fn create_pipeline<V: VertexInput>(&self, shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Box<dyn Pipeline> {
+            fn create_pipeline(&self, vertex_input: &vkr_core::VertexInputDescription, shader_module: &ShaderModule, render_pass: vk::RenderPass, subpass: u32) -> Box<dyn Pipeline> {
                 match self {
                     #( #pipeline_new, )*
                 }
             }
         }
 
-        pub struct PipelinePool {
+        impl From<usize> for #enum_name {
+            fn from(n: usize) -> Self {
+                #( #from_impl )*
+                panic!("Failed to get shader for {}", n)
+            }
+        }
+
+        pub struct #pipeline_pool_name {
             pass: Pass,
             // Each entry in the array is a vector, where each vector position corresponds to the subpass index
             pipelines: [[Option<Box<dyn Pipeline>>;#max_subpasses];#pipeline_count],
@@ -555,7 +570,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
             device: Rc<Device>,
         }
 
-        impl PipelinePool {
+        impl #pipeline_pool_name {
             /// Returns an empty pipeline cache
             pub fn new(dev: &Dev) -> Self {
                 let shader_module = None;
@@ -583,29 +598,33 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 self.shader_module.as_ref().unwrap()
             }
 
-            fn create_pipeline<V: VertexInput>(&mut self, shader: #enum_name, subpass: u32) {
-                assert!(self.pipelines[shader as usize][subpass as usize].is_none());
+            fn create_pipeline(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: usize, subpass: u32) {
+                assert!(self.pipelines[shader][subpass as usize].is_none());
 
                 let render_pass = self.pass.render;
                 let shader_module = self.get_shader_module();
-                let pipeline = shader.create_pipeline::<V>(shader_module, render_pass, subpass);
-                self.pipelines[shader as usize][subpass as usize] = Some(pipeline);
+                let shader_enum = #enum_name::from(shader);
+                let pipeline = shader_enum.create_pipeline(vertex_input, shader_module, render_pass, subpass);
+                self.pipelines[shader][subpass as usize] = Some(pipeline);
             }
 
-            pub fn get<V: VertexInput>(&mut self, shader: #enum_name, subpass: u32) -> &Box<dyn Pipeline> {
-                if self.pipelines[shader as usize][subpass as usize].is_none() {
-                    self.create_pipeline::<V>(shader, subpass)
+            pub fn get_mut(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: usize, subpass: u32) -> &mut Box<dyn Pipeline> {
+                if self.pipelines[shader][subpass as usize].is_none() {
+                    self.create_pipeline(vertex_input, shader, subpass)
                 }
 
-                self.pipelines[shader as usize][subpass as usize].as_ref().unwrap()
+                self.pipelines[shader][subpass as usize].as_mut().unwrap()
             }
+        }
 
-            pub fn get_mut<V: VertexInput>(&mut self, shader: #enum_name, subpass: u32) -> &mut Box<dyn Pipeline> {
-                if self.pipelines[shader as usize][subpass as usize].is_none() {
-                    self.create_pipeline::<V>(shader, subpass)
+        impl vkr_core::PipelinePool for #pipeline_pool_name {
+            fn get(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: usize, subpass: u32) -> &Box<dyn Pipeline> {
+                if self.pipelines[shader][subpass as usize].is_none() {
+                    // TODO continue implementing this
+                    self.create_pipeline(vertex_input, shader, subpass)
                 }
 
-                self.pipelines[shader as usize][subpass as usize].as_mut().unwrap()
+                self.pipelines[shader][subpass as usize].as_ref().unwrap()
             }
         }
     }

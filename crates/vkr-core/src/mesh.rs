@@ -12,17 +12,30 @@ use crate::*;
 pub struct Material {
     pub color: Color,
     pub albedo: Handle<Texture>,
+    /// This is not a strong type at this point because
+    /// we do not know which shader the user is going to use
+    /// neither we know which pipeline pool it is referring to
+    /// TODO get that as input?
+    pub pipeline: usize,
 }
 
 impl Material {
     pub fn new(color: Color) -> Self {
         let albedo = Handle::none();
-        Self { color, albedo }
+        Self {
+            color,
+            albedo,
+            pipeline: 0,
+        }
     }
 
     pub fn textured(albedo: Handle<Texture>) -> Self {
         let color = Color::white();
-        Self { color, albedo }
+        Self {
+            color,
+            albedo,
+            pipeline: 0,
+        }
     }
 
     pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
@@ -83,11 +96,16 @@ pub struct Primitive {
     pub vertex_count: u32,
     pub vertices: Buffer,
     pub indices: Option<Buffer>,
+    pub vertex_input_type: VertexInputType,
     pub material: Handle<Material>,
 }
 
 impl Primitive {
-    pub fn new<T>(allocator: &Rc<RefCell<vk_mem::Allocator>>, vv: &[T]) -> Self {
+    pub fn new<T>(
+        allocator: &Rc<RefCell<vk_mem::Allocator>>,
+        vertex_input_type: VertexInputType,
+        vv: &[T],
+    ) -> Self {
         let vertex_count = vv.len() as u32;
 
         let mut vertices = Buffer::new::<T>(allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
@@ -97,6 +115,7 @@ impl Primitive {
             vertex_count,
             vertices,
             indices: None,
+            vertex_input_type,
             material: Handle::none(), // default material
         }
     }
@@ -131,7 +150,7 @@ impl Primitive {
         ];
         let indices = vec![0, 1, 2, 2, 3, 0];
 
-        let mut ret = Self::new(allocator, &vertices);
+        let mut ret = Self::new(allocator, VertexInputType::Vertex, &vertices);
         ret.set_indices(&indices);
         ret
     }
@@ -306,7 +325,7 @@ impl Primitive {
             20, 21, 22, 20, 22, 23, // bottom
         ];
 
-        let mut ret = Self::new(allocator, &vertices);
+        let mut ret = Self::new(allocator, VertexInputType::Vertex, &vertices);
         ret.set_indices(&indices);
         ret
     }

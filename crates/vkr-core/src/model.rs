@@ -2,9 +2,60 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use nalgebra as na;
-use vkr_util::{Pack, Handle};
 use super::*;
+
+use ash::vk;
+use enum_ordinalize::Ordinalize;
+use memoffset::offset_of;
+use nalgebra as na;
+use vkr_util::{Handle, Pack};
+
+pub trait VertexInput {
+    fn get_topology() -> vk::PrimitiveTopology {
+        vk::PrimitiveTopology::TRIANGLE_LIST
+    }
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription>;
+    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription>;
+}
+
+pub struct VertexInputDescription {
+    /// Is this the right place for the topology?
+    pub topology: vk::PrimitiveTopology,
+    pub attributes: Vec<vk::VertexInputAttributeDescription>,
+    pub bindings: Vec<vk::VertexInputBindingDescription>,
+}
+
+impl VertexInputDescription {
+    pub fn new<V: VertexInput>() -> Self {
+        Self {
+            topology: V::get_topology(),
+            attributes: V::get_attributes(),
+            bindings: V::get_bindings(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Ordinalize)]
+pub enum VertexInputType {
+    Point,
+    Vertex,
+}
+
+impl VertexInputType {
+    pub fn get_vertex_input(&self) -> VertexInputDescription {
+        match self {
+            VertexInputType::Point => VertexInputDescription::new::<Point>(),
+            VertexInputType::Vertex => VertexInputDescription::new::<Vertex>(),
+        }
+    }
+}
+
+impl From<usize> for VertexInputType {
+    fn from(n: usize) -> Self {
+        VertexInputType::from_ordinal(n as i8)
+            .expect(&format!("Failed to find vertex input for ordinal: {}", n))
+    }
+}
 
 #[repr(C)]
 pub struct Color {
@@ -41,6 +92,43 @@ impl Point {
     }
 }
 
+impl VertexInput for Point {
+    fn get_topology() -> vk::PrimitiveTopology {
+        vk::PrimitiveTopology::LINE_STRIP
+    }
+
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Point>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()]
+    }
+
+    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
+        vec![
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Point, pos) as u32)
+                .build(),
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .offset(offset_of!(Point, color) as u32)
+                .build(),
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Point, normal) as u32)
+                .build(),
+        ]
+    }
+}
+
 #[repr(C)]
 pub struct Line {
     pub a: Point,
@@ -73,6 +161,49 @@ impl Vertex {
     }
 }
 
+impl VertexInput for Vertex {
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Vertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()]
+    }
+
+    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
+        vec![
+            // position
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Vertex, pos) as u32)
+                .build(),
+            // color
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .offset(offset_of!(Vertex, color) as u32)
+                .build(),
+            // normal
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Vertex, normal) as u32)
+                .build(),
+            // texture coordinates
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(3)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Vertex, uv) as u32)
+                .build(),
+        ]
+    }
+}
+
 /// Very simple vertex used for the presentation pass
 #[repr(C)]
 pub struct PresentVertex {
@@ -85,6 +216,28 @@ impl PresentVertex {
         Self {
             pos: na::Vector2::new(x, y),
         }
+    }
+}
+
+impl VertexInput for PresentVertex {
+    fn get_bindings() -> Vec<vk::VertexInputBindingDescription> {
+        vec![vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Self>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()]
+    }
+
+    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
+        vec![
+            // position
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Self, pos) as u32)
+                .build(),
+        ]
     }
 }
 
@@ -219,8 +372,8 @@ impl Camera {
             CameraType::PERSPECTIVE => Camera::perspective_matrix(aspect),
         };
     }
-/*
-    */
+    /*
+     */
 }
 
 type ScriptFn = Box<dyn Fn(f32, &mut Pack<Node>, Handle<Node>)>;

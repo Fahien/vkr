@@ -7,7 +7,7 @@ use std::any::Any;
 use ash::vk;
 use vkr_util::Handle;
 
-use crate::{Frame, Model, Node};
+use crate::{Frame, Model, Node, VertexInputDescription};
 
 pub trait Pipeline: Any {
     fn as_any(&self) -> &dyn Any;
@@ -18,4 +18,9 @@ pub trait Pipeline: Any {
     fn get_pipeline(&self) -> vk::Pipeline;
     fn bind(&self, frame: &mut Frame, model: &Model, node: Handle<Node>);
     fn draw(&self, frame: &mut Frame, model: &Model, node: Handle<Node>);
+}
+
+pub trait PipelinePool {
+    /// Returns a pipeline for a certain shader index and subpass
+    fn get(&mut self, vertex_input: &VertexInputDescription, shader: usize, subpass: u32) -> &Box<dyn Pipeline>;
 }
