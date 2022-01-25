@@ -42,7 +42,7 @@ impl Timer {
 #[derive(Debug)]
 pub struct Handle<T> {
     pub id: usize,
-    phantom: PhantomData<T>,
+    phantom: PhantomData<*const T>,
 }
 
 impl<T> Handle<T> {
@@ -249,5 +249,23 @@ mod test {
         let handle = pack.push(Thing { val: 1 });
         assert_eq!(handle.id, 0);
         assert_eq!(pack.get(handle).unwrap().val, 1);
+    }
+
+    trait Handy {
+        fn handy(&self) -> bool;
+    }
+
+    impl Handy for Thing {
+        fn handy(&self) -> bool {
+            self.val == 1
+        }
+    }
+
+    #[test]
+    fn use_traits() {
+        let mut pack = Pack::<Box<dyn Handy>>::new();
+        let handle = pack.push(Box::new(Thing::new(1)));
+        assert_eq!(handle.id, 0);
+        assert!(pack.get(handle).unwrap().handy());
     }
 }
