@@ -30,7 +30,18 @@ impl Vkr {
         let mut dev = Dev::new(&ctx, Some(&surface));
 
         let pass = Pass::new(&mut dev);
-        let sfs = SwapchainFrames::new(&ctx, &surface, &mut dev, width, height, &pass);
+
+        let default_pipeline = ShaderVkrMainShaders::Main.into();
+
+        let sfs = SwapchainFrames::new(
+            &ctx,
+            &surface,
+            &mut dev,
+            width,
+            height,
+            &pass,
+            default_pipeline,
+        );
 
         let gui = Gui::new(&win, &dev, &pass);
 
@@ -151,7 +162,7 @@ impl Vkr {
 
         let present_pipeline = self.present_pipelines.get(
             &VertexInputDescription::new::<PresentVertex>(),
-            ShaderVkrPresentShaders::Present as usize,
+            ShaderVkrPresentShaders::Present.into(),
             1,
         );
         let model = Model::new();

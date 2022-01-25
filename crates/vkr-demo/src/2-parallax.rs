@@ -22,7 +22,7 @@ fn create_back(
     i: i32,
 ) -> Handle<Node> {
     let texture = create_texture(vkr, model, sampler, path);
-    let material = Material::textured(texture);
+    let material = Material::textured(texture, ShaderVkrMainShaders::Main);
     let material = model.materials.push(material);
     let mut primitive = Primitive::quad(&vkr.dev.allocator, [2.0, 1.0]);
     primitive.material = material;

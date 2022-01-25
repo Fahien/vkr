@@ -106,11 +106,9 @@ impl Dev {
             if name == "VK_KHR_vulkan_memory_model" {
                 enabled_extensions.push(prop.extension_name.as_ptr());
                 vulkan_memory_model = true;
-            }
-            else if name == "VK_KHR_portability_subset" {
+            } else if name == "VK_KHR_portability_subset" {
                 enabled_extensions.push(prop.extension_name.as_ptr());
             }
-            println!("\t{}", name);
         }
 
         #[cfg(feature = "win")]

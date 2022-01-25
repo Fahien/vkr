@@ -22,5 +22,10 @@ pub trait Pipeline: Any {
 
 pub trait PipelinePool {
     /// Returns a pipeline for a certain shader index and subpass
-    fn get(&mut self, vertex_input: &VertexInputDescription, shader: usize, subpass: u32) -> &Box<dyn Pipeline>;
+    fn get(
+        &mut self,
+        vertex_input: &VertexInputDescription,
+        shader: Handle<Box<dyn Pipeline>>,
+        subpass: u32,
+    ) -> &Box<dyn Pipeline>;
 }

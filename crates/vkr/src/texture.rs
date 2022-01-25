@@ -12,12 +12,12 @@ mod test {
 
     #[test]
     fn save_png() {
-        let image_dir = Path::new(r"res/image");
+        let image_dir = Path::new(r"../../res/image");
         if !Path::exists(&image_dir) {
             create_dir(image_dir).expect("Failed to create image directory");
         }
 
-        let path = Path::new(r"res/image/test.png");
+        let path = Path::new(r"../../res/image/test.png");
         let file = File::create(path).unwrap();
         let ref mut w = BufWriter::new(file);
 

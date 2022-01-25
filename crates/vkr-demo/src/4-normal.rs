@@ -10,7 +10,7 @@ pub fn main() {
     let mut model = Model::new();
 
     let mut cube_primitive = Primitive::cube(&vkr.dev.allocator);
-    let material = Material::new(Color::white());
+    let material = Material::colored(Color::white(), ShaderVkrMainShaders::Main);
     cube_primitive.material = model.materials.push(material);
     let cube_primitive = model.primitives.push(cube_primitive);
 

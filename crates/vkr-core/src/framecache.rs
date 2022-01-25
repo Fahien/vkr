@@ -23,7 +23,7 @@ pub struct Fallback {
 }
 
 impl Fallback {
-    fn new(dev: &Dev) -> Self {
+    fn new(dev: &Dev, default_pipeline: Handle<Box<dyn Pipeline>>) -> Self {
         let white = [255, 255, 255, 255];
         let white_image = Image::from_data(&dev, &white, 1, 1, vk::Format::R8G8B8A8_SRGB);
 
@@ -31,7 +31,7 @@ impl Fallback {
         let white_sampler = Sampler::new(&dev.device);
         let white_texture = Texture::new(white_view.view, white_sampler.sampler);
 
-        let white_material = Material::new(Color::white());
+        let white_material = Material::colored(Color::white(), default_pipeline);
 
         // Y pointing down
         let present_vertices = vec![
@@ -98,7 +98,7 @@ pub struct FrameCache {
 }
 
 impl FrameCache {
-    pub fn new(dev: &mut Dev) -> Self {
+    pub fn new(dev: &mut Dev, default_pipeline: Handle<Box<dyn Pipeline>>) -> Self {
         // Graphics command buffer (device, command pool)
         let command_buffer = CommandBuffer::new(&mut dev.graphics_command_pool);
 
@@ -124,7 +124,7 @@ impl FrameCache {
             fence,
             image_ready: Semaphore::new(&dev.device),
             image_drawn: Semaphore::new(&dev.device),
-            fallback: Fallback::new(&dev),
+            fallback: Fallback::new(&dev, default_pipeline),
         }
     }
 

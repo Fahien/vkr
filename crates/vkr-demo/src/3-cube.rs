@@ -18,7 +18,7 @@ pub fn main() {
     model.samplers.push(sampler);
     let lena_texture = model.textures.push(texture);
 
-    let mut green_material = Material::textured(lena_texture);
+    let mut green_material = Material::textured(lena_texture, ShaderVkrMainShaders::Main);
     green_material.color = Color::new(0.8, 0.6, 0.7, 0.3);
     let green_material = model.materials.push(green_material);
 

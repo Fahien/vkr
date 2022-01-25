@@ -12,30 +12,34 @@ use crate::*;
 pub struct Material {
     pub color: Color,
     pub albedo: Handle<Texture>,
-    /// This is not a strong type at this point because
-    /// we do not know which shader the user is going to use
+    /// We do not know which shader the user is going to use
     /// neither we know which pipeline pool it is referring to
-    /// TODO get that as input?
-    pub pipeline: usize,
+    pub pipeline: Handle<Box<dyn Pipeline>>,
 }
 
 impl Material {
-    pub fn new(color: Color) -> Self {
-        let albedo = Handle::none();
+    pub fn new<T: Into<Handle<Box<dyn Pipeline>>>>(
+        color: Color,
+        albedo: Handle<Texture>,
+        pipeline: T,
+    ) -> Self {
         Self {
             color,
             albedo,
-            pipeline: 0,
+            pipeline: pipeline.into(),
         }
     }
 
-    pub fn textured(albedo: Handle<Texture>) -> Self {
+    pub fn colored<T: Into<Handle<Box<dyn Pipeline>>>>(color: Color, pipeline: T) -> Self {
+        Self::new(color, Handle::none(), pipeline)
+    }
+
+    pub fn textured<T: Into<Handle<Box<dyn Pipeline>>>>(
+        albedo: Handle<Texture>,
+        pipeline: T,
+    ) -> Self {
         let color = Color::white();
-        Self {
-            color,
-            albedo,
-            pipeline: 0,
-        }
+        Self::new(color, albedo, pipeline)
     }
 
     pub fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {

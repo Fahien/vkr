@@ -156,9 +156,14 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
+    pub fn new(
+        dev: &mut Dev,
+        image: &Image,
+        pass: &Pass,
+        default_pipeline: Handle<Box<dyn Pipeline>>,
+    ) -> Self {
         let buffer = Framebuffer::new(dev, image, pass);
-        let res = FrameCache::new(dev);
+        let res = FrameCache::new(dev, default_pipeline);
 
         Frame {
             camera_nodes: vec![],
@@ -219,7 +224,7 @@ impl Frame {
     pub fn bind_pipe_recursive(&mut self, model: &Model, node_handle: Handle<Node>) {
         let children = model.nodes.get(node_handle).unwrap().children.clone();
         for child in children {
-            self.bind_pipe_recursive( model, child);
+            self.bind_pipe_recursive(model, child);
         }
 
         let node = model.nodes.get(node_handle).unwrap();
@@ -229,7 +234,6 @@ impl Frame {
     }
 
     pub fn bind_pipe(&mut self, model: &Model, node_handle: Handle<Node>) {
-
         self.bind_pipe_recursive(model, node_handle);
     }
 
@@ -249,7 +253,11 @@ impl Frame {
             for primitive in &mesh.primitives {
                 let primitive = model.primitives.get(*primitive).unwrap();
                 if let Some(material) = model.materials.get(primitive.material) {
-                    let pipeline = pipeline_pool.get(&primitive.vertex_input_type.get_vertex_input(), material.pipeline, 0);
+                    let pipeline = pipeline_pool.get(
+                        &primitive.vertex_input_type.get_vertex_input(),
+                        material.pipeline,
+                        0,
+                    );
                     pipeline.bind(self, model, self.camera_nodes[0]);
                     pipeline.draw(self, model, node_handle);
                 }
@@ -258,7 +266,12 @@ impl Frame {
     }
 
     /// Pipeline pool can not be a member of Frame or we would end up with a pipeline for each frame, which is not needed.
-    pub fn draw_pipe(&mut self, pipeline_pool: &mut dyn PipelinePool, model: &Model, node: Handle<Node>) {
+    pub fn draw_pipe(
+        &mut self,
+        pipeline_pool: &mut dyn PipelinePool,
+        model: &Model,
+        node: Handle<Node>,
+    ) {
         // TODO: This function should just prepare stuff for drawing
         // Actual drawing should happen later, which means Pipeline trait can call this function
         // and then call another one to submit render commands.
@@ -365,12 +378,13 @@ impl SwapchainFrames {
         width: u32,
         height: u32,
         pass: &Pass,
+        default_pipeline: Handle<Box<dyn Pipeline>>,
     ) -> Self {
         let swapchain = Swapchain::new(ctx, surface, dev, width, height);
 
         let mut frames = Vec::new();
         for image in swapchain.images.iter() {
-            let frame = Frame::new(dev, image, pass);
+            let frame = Frame::new(dev, image, pass, default_pipeline);
             frames.push(Some(frame));
         }
 

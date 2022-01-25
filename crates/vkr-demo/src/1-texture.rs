@@ -11,8 +11,7 @@ pub fn main() {
 
     let mut root = Node::new();
 
-    let mut line_material = Material::new(Color::white());
-    line_material.pipeline = vkr::default::ShaderVkrMainShaders::Line as usize;
+    let line_material = Material::colored(Color::white(), ShaderVkrMainShaders::Line);
     let mut lines_primitive = {
         // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
         let lines_vertices = vec![
@@ -58,8 +57,7 @@ pub fn main() {
     model.samplers.push(sampler);
     let texture = model.textures.push(texture);
 
-    let mut material = Material::textured(texture);
-    material.pipeline = vkr::ShaderVkrMainShaders::Main as usize;
+    let material = Material::textured(texture, ShaderVkrMainShaders::Main);
     let material = model.materials.push(material);
     let mut rect_primitive = Primitive::quad(&vkr.dev.allocator, [1.0, 1.0]);
     rect_primitive.material = material;

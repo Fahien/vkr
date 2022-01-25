@@ -228,7 +228,7 @@ impl Gui {
 
         let pipeline = self.pipeline_pool.get(
             &get_imgui_vertex_input_description(),
-            ShaderVkrGuiShaders::Gui as usize,
+            ShaderVkrGuiShaders::Gui.into(),
             1,
         );
 

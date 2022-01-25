@@ -509,11 +509,16 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
             .expect("Failed to parse shader name")
     });
 
-    let from_impl = pipelines.iter().enumerate().map(|(i, p)|
-        format!("if n == {} {{ return Shader{}::{} }}", i, crate_module.name.to_camelcase(), p.name.to_camelcase())
+    let from_impl = pipelines.iter().enumerate().map(|(i, p)| {
+        format!(
+            "if handle.id == {} {{ return Shader{}::{} }}",
+            i,
+            crate_module.name.to_camelcase(),
+            p.name.to_camelcase()
+        )
         .parse::<TokenStream>()
         .expect("Failed to create from implementation")
-    );
+    });
 
     let pipeline_new = pipelines.iter().map(|m| {
         format!(
@@ -555,10 +560,16 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
             }
         }
 
-        impl From<usize> for #enum_name {
-            fn from(n: usize) -> Self {
+        impl From<Handle<Box<dyn Pipeline>>> for #enum_name {
+            fn from(handle: Handle<Box<dyn Pipeline>>) -> Self {
                 #( #from_impl )*
-                panic!("Failed to get shader for {}", n)
+                panic!("Failed to get shader for {}", handle.id)
+            }
+        }
+
+        impl Into<Handle<Box<dyn Pipeline>>> for #enum_name {
+            fn into(self) -> Handle<Box<dyn Pipeline>> {
+                Handle::new(self as usize)
             }
         }
 
@@ -598,33 +609,37 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 self.shader_module.as_ref().unwrap()
             }
 
-            fn create_pipeline(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: usize, subpass: u32) {
-                assert!(self.pipelines[shader][subpass as usize].is_none());
+            fn create_pipeline(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: Handle<Box<dyn Pipeline>>, subpass: u32) {
+                assert!(self.pipelines[shader.id][subpass as usize].is_none());
 
                 let render_pass = self.pass.render;
                 let shader_module = self.get_shader_module();
                 let shader_enum = #enum_name::from(shader);
                 let pipeline = shader_enum.create_pipeline(vertex_input, shader_module, render_pass, subpass);
-                self.pipelines[shader][subpass as usize] = Some(pipeline);
+                self.pipelines[shader.id][subpass as usize] = Some(pipeline);
             }
 
-            pub fn get_mut(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: usize, subpass: u32) -> &mut Box<dyn Pipeline> {
-                if self.pipelines[shader][subpass as usize].is_none() {
+            pub fn get_mut(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: Handle<Box<dyn Pipeline>>, subpass: u32) -> &mut Box<dyn Pipeline> {
+                if self.pipelines[shader.id][subpass as usize].is_none() {
                     self.create_pipeline(vertex_input, shader, subpass)
                 }
 
-                self.pipelines[shader][subpass as usize].as_mut().unwrap()
+                self.pipelines[shader.id][subpass as usize].as_mut().unwrap()
             }
         }
 
         impl vkr_core::PipelinePool for #pipeline_pool_name {
-            fn get(&mut self, vertex_input: &vkr_core::VertexInputDescription, shader: usize, subpass: u32) -> &Box<dyn Pipeline> {
-                if self.pipelines[shader][subpass as usize].is_none() {
-                    // TODO continue implementing this
+            fn get(
+                &mut self,
+                vertex_input: &vkr_core::VertexInputDescription,
+                shader: Handle<Box<dyn Pipeline>>,
+                subpass: u32
+            ) -> &Box<dyn Pipeline> {
+                if self.pipelines[shader.id][subpass as usize].is_none() {
                     self.create_pipeline(vertex_input, shader, subpass)
                 }
 
-                self.pipelines[shader][subpass as usize].as_ref().unwrap()
+                self.pipelines[shader.id][subpass as usize].as_ref().unwrap()
             }
         }
     }
