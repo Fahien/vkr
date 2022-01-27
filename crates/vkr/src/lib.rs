@@ -12,9 +12,6 @@ pub use vkr_util::*;
 pub mod texture;
 pub use texture::*;
 
-mod model;
-pub use model::*;
-
 mod pipeline;
 pub use pipeline::*;
 

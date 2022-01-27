@@ -1,4 +1,4 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
@@ -169,6 +169,7 @@ impl Vkr {
         present_pipeline.draw(frame, &model, Handle::none());
     }
 
+    /// Finish present subpass and submit frame for presentation
     pub fn end_frame(&mut self, frame: Frame) {
         frame.end();
 
