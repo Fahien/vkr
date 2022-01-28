@@ -55,7 +55,7 @@ pub fn main() {
 
         vkr.end_scene(&mut frame);
         vkr.gui
-            .draw_debug_window(delta, &mut frame, &model, camera_node);
+            .draw_debug_window(delta, &mut frame, &model, camera_node, &mut vkr.present_pipelines);
         vkr.end_frame(frame);
     }
 

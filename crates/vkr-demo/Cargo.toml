@@ -9,6 +9,7 @@ license = "MIT"
 vkr = { path = "../vkr" }
 vkr-core = { path = "../vkr-core" }
 vkr-util = { path = "../vkr-util" }
+enum-ordinalize = "3.1.10"
 vkr-pipe = { path = "../vkr-pipe" }
 ash = "0.33"
 

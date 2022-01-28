@@ -520,6 +520,27 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
         .expect("Failed to create from implementation")
     });
 
+    let display_impl = pipelines.iter().map(|m| {
+        format!(
+            "Shader{0}::{1} => write!(f, \"{1}\"),",
+            crate_module.name.to_camelcase(),
+            m.name.to_camelcase(),
+        )
+        .parse::<TokenStream>()
+        .expect("Failed to parse shader name")
+    });
+
+    let all_enums = pipelines.iter().map(|m| {
+        format!(
+            "Shader{0}::{1},",
+            crate_module.name.to_camelcase(),
+            m.name.to_camelcase(),
+        )
+        .parse::<TokenStream>()
+        .expect("Failed to parse shader name")
+    });
+
+
     let pipeline_new = pipelines.iter().map(|m| {
         format!(
             "Shader{0}::{1} => {{
@@ -547,7 +568,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
         .unwrap();
 
     quote! {
-        #[derive(Copy,Clone,Debug)]
+        #[derive(Copy,Clone,Debug, enum_ordinalize::Ordinalize)]
         pub enum #enum_name {
             #( #pipeline_names, )*
         }
@@ -557,6 +578,12 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 match self {
                     #( #pipeline_new, )*
                 }
+            }
+
+            pub fn all() -> [#enum_name; #pipeline_count] {
+                [
+                    #( #all_enums )*
+                ]
             }
         }
 
@@ -573,7 +600,16 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
             }
         }
 
+        impl core::fmt::Display for #enum_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+                match self {
+                    #( #display_impl )*
+                }
+            }
+        }
+
         pub struct #pipeline_pool_name {
+            pub debug: Option<#enum_name>,
             pass: Pass,
             // Each entry in the array is a vector, where each vector position corresponds to the subpass index
             pipelines: [[Option<Box<dyn Pipeline>>;#max_subpasses];#pipeline_count],
@@ -593,6 +629,7 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
                 let pass = Pass::new(dev);
 
                 Self {
+                    debug: None,
                     pass,
                     pipelines,
                     shader_module,
@@ -629,12 +666,18 @@ pub fn cache(crate_module: &CrateModule, pipelines: &[Pipeline]) -> TokenStream 
         }
 
         impl vkr_core::PipelinePool for #pipeline_pool_name {
+            /// Shader must be a handle as it comes from a trait as it must be a common type for all pipeline pools
             fn get(
                 &mut self,
                 vertex_input: &vkr_core::VertexInputDescription,
                 shader: Handle<Box<dyn Pipeline>>,
                 subpass: u32
             ) -> &Box<dyn Pipeline> {
+                let shader = if let Some(pipeline) = self.debug {
+                    pipeline.into()
+                } else {
+                    shader
+                };
                 if self.pipelines[shader.id][subpass as usize].is_none() {
                     self.create_pipeline(vertex_input, shader, subpass)
                 }

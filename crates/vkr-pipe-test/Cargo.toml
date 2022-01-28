@@ -6,6 +6,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
+enum-ordinalize = "3.1.10"
 vkr-pipe =  { path = "../vkr-pipe" }
 ash = "0.33"
 vkr-core = { path = "../vkr-core", default-features = false }

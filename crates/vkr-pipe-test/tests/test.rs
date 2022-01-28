@@ -58,14 +58,14 @@ fn build_simple_shader() {
 
     let vertex_input = VertexInputDescription::new::<Vertex>();
 
-    let main_pipeline = cache.get(&vertex_input, ShaderSimpleShader::Main as usize, 0);
+    let main_pipeline = cache.get(&vertex_input, ShaderSimpleShader::Main.into(), 0);
     assert!(main_pipeline.get_name() == "Main");
 
-    let secondary_pipeline = cache.get(&vertex_input, ShaderSimpleShader::Secondary as usize, 0);
+    let secondary_pipeline = cache.get(&vertex_input, ShaderSimpleShader::Secondary.into(), 0);
     eprintln!("{}", secondary_pipeline.get_name());
     assert!(secondary_pipeline.get_name() == "Secondary");
 
-    let uniform_pipeline = cache.get_mut(&vertex_input, ShaderSimpleShader::Uniform as usize, 0);
+    let uniform_pipeline = cache.get_mut(&vertex_input, ShaderSimpleShader::Uniform.into(), 0);
     assert!(uniform_pipeline.get_name() == "Uniform");
 
     let uniform_pipeline = as_uni(uniform_pipeline.as_any_mut());

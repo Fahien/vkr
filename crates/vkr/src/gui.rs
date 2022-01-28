@@ -351,6 +351,7 @@ impl Gui {
         frame: &mut Frame,
         model: &Model,
         camera: Handle<Node>,
+        pipeline_pool: &mut PipelinePoolVkrPresentShaders,
     ) {
         self.update(delta, &mut frame.res, |ui| {
             im::Window::new(im::im_str!("Debug"))
@@ -363,33 +364,31 @@ impl Gui {
                 .bg_alpha(0.33)
                 .build(ui, || {
                     // Pipeline
-                    //let mut current = if pipelines.debug.is_none() {
-                    //    0
-                    //} else {
-                    //    pipelines.debug.unwrap() as usize
-                    //};
+                    let mut current = if pipeline_pool.debug.is_none() {
+                        0
+                    } else {
+                        pipeline_pool.debug.unwrap() as usize + 1
+                    };
 
                     ui.text("Pipeline:");
 
-                    let _items = [
-                        im::im_str!("None"),
-                        im::im_str!("Albedo"),
-                        im::im_str!("Normal"),
-                    ];
+                    let mut items = vec![String::from("None")];
+                    items.extend(ShaderVkrPresentShaders::all().iter().map(|s| s.to_string()));
+
                     ui.text(" · ");
                     ui.same_line(0.0);
-                    //if im::ComboBox::new(im::im_str!("")).build_simple(
-                    //    &ui,
-                    //    &mut current,
-                    //    &items,
-                    //    &|&s| s.into(),
-                    //) {
-                    //    if current == 0 {
-                    //        pipelines.debug = None;
-                    //    } else {
-                    //        pipelines.debug = Pipelines::from_ordinal(current as i8);
-                    //    }
-                    //}
+                    if im::ComboBox::new(im::im_str!("")).build_simple(
+                        &ui,
+                        &mut current,
+                        &items,
+                        &|s| im::im_str!("{}", s).into()
+                    ) {
+                        if current == 0 {
+                            pipeline_pool.debug = None;
+                        } else {
+                            pipeline_pool.debug = ShaderVkrPresentShaders::from_ordinal(current as i8 - 1);
+                        }
+                    }
 
                     // Camera
                     let camera_node = model.nodes.get(camera).unwrap();
