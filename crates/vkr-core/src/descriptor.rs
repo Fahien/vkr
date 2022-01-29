@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 use ash::{vk, Device};
-use vkr_util::Handle;
 use std::{collections::HashMap, rc::Rc};
+use vkr_util::Handle;
 
 use crate::{model::Node, Material};
 
@@ -16,13 +16,9 @@ pub struct Descriptors {
     /// Descriptor sets for the GUI
     pub gui_sets: Vec<vk::DescriptorSet>,
 
-    /// These descriptor sets are for camera view and proj uniform, therefore we need NxM descriptor sets
-    /// where N is the number of pipeline layouts, and M is the number of nodes with cameras
-    pub view_sets: SetCache<Node>,
-
-    /// These descriptor sets are for model matrix uniforms, therefore we need NxM descriptor sets
-    /// where N is the number of pipeline layouts, and M is the node with the model matrix
-    pub model_sets: SetCache<Node>,
+    /// These descriptor sets are for node transform matrices, therefore we need NxM descriptor sets
+    /// where N is the number of descriptor set layouts, and M is the nodes with transform matrices
+    pub node_sets: SetCache<Node>,
 
     /// These descriptor sets are for material uniforms, therefore we need NxM descriptor sets
     /// where N is the number of pipeline layouts, and M is the number of materials
@@ -76,8 +72,7 @@ impl Descriptors {
 
         Self {
             gui_sets: vec![],
-            view_sets: SetCache::new(),
-            model_sets: SetCache::new(),
+            node_sets: SetCache::new(),
             material_sets: SetCache::new(),
             present_sets: vec![],
             pool,

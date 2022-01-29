@@ -42,7 +42,7 @@ impl PipelineLine {
             .res
             .pipeline_cache
             .descriptors
-            .view_sets
+            .node_sets
             .get(&(self.get_set_layouts()[1], camera_node))
         {
             frame
@@ -101,12 +101,12 @@ impl PipelineLine {
                 .res
                 .pipeline_cache
                 .descriptors
-                .view_sets
+                .node_sets
                 .insert((self.get_set_layouts()[1], camera_node), sets);
         }
     }
 
-    fn get_model_sets(
+    fn get_node_sets(
         &self,
         frame: &mut Frame,
         node_handle: Handle<Node>,
@@ -115,7 +115,7 @@ impl PipelineLine {
             .res
             .pipeline_cache
             .descriptors
-            .model_sets
+            .node_sets
             .contains_key(&(self.set_layouts[0], node_handle))
         {
             // Check the model buffer already exists
@@ -157,7 +157,7 @@ impl PipelineLine {
                 .res
                 .pipeline_cache
                 .descriptors
-                .model_sets
+                .node_sets
                 .insert((self.set_layouts[0], node_handle), sets);
         }
 
@@ -165,7 +165,7 @@ impl PipelineLine {
             .res
             .pipeline_cache
             .descriptors
-            .model_sets
+            .node_sets
             .get(&(self.set_layouts[0], node_handle))
             .unwrap();
 
@@ -182,7 +182,7 @@ impl PipelineLine {
 
         let mesh = mesh.unwrap();
 
-        let sets = self.get_model_sets(frame, node_handle);
+        let sets = self.get_node_sets(frame, node_handle);
         frame
             .res
             .command_buffer
@@ -256,7 +256,7 @@ impl PipelineMain {
             .res
             .pipeline_cache
             .descriptors
-            .view_sets
+            .node_sets
             .get(&(self.get_set_layouts()[1], camera_node))
         {
             frame
@@ -315,12 +315,12 @@ impl PipelineMain {
                 .res
                 .pipeline_cache
                 .descriptors
-                .view_sets
+                .node_sets
                 .insert((self.get_set_layouts()[1], camera_node), sets);
         }
     }
 
-    fn get_model_sets(
+    fn get_node_sets(
         &self,
         frame: &mut Frame,
         node_handle: Handle<Node>,
@@ -329,7 +329,7 @@ impl PipelineMain {
             .res
             .pipeline_cache
             .descriptors
-            .model_sets
+            .node_sets
             .contains_key(&(self.set_layouts[0], node_handle))
         {
             // Check the model buffer already exists
@@ -371,7 +371,7 @@ impl PipelineMain {
                 .res
                 .pipeline_cache
                 .descriptors
-                .model_sets
+                .node_sets
                 .insert((self.set_layouts[0], node_handle), sets);
         }
 
@@ -379,7 +379,7 @@ impl PipelineMain {
             .res
             .pipeline_cache
             .descriptors
-            .model_sets
+            .node_sets
             .get(&(self.set_layouts[0], node_handle))
             .unwrap();
 
@@ -465,7 +465,7 @@ impl PipelineMain {
 
         let mesh = mesh.unwrap();
 
-        let sets = self.get_model_sets(frame, node_handle);
+        let sets = self.get_node_sets(frame, node_handle);
         frame
             .res
             .command_buffer
