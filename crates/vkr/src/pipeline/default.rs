@@ -52,10 +52,10 @@ impl PipelineLine {
 
             // If there is a descriptor set, there must be a buffer, so we just unwrap
             // TODO: Optimize by uploading only if data has actually changed.
-            let view_buffer = frame.res.view_buffers.get_mut(&camera_node).unwrap();
+            let view_buffer = frame.res.view_buffers.get_mut_unchecked(&camera_node);
             view_buffer.upload(&frame.current_view);
 
-            let proj_buffer = frame.res.proj_buffers.get_mut(&node.camera).unwrap();
+            let proj_buffer = frame.res.proj_buffers.get_mut_unchecked(&node.camera);
             proj_buffer.upload(&camera.proj);
         } else {
             // TODO: Can I move this into the pipeline?
@@ -67,28 +67,14 @@ impl PipelineLine {
                 .descriptors
                 .allocate(&[self.get_set_layouts()[1]]);
 
-            if !frame.res.view_buffers.contains_key(&camera_node) {
-                // Create a new buffer for this node's view matrix
-                let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                view_buffer.upload(&frame.current_view);
-                frame.res.view_buffers.insert(camera_node, view_buffer);
-            }
-            let view_buffer = frame.res.view_buffers.get(&camera_node).unwrap();
-
-            // Same thing with proj buffer
-            if !frame.res.proj_buffers.contains_key(&node.camera) {
-                // Create a new buffer for this camera proj matrix
-                let mut proj_buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                proj_buffer.upload(&camera.proj);
-                frame.res.proj_buffers.insert(node.camera, proj_buffer);
-            }
-            let proj_buffer = frame.res.proj_buffers.get(&node.camera).unwrap();
+            let view_buffer = frame
+                .res
+                .view_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&camera_node);
+            let proj_buffer = frame
+                .res
+                .proj_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&node.camera);
 
             self.write_set_1(sets[0], &view_buffer, &proj_buffer);
 
@@ -118,27 +104,14 @@ impl PipelineLine {
             .node_sets
             .contains_key(&(self.set_layouts[0], node_handle))
         {
-            // Check the model buffer already exists
-            if !frame.res.model_buffers.contains_key(&node_handle) {
-                // Create a new uniform buffer for this node's model matrix
-                let buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                frame.res.model_buffers.insert(node_handle, buffer);
-            }
-            let model_buffer = frame.res.model_buffers.get_mut(&node_handle).unwrap();
-
-            // Check whether the view-model buffer already exists
-            if !frame.res.model_view_buffers.contains_key(&node_handle) {
-                // Create a new uniform buffer for this node's model view matrix
-                let buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                frame.res.model_view_buffers.insert(node_handle, buffer);
-            }
-            let model_view_buffer = frame.res.model_view_buffers.get_mut(&node_handle).unwrap();
+            let model_buffer = frame
+                .res
+                .model_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&node_handle);
+            let model_view_buffer = frame
+                .res
+                .model_view_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&node_handle);
 
             // Allocate and write descriptors
             let sets = frame
@@ -194,12 +167,12 @@ impl PipelineLine {
             .transpose();
 
         // If there is a descriptor set, there must be a uniform buffer
-        let model_buffer = frame.res.model_buffers.get_mut(&node_handle).unwrap();
+        let model_buffer = frame.res.model_buffers.get_mut_unchecked(&node_handle);
 
         let node = model.nodes.get(node_handle).unwrap();
         model_buffer.upload(&node.trs.get_matrix());
 
-        let model_view_buffer = frame.res.model_view_buffers.get_mut(&node_handle).unwrap();
+        let model_view_buffer = frame.res.model_view_buffers.get_mut_unchecked(&node_handle);
         model_view_buffer.upload(&model_view_matrix);
 
         for hprimitive in &mesh.primitives {
@@ -266,10 +239,10 @@ impl PipelineMain {
 
             // If there is a descriptor set, there must be a buffer, so we just unwrap
             // TODO: Optimize by uploading only if data has actually changed.
-            let view_buffer = frame.res.view_buffers.get_mut(&camera_node).unwrap();
+            let view_buffer = frame.res.view_buffers.get_mut_unchecked(&camera_node);
             view_buffer.upload(&frame.current_view);
 
-            let proj_buffer = frame.res.proj_buffers.get_mut(&node.camera).unwrap();
+            let proj_buffer = frame.res.proj_buffers.get_mut_unchecked(&node.camera);
             proj_buffer.upload(&camera.proj);
         } else {
             // TODO: Can I move this into the pipeline?
@@ -281,28 +254,14 @@ impl PipelineMain {
                 .descriptors
                 .allocate(&[self.get_set_layouts()[1]]);
 
-            if !frame.res.view_buffers.contains_key(&camera_node) {
-                // Create a new buffer for this node's view matrix
-                let mut view_buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                view_buffer.upload(&frame.current_view);
-                frame.res.view_buffers.insert(camera_node, view_buffer);
-            }
-            let view_buffer = frame.res.view_buffers.get(&camera_node).unwrap();
-
-            // Same thing with proj buffer
-            if !frame.res.proj_buffers.contains_key(&node.camera) {
-                // Create a new buffer for this camera proj matrix
-                let mut proj_buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                proj_buffer.upload(&camera.proj);
-                frame.res.proj_buffers.insert(node.camera, proj_buffer);
-            }
-            let proj_buffer = frame.res.proj_buffers.get(&node.camera).unwrap();
+            let view_buffer = frame
+                .res
+                .view_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&camera_node);
+            let proj_buffer = frame
+                .res
+                .proj_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&node.camera);
 
             self.write_set_1(sets[0], &view_buffer, &proj_buffer);
 
@@ -332,27 +291,14 @@ impl PipelineMain {
             .node_sets
             .contains_key(&(self.set_layouts[0], node_handle))
         {
-            // Check the model buffer already exists
-            if !frame.res.model_buffers.contains_key(&node_handle) {
-                // Create a new uniform buffer for this node's model matrix
-                let buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                frame.res.model_buffers.insert(node_handle, buffer);
-            }
-            let model_buffer = frame.res.model_buffers.get_mut(&node_handle).unwrap();
-
-            // Check whether the view-model buffer already exists
-            if !frame.res.model_view_buffers.contains_key(&node_handle) {
-                // Create a new uniform buffer for this node's model view matrix
-                let buffer = Buffer::new::<na::Matrix4<f32>>(
-                    &frame.allocator,
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                );
-                frame.res.model_view_buffers.insert(node_handle, buffer);
-            }
-            let model_view_buffer = frame.res.model_view_buffers.get_mut(&node_handle).unwrap();
+            let model_buffer = frame
+                .res
+                .model_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&node_handle);
+            let model_view_buffer = frame
+                .res
+                .model_view_buffers
+                .get_or_create_mut::<na::Matrix4<f32>>(&node_handle);
 
             // Allocate and write descriptors
             let sets = frame
@@ -399,23 +345,10 @@ impl PipelineMain {
             .material_sets
             .contains_key(&(self.set_layouts[2], material_handle))
         {
-            // Check if material uniform buffer already exists
-            if !frame.res.material_buffers.contains_key(&material_handle) {
-                // Create a new uniform buffer for this material
-                let material_buffer =
-                    Buffer::new::<Color>(&frame.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
-
-                frame
-                    .res
-                    .material_buffers
-                    .insert(material_handle, material_buffer);
-            }
-
             let material_color = frame
                 .res
                 .material_buffers
-                .get_mut(&material_handle)
-                .unwrap();
+                .get_or_create_mut::<Color>(&material_handle);
 
             let material = model.materials.get(material_handle).unwrap();
             let material_albedo = model
@@ -477,12 +410,12 @@ impl PipelineMain {
             .transpose();
 
         // If there is a descriptor set, there must be a uniform buffer
-        let model_buffer = frame.res.model_buffers.get_mut(&node_handle).unwrap();
+        let model_buffer = frame.res.model_buffers.get_mut_unchecked(&node_handle);
 
         let node = model.nodes.get(node_handle).unwrap();
         model_buffer.upload(&node.trs.get_matrix());
 
-        let model_view_buffer = frame.res.model_view_buffers.get_mut(&node_handle).unwrap();
+        let model_view_buffer = frame.res.model_view_buffers.get_mut_unchecked(&node_handle);
         model_view_buffer.upload(&model_view_matrix);
 
         for hprimitive in &mesh.primitives {
@@ -499,8 +432,7 @@ impl PipelineMain {
                 let material_buffer = frame
                     .res
                     .material_buffers
-                    .get_mut(&primitive.material)
-                    .unwrap();
+                    .get_mut_unchecked(&primitive.material);
 
                 let material = match model.materials.get(primitive.material) {
                     Some(m) => m,

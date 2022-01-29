@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::*;
 use ash::vk;
@@ -56,7 +56,33 @@ impl Fallback {
     }
 }
 
-type BufferCache<T> = HashMap<Handle<T>, Buffer>;
+/// Maps uniforms buffers to handles
+pub struct BufferCache<T> {
+    buffers: HashMap<Handle<T>, Buffer>,
+    allocator: Rc<RefCell<vk_mem::Allocator>>,
+}
+
+impl<T> BufferCache<T> {
+    pub fn new(allocator: &Rc<RefCell<vk_mem::Allocator>>) -> Self {
+        Self {
+            buffers: HashMap::new(),
+            allocator: allocator.clone(),
+        }
+    }
+
+    pub fn get_mut_unchecked(&mut self, handle: &Handle<T>) -> &mut Buffer {
+        self.buffers.get_mut(handle).unwrap()
+    }
+
+    pub fn get_or_create_mut<S>(&mut self, handle: &Handle<T>) -> &mut Buffer {
+        if !self.buffers.contains_key(handle) {
+            // Create a new uniform buffer for a matrix
+            let buffer = Buffer::new::<S>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+            self.buffers.insert(*handle, buffer);
+        }
+        self.get_mut_unchecked(handle)
+    }
+}
 
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
@@ -114,11 +140,11 @@ impl FrameCache {
         Self {
             gui_vertex_buffer,
             gui_index_buffer,
-            model_buffers: BufferCache::new(),
-            model_view_buffers: BufferCache::new(),
-            view_buffers: BufferCache::new(),
-            proj_buffers: BufferCache::new(),
-            material_buffers: BufferCache::new(),
+            model_buffers: BufferCache::new(&dev.allocator),
+            model_view_buffers: BufferCache::new(&dev.allocator),
+            view_buffers: BufferCache::new(&dev.allocator),
+            proj_buffers: BufferCache::new(&dev.allocator),
+            material_buffers: BufferCache::new(&dev.allocator),
             pipeline_cache: PipelineCache::new(&dev.device),
             command_buffer,
             fence,
