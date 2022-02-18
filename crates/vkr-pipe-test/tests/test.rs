@@ -7,7 +7,7 @@ use std::any::Any;
 use vkr_core::{Buffer, Ctx, DescriptorPool, Image, ImageView, Sampler, PipelinePool, VertexInputDescription, Vertex};
 use vkr_pipe::*;
 
-pipewriter!("crates/vkr-pipe-test/shader/simple");
+pipewriter!("../vkr-pipe-test/shader/simple");
 
 impl PipelineUniform {
     fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {

@@ -1,10 +1,10 @@
-// Copyright © 2021
+// Copyright © 2021-2022
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
 extern crate proc_macro;
 
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, path::PathBuf};
 
 use proc_macro::*;
 
@@ -25,7 +25,7 @@ mod gen;
 #[proc_macro]
 pub fn pipewriter(input: TokenStream) -> TokenStream {
     let shader_crate = input.to_string().replace("\"", "");
-    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+    let current_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let crate_dir = current_dir.join(&shader_crate);
 
     let crate_module = CrateModule::new(crate_dir);

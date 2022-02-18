@@ -8,7 +8,7 @@ use vkr_core::Material;
 
 use crate::Buffer;
 
-vkr_pipe::pipewriter!("crates/shader/main");
+vkr_pipe::pipewriter!("../shader/main");
 
 impl PipelineLine {
     fn bind_impl(&self, frame: &mut Frame, model: &Model, camera_node: Handle<Node>) {

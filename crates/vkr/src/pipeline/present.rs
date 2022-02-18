@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-vkr_pipe::pipewriter!("crates/shader/present");
+vkr_pipe::pipewriter!("../shader/present");
 
 impl PipelineNormal {
     fn bind_impl(&self, _frame: &mut Frame, _model: &Model, _node: Handle<Node>) {}
