@@ -107,7 +107,7 @@ fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         if let Some(mut frame) = vkr.begin_frame() {
-            frame.update(&model, camera_node);
+            frame.update(&mut model, camera_node);
             frame.draw_pipe(&mut vkr.default_pipelines, &model, scene);
 
             vkr.end_scene(&mut frame);

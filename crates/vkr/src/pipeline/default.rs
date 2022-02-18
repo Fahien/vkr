@@ -14,29 +14,12 @@ impl PipelineLine {
     fn bind_impl(&self, frame: &mut Frame, model: &Model, camera_node: Handle<Node>) {
         frame.res.command_buffer.bind_pipeline(self.get_pipeline());
 
-        let width = frame.buffer.width as f32;
-        let height = frame.buffer.height as f32;
-        let viewport = vk::Viewport::builder()
-            .width(width)
-            .height(height)
-            .max_depth(0.0)
-            .min_depth(1.0)
-            .build();
-        frame.res.command_buffer.set_viewport(&viewport);
-
-        let scissor = vk::Rect2D::builder()
-            .extent(
-                vk::Extent2D::builder()
-                    .width(frame.buffer.width)
-                    .height(frame.buffer.height)
-                    .build(),
-            )
-            .build();
-        frame.res.command_buffer.set_scissor(&scissor);
-
         let node = model.nodes.get(camera_node).unwrap();
         frame.current_view = node.trs.get_view_matrix();
         let camera = model.cameras.get(node.camera).unwrap();
+
+        frame.res.command_buffer.set_viewport(&camera.viewport);
+        frame.res.command_buffer.set_scissor(&camera.scissor);
 
         if let Some(sets) = frame
             .res
@@ -201,29 +184,12 @@ impl PipelineMain {
     fn bind_impl(&self, frame: &mut Frame, model: &Model, camera_node: Handle<Node>) {
         frame.res.command_buffer.bind_pipeline(self.get_pipeline());
 
-        let width = frame.buffer.width as f32;
-        let height = frame.buffer.height as f32;
-        let viewport = vk::Viewport::builder()
-            .width(width)
-            .height(height)
-            .max_depth(0.0)
-            .min_depth(1.0)
-            .build();
-        frame.res.command_buffer.set_viewport(&viewport);
-
-        let scissor = vk::Rect2D::builder()
-            .extent(
-                vk::Extent2D::builder()
-                    .width(frame.buffer.width)
-                    .height(frame.buffer.height)
-                    .build(),
-            )
-            .build();
-        frame.res.command_buffer.set_scissor(&scissor);
-
         let node = model.nodes.get(camera_node).unwrap();
         frame.current_view = node.trs.get_view_matrix();
         let camera = model.cameras.get(node.camera).unwrap();
+
+        frame.res.command_buffer.set_viewport(&camera.viewport);
+        frame.res.command_buffer.set_scissor(&camera.scissor);
 
         if let Some(sets) = frame
             .res

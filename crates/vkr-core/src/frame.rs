@@ -189,33 +189,21 @@ impl Frame {
         self.res
             .command_buffer
             .begin_render_pass(pass.render, self.buffer.framebuffer, area);
-
-        let viewport = vk::Viewport::builder()
-            .width(width as f32)
-            .height(height as f32)
-            .max_depth(0.0)
-            .min_depth(1.0)
-            .build();
-        self.res.command_buffer.set_viewport(&viewport);
-
-        let scissor = vk::Rect2D::builder()
-            .extent(vk::Extent2D::builder().width(width).height(height).build())
-            .build();
-        self.res.command_buffer.set_scissor(&scissor);
     }
 
-    /// Ideally it should not modify the model
-    pub fn update(&mut self, model: &Model, node_handle: Handle<Node>) {
+    /// It can modify the model
+    pub fn update(&mut self, model: &mut Model, node_handle: Handle<Node>) {
         let node = model.nodes.get(node_handle).unwrap();
+
+        // Add this camera to the list of cameras to render
+        if let Some(camera) = model.cameras.get_mut(node.camera) {
+            camera.update(self.buffer.width, self.buffer.height);
+            self.camera_nodes.push(node_handle);
+        }
 
         let children = node.children.clone();
         for child in children {
             self.update(model, child);
-        }
-
-        // Add this camera to the list of cameras to render
-        if node.camera.valid() {
-            self.camera_nodes.push(node_handle);
         }
 
         // TODO collect more info such as pipelines for each material

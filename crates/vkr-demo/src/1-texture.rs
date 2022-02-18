@@ -128,7 +128,7 @@ pub fn main() {
 
         let mut frame = frame.unwrap();
 
-        frame.update(&model, root);
+        frame.update(&mut model, root);
         frame.draw_pipe(&mut vkr.default_pipelines, &model, root);
 
         vkr.end_scene(&mut frame);

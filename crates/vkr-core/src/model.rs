@@ -310,9 +310,22 @@ pub struct Camera {
     pub id: usize,
     typ: CameraType,
     pub proj: na::Matrix4<f32>,
+
+    pub viewport: vk::Viewport,
+    pub scissor: vk::Rect2D,
 }
 
 impl Camera {
+    fn new(typ: CameraType, proj: na::Matrix4<f32>) -> Self {
+        Self {
+            id: 0,
+            typ,
+            proj,
+            viewport: vk::Viewport::default(),
+            scissor: vk::Rect2D::default(),
+        }
+    }
+
     fn perspective_matrix(aspect: f32) -> na::Matrix4<f32> {
         let fovy = 3.14 / 4.0;
         let znear = 0.1;
@@ -321,11 +334,7 @@ impl Camera {
     }
 
     pub fn perspective(aspect: f32) -> Self {
-        Self {
-            id: 0,
-            typ: CameraType::PERSPECTIVE,
-            proj: Camera::perspective_matrix(aspect),
-        }
+        Self::new(CameraType::PERSPECTIVE, Camera::perspective_matrix(aspect))
     }
 
     fn orthographic_matrix(
@@ -356,11 +365,10 @@ impl Camera {
 
     /// Parameters here are referred to the camera, where towards direction is positive.
     pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
-        Self {
-            id: 0,
-            typ: CameraType::ORTHOGRAPHIC,
-            proj: Camera::orthographic_matrix(left, right, bottom, top, near, far),
-        }
+        Self::new(
+            CameraType::ORTHOGRAPHIC,
+            Camera::orthographic_matrix(left, right, bottom, top, near, far),
+        )
     }
 
     pub fn update(&mut self, width: u32, height: u32) {
@@ -369,11 +377,17 @@ impl Camera {
             CameraType::ORTHOGRAPHIC => {
                 Camera::orthographic_matrix(-aspect, aspect, -1.0, 1.0, 0.1, 1.0)
             }
+
             CameraType::PERSPECTIVE => Camera::perspective_matrix(aspect),
         };
+
+        self.viewport.width = width as f32;
+        self.viewport.height = height as f32;
+        self.viewport.min_depth = 1.0;
+
+        self.scissor.extent.width = width;
+        self.scissor.extent.height = height;
     }
-    /*
-     */
 }
 
 type ScriptFn = Box<dyn Fn(f32, &mut Pack<Node>, Handle<Node>)>;

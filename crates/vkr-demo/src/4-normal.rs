@@ -50,7 +50,7 @@ pub fn main() {
         vkr.update_camera(&mut model, camera_node);
 
         let mut frame = frame.unwrap();
-        frame.update(&model, camera_node);
+        frame.update(&mut model, camera_node);
         frame.draw_pipe(&mut vkr.default_pipelines, &model, cube_node);
 
         vkr.end_scene(&mut frame);
