@@ -1,0 +1,13 @@
+[package]
+name = "vkr"
+version = "0.0.3"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+vkr-core = { path = "../vkr-core" }
+byteorder = "1.4.3"
+
+[build-dependencies]
+glsl = { version = "6.0.1", features = ["spirv"] }

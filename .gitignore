@@ -3,4 +3,4 @@ imgui.ini
 target
 *.spv
 .vscode
-res/image
+image
