@@ -6,8 +6,7 @@ use std::{ffi::CString, rc::Rc};
 
 use byteorder::{ByteOrder, NativeEndian};
 
-use vkr_core::Pipeline;
-use vkr_core::{dev::Dev, pass::Pass, vertex::Vertex};
+use vkr_core::{Dev, Pass, Pipeline, Vertex};
 
 use vkr_core::ash::{self, vk};
 
@@ -17,6 +16,23 @@ pub struct MainPipeline {
 }
 
 impl MainPipeline {
+    fn get_bindings() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Vertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    }
+
+    fn get_attributes() -> vk::VertexInputAttributeDescription {
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(0)
+            .build()
+    }
+
     pub fn new(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
         // Pipeline layout (device, shader reflection?)
         let layout = {
@@ -60,18 +76,8 @@ impl MainPipeline {
                 .name(&entrypoint)
                 .build();
 
-            let vertex_binding = vk::VertexInputBindingDescription::builder()
-                .binding(0)
-                .stride(std::mem::size_of::<Vertex>() as u32)
-                .input_rate(vk::VertexInputRate::VERTEX)
-                .build();
-
-            let vertex_attribute = vk::VertexInputAttributeDescription::builder()
-                .location(0)
-                .binding(0)
-                .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(0)
-                .build();
+            let vertex_binding = Self::get_bindings();
+            let vertex_attribute = Self::get_attributes();
 
             let vertex_binding = [vertex_binding];
             let vertex_attribute = [vertex_attribute];
