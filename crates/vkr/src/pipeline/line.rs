@@ -13,6 +13,8 @@ use vkr_core::ash::{self, vk};
 
 pub struct LinePipeline {
     pub graphics: vk::Pipeline,
+    layout: vk::PipelineLayout,
+    set_layout: vk::DescriptorSetLayout,
     device: Rc<ash::Device>,
 }
 
@@ -43,9 +45,29 @@ impl LinePipeline {
     }
 
     pub fn new(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
-        // Pipeline layout (device, shader reflection?)
+        let set_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER) // delta time?
+            .descriptor_count(1) // Referring the shader
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build();
+        let arr_bindings = vec![set_layout_bindings];
+
+        let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&arr_bindings);
+
+        let set_layout = unsafe {
+            dev.device
+                .create_descriptor_set_layout(&set_layout_info, None)
+        }
+        .expect("Failed to create Vulkan descriptor set layout");
+
+        let set_layouts = vec![set_layout];
+
+        // Pipeline layout (device, descriptorset layouts, shader reflection?)
         let layout = {
-            let create_info = vk::PipelineLayoutCreateInfo::builder().build();
+            let create_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&set_layouts)
+                .build();
             unsafe { dev.device.create_pipeline_layout(&create_info, None) }
                 .expect("Failed to create Vulkan pipeline layout")
         };
@@ -172,12 +194,10 @@ impl LinePipeline {
             pipelines[0]
         };
 
-        unsafe {
-            dev.device.destroy_pipeline_layout(layout, None);
-        }
-
         Self {
             graphics,
+            layout,
+            set_layout,
             device: Rc::clone(&dev.device),
         }
     }
@@ -186,6 +206,9 @@ impl LinePipeline {
 impl Drop for LinePipeline {
     fn drop(&mut self) {
         unsafe {
+            self.device
+                .destroy_descriptor_set_layout(self.set_layout, None);
+            self.device.destroy_pipeline_layout(self.layout, None);
             self.device.destroy_pipeline(self.graphics, None);
         }
     }
