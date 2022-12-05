@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use std::{
+    cell::RefCell,
     ffi::{CStr, CString},
     rc::Rc,
 };
@@ -16,6 +17,11 @@ pub struct Dev {
     pub graphics_command_pool: vk::CommandPool,
     pub graphics_queue: vk::Queue,
     pub physical: vk::PhysicalDevice,
+
+    /// Needs to be public if we want to create buffers outside this module.
+    /// The allocator is shared between the various buffers to release resources on drop.
+    /// Moreover it needs to be inside a RefCell, so we can mutably borrow it on destroy.
+    pub allocator: Rc<RefCell<vk_mem::Allocator>>,
     pub device: Rc<ash::Device>,
 }
 
@@ -117,19 +123,36 @@ impl Dev {
         };
         println!("Surface format: {:?}", surface_format.format);
 
+        let allocator = {
+            let create_info = vk_mem::AllocatorCreateInfo::new(&ctx.instance, &device, &physical);
+            vk_mem::Allocator::new(create_info)
+        }
+        .expect("Failed to create Vulkan allocator");
+
         Self {
             surface_format,
             graphics_command_pool,
             graphics_queue,
             physical,
+            allocator: Rc::new(RefCell::new(allocator)),
             device: Rc::new(device),
+        }
+    }
+
+    pub fn wait(&self) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for Vulkan device");
         }
     }
 }
 
 impl Drop for Dev {
     fn drop(&mut self) {
+        self.wait();
         unsafe {
+            self.allocator.borrow_mut().destroy();
             self.device
                 .destroy_command_pool(self.graphics_command_pool, None);
             self.device.destroy_device(None);

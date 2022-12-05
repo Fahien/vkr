@@ -23,13 +23,16 @@ pub fn main() {
 
     let pipeline = MainPipeline::new(&mut dev, &pass, width, height);
 
-    let mut buffer = Buffer::new(&vkr.ctx, &mut dev);
+    let mut buffer = Buffer::new(&dev.allocator);
     let vertices = [
         Vertex::new(-0.2, -0.2, 0.0),
         Vertex::new(0.2, -0.2, 0.0),
-        Vertex::new(0.0, 0.2, 0.0),
+        Vertex::new(-0.2, 0.2, 0.0),
+        Vertex::new(0.2, -0.2, 0.0),
+        Vertex::new(0.2, 0.2, 0.0),
+        Vertex::new(-0.2, 0.2, 0.0),
     ];
-    buffer.upload(vertices.as_ptr(), buffer.size as usize);
+    buffer.upload_arr(&vertices);
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
@@ -75,4 +78,6 @@ pub fn main() {
             }
         }
     }
+
+    dev.wait();
 }

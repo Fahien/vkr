@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 ash = "0.37.1"
 sdl2 = { version = "0.35.2", optional = true }
+vk-mem = { git = "https://github.com/fahien/vk-mem-rs" }
 
 [features]
 default = ["win"]
