@@ -5,8 +5,8 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Color, Dev, Frames, Line, LinePipeline, MainPipeline, Pass, Point3, Surface,
-    SwapchainFrames, Vec3, Vertex, Vkr, Win,
+    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Pass, Point3,
+    Surface, Swapchain, SwapchainFrames, Vec3, Vertex, Vkr, Win,
 };
 
 pub fn main() {
@@ -72,37 +72,43 @@ pub fn main() {
                 } => break 'running,
                 _ => {}
             }
+        }
 
-            let frame = match sfs.next_frame() {
-                Ok(frame) => frame,
-                // Recreate swapchain
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    drop(sfs);
-                    let (width, height) = win.window.size();
-                    println!("Recreating swapchain ({}x{})", width, height);
-                    sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
-                    continue 'running;
+        let frame = match sfs.next_frame() {
+            Ok(frame) => frame,
+            // Recreate swapchain
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                drop(sfs.swapchain);
+                let (width, height) = win.window.size();
+                sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
+                for i in 0..sfs.swapchain.images.len() {
+                    let frame = &mut sfs.frames[i];
+                    frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
                 }
-                Err(result) => panic!("{:?}", result),
-            };
-
-            frame.begin(&pass);
-            frame.draw(&triangle_pipeline, &buffer);
-            frame.draw(&line_pipeline, &line_buffer);
-            frame.end();
-
-            match sfs.present(&dev) {
-                // Recreate swapchain
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    drop(sfs);
-                    let (width, height) = win.window.size();
-                    println!("Recreating swapchain ({}x{})", width, height);
-                    sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
-                    continue 'running;
-                }
-                Err(result) => panic!("{:?}", result),
-                _ => (),
+                continue 'running;
             }
+            Err(result) => panic!("{:?}", result),
+        };
+
+        frame.begin(&pass);
+        frame.draw(&triangle_pipeline, &buffer);
+        frame.draw(&line_pipeline, &line_buffer);
+        frame.end();
+
+        match sfs.present(&dev) {
+            // Recreate swapchain
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                drop(sfs.swapchain);
+                let (width, height) = win.window.size();
+                sfs.swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
+                for i in 0..sfs.swapchain.images.len() {
+                    let frame = &mut sfs.frames[i];
+                    frame.buffer = Framebuffer::new(&mut dev, &sfs.swapchain.images[i], &pass);
+                }
+                continue 'running;
+            }
+            Err(result) => panic!("{:?}", result),
+            _ => (),
         }
     }
 
