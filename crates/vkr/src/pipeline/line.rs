@@ -13,8 +13,8 @@ use vkr_core::ash::{self, vk};
 
 pub struct LinePipeline {
     pub graphics: vk::Pipeline,
-    layout: vk::PipelineLayout,
-    set_layout: vk::DescriptorSetLayout,
+    pub layout: vk::PipelineLayout,
+    pub set_layout: vk::DescriptorSetLayout,
     device: Rc<ash::Device>,
 }
 

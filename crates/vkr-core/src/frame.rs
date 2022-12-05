@@ -8,7 +8,7 @@ use ash::{vk, Device};
 
 use crate::{
     buffer::Buffer, ctx::Ctx, dev::Dev, image::Image, pass::Pass, pipeline::Pipeline,
-    swapchain::Swapchain, Descriptors, Surface, Vertex,
+    swapchain::Swapchain, Descriptors, Mat4, Surface, Vertex,
 };
 
 /// This is the one that is going to be recreated
@@ -101,7 +101,7 @@ impl Drop for Framebuffer {
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
-    _descriptors: Descriptors,
+    descriptors: Descriptors,
     pub command_buffer: vk::CommandBuffer,
     pub fence: vk::Fence,
     pub can_wait: bool,
@@ -149,7 +149,7 @@ impl Frameres {
         };
 
         Self {
-            _descriptors: Descriptors::new(dev),
+            descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
             can_wait: true,
@@ -189,6 +189,8 @@ impl Drop for Frameres {
 pub struct Frame {
     pub buffer: Framebuffer,
     pub res: Frameres,
+    /// TODO: An buffer for each node
+    pub model_buffer: Buffer,
     pub device: Rc<Device>,
 }
 
@@ -196,10 +198,13 @@ impl Frame {
     pub fn new(dev: &mut Dev, image: &Image, pass: &Pass) -> Self {
         let buffer = Framebuffer::new(dev, image, pass);
         let res = Frameres::new(dev);
+        let model_buffer =
+            Buffer::new::<Mat4>(&dev.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
 
         Frame {
             buffer,
             res,
+            model_buffer,
             device: Rc::clone(&dev.device),
         }
     }
@@ -238,6 +243,49 @@ impl Frame {
                 pipeline.get_pipeline(),
             )
         };
+
+        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.layout) {
+            unsafe {
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    sets,
+                    &[],
+                );
+            }
+        } else {
+            let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
+
+            // Update immediately the descriptor sets
+            let buffer_info = vk::DescriptorBufferInfo::builder()
+                .range(std::mem::size_of::<Mat4>() as vk::DeviceSize)
+                .buffer(self.model_buffer.buffer)
+                .build();
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(sets[0])
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&[buffer_info])
+                .build();
+
+            unsafe {
+                self.device.update_descriptor_sets(&[descriptor_write], &[]);
+
+                self.device.cmd_bind_descriptor_sets(
+                    self.res.command_buffer,
+                    graphics_bind_point,
+                    pipeline.layout,
+                    0,
+                    &sets,
+                    &[],
+                );
+            }
+            self.res.descriptors.sets.insert(pipeline.layout, sets);
+        }
 
         let first_binding = 0;
         let buffers = [buffer.buffer];

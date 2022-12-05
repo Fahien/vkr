@@ -60,6 +60,8 @@ pub fn main() {
     ];
     buffer.upload_arr(&vertices);
 
+    let mut model = Mat4::identity();
+
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
         // Handle events
@@ -73,6 +75,9 @@ pub fn main() {
                 _ => {}
             }
         }
+
+        let rot = Quat::axis_angle(Vec3::new(0.0, 0.0, 1.0), 0.01);
+        model.rotate(&rot);
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -91,6 +96,7 @@ pub fn main() {
         };
 
         frame.begin(&pass);
+        frame.model_buffer.upload(&model);
         frame.draw(&triangle_pipeline, &buffer);
         frame.draw(&line_pipeline, &line_buffer);
         frame.end();
