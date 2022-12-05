@@ -7,3 +7,6 @@ pub use vec3::*;
 
 pub mod point3;
 pub use point3::*;
+
+pub mod line;
+pub use line::*;

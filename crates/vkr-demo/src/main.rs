@@ -5,7 +5,8 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Dev, Frames, MainPipeline, Pass, Surface, SwapchainFrames, Vertex, Vkr, Win,
+    Buffer, Dev, Frames, Line, LinePipeline, MainPipeline, Pass, Point3, Surface, SwapchainFrames,
+    Vertex, Vkr, Win,
 };
 
 pub fn main() {
@@ -21,7 +22,18 @@ pub fn main() {
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
-    let pipeline = MainPipeline::new(&mut dev, &pass, width, height);
+    let line_pipeline = LinePipeline::new(&mut dev, &pass, width, height);
+
+    let lines = vec![
+        Line::new(Point3::new(-0.3, -0.3, 0.0), Point3::new(0.3, -0.3, 0.0)),
+        Line::new(Point3::new(0.3, -0.3, 0.0), Point3::new(0.3, 0.3, 0.0)),
+        Line::new(Point3::new(0.3, 0.3, 0.0), Point3::new(-0.3, 0.3, 0.0)),
+        Line::new(Point3::new(-0.3, 0.3, 0.0), Point3::new(-0.3, -0.3, 0.0)),
+    ];
+    let mut line_buffer = Buffer::new(&dev.allocator);
+    line_buffer.upload_arr(&lines);
+
+    let triangle_pipeline = MainPipeline::new(&mut dev, &pass, width, height);
 
     let mut buffer = Buffer::new(&dev.allocator);
     let vertices = [
@@ -61,7 +73,8 @@ pub fn main() {
             };
 
             frame.begin(&pass);
-            frame.draw(&pipeline, &buffer);
+            frame.draw(&triangle_pipeline, &buffer);
+            frame.draw(&line_pipeline, &line_buffer);
             frame.end();
 
             match sfs.present(&dev) {

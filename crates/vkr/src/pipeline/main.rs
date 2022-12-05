@@ -43,8 +43,8 @@ impl MainPipeline {
 
         // Graphics pipeline (shaders, renderpass)
         let graphics = {
-            let frag_spv = include_bytes!("../res/shader/frag.spv");
-            let vert_spv = include_bytes!("../res/shader/vert.spv");
+            let frag_spv = include_bytes!("../../res/shader/frag.spv");
+            let vert_spv = include_bytes!("../../res/shader/vert.spv");
 
             let mut frag_code = vec![0; frag_spv.len() / std::mem::size_of::<u32>()];
             let mut vert_code = vec![0; vert_spv.len() / std::mem::size_of::<u32>()];
