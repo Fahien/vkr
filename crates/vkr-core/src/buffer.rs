@@ -6,12 +6,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use ash::vk;
 
-use crate::Vertex;
-
 pub struct Buffer {
     allocation: vk_mem::Allocation,
     pub buffer: vk::Buffer,
     pub size: vk::DeviceSize,
+    usage: vk::BufferUsageFlags,
     allocator: Rc<RefCell<vk_mem::Allocator>>,
 }
 
@@ -19,10 +18,11 @@ impl Buffer {
     fn create_buffer(
         allocator: &vk_mem::Allocator,
         size: vk::DeviceSize,
+        usage: vk::BufferUsageFlags,
     ) -> (vk::Buffer, vk_mem::Allocation) {
         let buffer_info = vk::BufferCreateInfo::builder()
             .size(size)
-            .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
+            .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .build();
 
@@ -41,26 +41,31 @@ impl Buffer {
         (buffer, allocation)
     }
 
-    pub fn new(allocator: &Rc<RefCell<vk_mem::Allocator>>) -> Self {
+    pub fn new<T>(allocator: &Rc<RefCell<vk_mem::Allocator>>, usage: vk::BufferUsageFlags) -> Self {
         // Default size allows for 3 vertices
-        let size = std::mem::size_of::<Vertex>() as vk::DeviceSize * 3;
+        let size = std::mem::size_of::<T>() as vk::DeviceSize * 3;
 
-        let (buffer, allocation) = Self::create_buffer(&allocator.borrow(), size);
+        let (buffer, allocation) = Self::create_buffer(&allocator.borrow(), size, usage);
 
         Self {
             allocation,
             buffer,
             size,
+            usage,
             allocator: allocator.clone(),
         }
     }
 
-    pub fn upload<T>(&mut self, src: *const T, size: vk::DeviceSize) {
+    pub fn upload_raw<T>(&mut self, src: *const T, size: vk::DeviceSize) {
         let alloc = self.allocator.borrow();
         let data =
             unsafe { alloc.map_memory(self.allocation) }.expect("Failed to map Vulkan memory");
         unsafe { data.copy_from(src as _, size as usize) };
         unsafe { alloc.unmap_memory(self.allocation) };
+    }
+
+    pub fn upload<T>(&mut self, data: &T) {
+        self.upload_raw(data as *const T, std::mem::size_of::<T>() as vk::DeviceSize);
     }
 
     pub fn upload_arr<T>(&mut self, arr: &[T]) {
@@ -71,12 +76,12 @@ impl Buffer {
             unsafe { alloc.destroy_buffer(self.buffer, self.allocation) };
 
             self.size = size;
-            let (buffer, allocation) = Self::create_buffer(&alloc, size);
+            let (buffer, allocation) = Self::create_buffer(&alloc, size, self.usage);
             self.buffer = buffer;
             self.allocation = allocation;
         }
 
-        self.upload(arr.as_ptr(), size);
+        self.upload_raw(arr.as_ptr(), size);
     }
 }
 
