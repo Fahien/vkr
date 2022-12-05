@@ -5,7 +5,7 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Dev, Frame, MainPipeline, Pass, Surface, Swapchain, Vertex, Vkr, Win,
+    Buffer, Dev, Frames, MainPipeline, Pass, Surface, SwapchainFrames, Vertex, Vkr, Win,
 };
 
 pub fn main() {
@@ -17,15 +17,9 @@ pub fn main() {
     let surface = Surface::new(&win, &vkr.ctx);
     let mut dev = Dev::new(&vkr.ctx, &surface);
 
-    let swapchain = Swapchain::new(&vkr.ctx, &surface, &dev, width, height);
-
     let pass = Pass::new(&mut dev);
 
-    // Frames: collection of per-frame resources (device, swapchain, renderpass, command pool)
-    let mut frames = Vec::new();
-    for image in swapchain.images.iter() {
-        frames.push(Frame::new(&mut dev, image, &pass));
-    }
+    let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
     let pipeline = MainPipeline::new(&mut dev, &pass, width, height);
 
@@ -37,7 +31,6 @@ pub fn main() {
     ];
     buffer.upload(vertices.as_ptr(), buffer.size as usize);
 
-    let mut current_frame = 0;
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
         // Handle events
@@ -51,28 +44,35 @@ pub fn main() {
                 _ => {}
             }
 
-            // Wait for this frame to be ready
-            let frame = &frames[current_frame];
-            frame.wait();
-
-            // Get next image
-            let (image_index, _) = unsafe {
-                swapchain.ext.acquire_next_image(
-                    swapchain.swapchain,
-                    u64::max_value(),
-                    frame.image_ready,
-                    vk::Fence::null(),
-                )
-            }
-            .expect("Failed to acquire Vulkan next image");
+            let frame = match sfs.next_frame() {
+                Ok(frame) => frame,
+                // Recreate swapchain
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    drop(sfs);
+                    let (width, height) = win.window.size();
+                    println!("Recreating swapchain ({}x{})", width, height);
+                    sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
+                    continue 'running;
+                }
+                Err(result) => panic!("{:?}", result),
+            };
 
             frame.begin(&pass);
             frame.draw(&pipeline, &buffer);
             frame.end();
-            frame.present(&dev, &swapchain, image_index);
 
-            // Update current frame
-            current_frame = (current_frame + 1) % swapchain.images.len();
+            match sfs.present(&dev) {
+                // Recreate swapchain
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    drop(sfs);
+                    let (width, height) = win.window.size();
+                    println!("Recreating swapchain ({}x{})", width, height);
+                    sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
+                    continue 'running;
+                }
+                Err(result) => panic!("{:?}", result),
+                _ => (),
+            }
         }
     }
 }

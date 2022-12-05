@@ -16,6 +16,8 @@ impl Win {
             .window("Test", 480, 480)
             .vulkan()
             .position_centered()
+            .allow_highdpi()
+            .resizable()
             .build()
             .expect("Failed to build SDL window");
 
