@@ -6,6 +6,7 @@ use std::{ffi::CString, rc::Rc};
 
 use byteorder::{ByteOrder, NativeEndian};
 
+use memoffset::offset_of;
 use vkr_core::{Dev, Pass, Pipeline, Vertex};
 
 use vkr_core::ash::{self, vk};
@@ -24,13 +25,21 @@ impl MainPipeline {
             .build()
     }
 
-    fn get_attributes() -> vk::VertexInputAttributeDescription {
-        vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(0)
-            .build()
+    fn get_attributes() -> Vec<vk::VertexInputAttributeDescription> {
+        vec![
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Vertex, pos) as u32)
+                .build(),
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .offset(offset_of!(Vertex, color) as u32)
+                .build(),
+        ]
     }
 
     pub fn new(dev: &mut Dev, pass: &Pass, width: u32, height: u32) -> Self {
@@ -77,13 +86,12 @@ impl MainPipeline {
                 .build();
 
             let vertex_binding = Self::get_bindings();
-            let vertex_attribute = Self::get_attributes();
+            let vertex_attributes = Self::get_attributes();
 
             let vertex_binding = [vertex_binding];
-            let vertex_attribute = [vertex_attribute];
 
             let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_attribute)
+                .vertex_attribute_descriptions(&vertex_attributes)
                 .vertex_binding_descriptions(&vertex_binding)
                 .build();
 

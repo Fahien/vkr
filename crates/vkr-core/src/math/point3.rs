@@ -2,17 +2,16 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use crate::Vec3;
+use crate::{Color, Vec3};
 
 #[repr(C)]
 pub struct Point3 {
-    pos: Vec3,
+    pub pos: Vec3,
+    pub color: Color,
 }
 
 impl Point3 {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self {
-            pos: Vec3::new(x, y, z),
-        }
+    pub fn new(pos: Vec3, color: Color) -> Self {
+        Self { pos, color }
     }
 }

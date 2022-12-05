@@ -5,8 +5,8 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Dev, Frames, Line, LinePipeline, MainPipeline, Pass, Point3, Surface, SwapchainFrames,
-    Vertex, Vkr, Win,
+    Buffer, Color, Dev, Frames, Line, LinePipeline, MainPipeline, Pass, Point3, Surface,
+    SwapchainFrames, Vec3, Vertex, Vkr, Win,
 };
 
 pub fn main() {
@@ -25,10 +25,23 @@ pub fn main() {
     let line_pipeline = LinePipeline::new(&mut dev, &pass, width, height);
 
     let lines = vec![
-        Line::new(Point3::new(-0.3, -0.3, 0.0), Point3::new(0.3, -0.3, 0.0)),
-        Line::new(Point3::new(0.3, -0.3, 0.0), Point3::new(0.3, 0.3, 0.0)),
-        Line::new(Point3::new(0.3, 0.3, 0.0), Point3::new(-0.3, 0.3, 0.0)),
-        Line::new(Point3::new(-0.3, 0.3, 0.0), Point3::new(-0.3, -0.3, 0.0)),
+        // Notice how this line appears at the top of the picture as Vulkan Y axis is pointing downwards
+        Line::new(
+            Point3::new(Vec3::new(-0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
+            Point3::new(Vec3::new(0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
+        ),
+        Line::new(
+            Point3::new(Vec3::new(0.3, -0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
+            Point3::new(Vec3::new(0.3, 0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
+        ),
+        Line::new(
+            Point3::new(Vec3::new(0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
+            Point3::new(Vec3::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
+        ),
+        Line::new(
+            Point3::new(Vec3::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
+            Point3::new(Vec3::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
+        ),
     ];
     let mut line_buffer = Buffer::new(&dev.allocator);
     line_buffer.upload_arr(&lines);

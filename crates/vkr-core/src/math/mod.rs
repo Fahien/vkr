@@ -10,3 +10,6 @@ pub use point3::*;
 
 pub mod line;
 pub use line::*;
+
+pub mod color;
+pub use color::*;
