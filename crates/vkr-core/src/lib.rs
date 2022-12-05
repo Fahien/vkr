@@ -42,5 +42,8 @@ pub use buffer::*;
 pub mod pipeline;
 pub use pipeline::*;
 
+pub mod descriptor;
+pub use descriptor::*;
+
 pub mod frame;
 pub use frame::*;

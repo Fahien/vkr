@@ -8,7 +8,7 @@ use ash::{vk, Device};
 
 use crate::{
     buffer::Buffer, ctx::Ctx, dev::Dev, image::Image, pass::Pass, pipeline::Pipeline,
-    swapchain::Swapchain, Surface, Vertex,
+    swapchain::Swapchain, Descriptors, Surface, Vertex,
 };
 
 /// This is the one that is going to be recreated
@@ -101,6 +101,7 @@ impl Drop for Framebuffer {
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
+    _descriptors: Descriptors,
     pub command_buffer: vk::CommandBuffer,
     pub fence: vk::Fence,
     pub can_wait: bool,
@@ -148,6 +149,7 @@ impl Frameres {
         };
 
         Self {
+            _descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
             can_wait: true,
