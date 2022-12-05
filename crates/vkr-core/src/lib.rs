@@ -2,6 +2,8 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
+#![feature(portable_simd)]
+
 pub use ash;
 pub use sdl2;
 
