@@ -5,8 +5,8 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Pass, Point3,
-    Surface, Swapchain, SwapchainFrames, Vec3, Vertex, Vkr, Win,
+    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Mat4, Pass, Point3,
+    Quat, Surface, Swapchain, SwapchainFrames, Vec3, Vertex, Vkr, Win,
 };
 
 pub fn main() {

@@ -244,19 +244,19 @@ impl Frame {
             )
         };
 
-        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.layout) {
+        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.get_layout()) {
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
                     graphics_bind_point,
-                    pipeline.layout,
+                    pipeline.get_layout(),
                     0,
                     sets,
                     &[],
                 );
             }
         } else {
-            let sets = self.res.descriptors.allocate(&[pipeline.set_layout]);
+            let sets = self.res.descriptors.allocate(&[pipeline.get_set_layout()]);
 
             // Update immediately the descriptor sets
             let buffer_info = vk::DescriptorBufferInfo::builder()
@@ -278,13 +278,16 @@ impl Frame {
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
                     graphics_bind_point,
-                    pipeline.layout,
+                    pipeline.get_layout(),
                     0,
                     &sets,
                     &[],
                 );
             }
-            self.res.descriptors.sets.insert(pipeline.layout, sets);
+            self.res
+                .descriptors
+                .sets
+                .insert(pipeline.get_layout(), sets);
         }
 
         let first_binding = 0;

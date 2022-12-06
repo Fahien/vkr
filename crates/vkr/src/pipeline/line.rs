@@ -218,4 +218,12 @@ impl Pipeline for LinePipeline {
     fn get_pipeline(&self) -> vk::Pipeline {
         self.graphics
     }
+
+    fn get_layout(&self) -> vk::PipelineLayout {
+        self.layout
+    }
+
+    fn get_set_layout(&self) -> vk::DescriptorSetLayout {
+        self.set_layout
+    }
 }

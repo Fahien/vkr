@@ -10,6 +10,9 @@ pub use sdl2;
 pub mod math;
 pub use math::*;
 
+pub mod util;
+pub use util::*;
+
 pub mod debug;
 pub use debug::*;
 
