@@ -2,11 +2,28 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs::File, path::Path, rc::Rc};
 
 use ash::vk;
 
 use super::*;
+
+pub struct Png {
+    pub reader: png::Reader<File>,
+}
+
+impl Png {
+    /// Opens a PNG file without loading data yet
+    pub fn open(path: &str) -> Self {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+
+        let decoder = png::Decoder::new(file);
+        let reader = decoder.read_info().unwrap();
+
+        Self { reader }
+    }
+}
 
 pub struct Image {
     /// Whether this image is manages and should be freed, or not (like swapchain images)
