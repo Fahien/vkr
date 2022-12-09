@@ -55,3 +55,6 @@ pub use frame::*;
 
 pub mod model;
 pub use model::*;
+
+pub mod primitive;
+pub use primitive::*;

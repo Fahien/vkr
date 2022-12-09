@@ -118,7 +118,7 @@ impl LinePipeline {
                 .build();
 
             let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::builder()
-                .topology(vk::PrimitiveTopology::LINE_LIST)
+                .topology(vk::PrimitiveTopology::LINE_STRIP)
                 .primitive_restart_enable(false)
                 .build();
 

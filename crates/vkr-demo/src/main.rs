@@ -5,8 +5,8 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Node, Pack, Pass,
-    Point3, Quat, Surface, Swapchain, SwapchainFrames, Timer, Vec3, Vertex, Vkr, Win,
+    Color, Dev, Framebuffer, Frames, LinePipeline, MainPipeline, Node, Pack, Pass, Point3,
+    Primitive, Quat, Surface, Swapchain, SwapchainFrames, Timer, Vec3, Vertex, Vkr, Win,
 };
 
 pub fn main() {
@@ -26,42 +26,32 @@ pub fn main() {
 
     let line_pipeline = LinePipeline::new(&mut dev, &pass, width, height);
 
-    let lines = vec![
-        // Notice how this line appears at the top of the picture as Vulkan Y axis is pointing downwards
-        Line::new(
+    let lines_primitive = {
+        // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
+        let lines_vertices = vec![
             Point3::new(Vec3::new(-0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
             Point3::new(Vec3::new(0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
-        ),
-        Line::new(
-            Point3::new(Vec3::new(0.3, -0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
             Point3::new(Vec3::new(0.3, 0.3, 0.0), Color::new(1.0, 0.5, 0.0, 1.0)),
-        ),
-        Line::new(
-            Point3::new(Vec3::new(0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
             Point3::new(Vec3::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.1, 0.0, 1.0)),
-        ),
-        Line::new(
-            Point3::new(Vec3::new(-0.3, 0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
             Point3::new(Vec3::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
-        ),
-    ];
-    let mut lines_vertex_buffer =
-        Buffer::new::<Vertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
-    lines_vertex_buffer.upload_arr(&lines);
+        ];
+        Primitive::new(&dev.allocator, &lines_vertices)
+    };
 
     let triangle_pipeline = MainPipeline::new(&mut dev, &pass, width, height);
 
-    let mut rect_vertex_buffer =
-        Buffer::new::<Vertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
-    let vertices = [
-        Vertex::new(-0.2, -0.2, 0.0),
-        Vertex::new(0.2, -0.2, 0.0),
-        Vertex::new(-0.2, 0.2, 0.0),
-        Vertex::new(0.2, -0.2, 0.0),
-        Vertex::new(0.2, 0.2, 0.0),
-        Vertex::new(-0.2, 0.2, 0.0),
-    ];
-    rect_vertex_buffer.upload_arr(&vertices);
+    let rect_primitive = {
+        let vertices = vec![
+            Vertex::new(-0.2, -0.2, 0.0),
+            Vertex::new(0.2, -0.2, 0.0),
+            Vertex::new(-0.2, 0.2, 0.0),
+            Vertex::new(0.2, 0.2, 0.0),
+        ];
+        let mut primitive = Primitive::new(&dev.allocator, &vertices);
+        let indices = vec![0, 1, 2, 1, 3, 2];
+        primitive.set_indices(&indices);
+        primitive
+    };
 
     let mut nodes = Pack::new();
     let rect = nodes.push(Node::new());
@@ -106,8 +96,8 @@ pub fn main() {
         };
 
         frame.begin(&pass);
-        frame.draw(&triangle_pipeline, &nodes, &rect_vertex_buffer, rect);
-        frame.draw(&line_pipeline, &nodes, &lines_vertex_buffer, lines);
+        frame.draw(&triangle_pipeline, &nodes, &rect_primitive, rect);
+        frame.draw(&line_pipeline, &nodes, &lines_primitive, lines);
         frame.end();
 
         match sfs.present(&dev) {

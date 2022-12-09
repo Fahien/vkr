@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "vkr"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "byteorder",
  "glsl",
@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "vkr-core"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "ash",
  "sdl2",
@@ -225,7 +225,7 @@ dependencies = [
 
 [[package]]
 name = "vkr-demo"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "glsl",
  "vkr",
