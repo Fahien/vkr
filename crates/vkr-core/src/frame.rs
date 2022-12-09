@@ -8,7 +8,8 @@ use ash::{vk, Device};
 
 use crate::{
     buffer::Buffer, ctx::Ctx, dev::Dev, image::Image, pass::Pass, pipeline::Pipeline,
-    swapchain::Swapchain, Descriptors, Handle, Mat4, Node, Pack, Primitive, Semaphore, Surface,
+    swapchain::Swapchain, Descriptors, Fence, Handle, Mat4, Node, Pack, Primitive, Semaphore,
+    Surface,
 };
 
 /// This is the one that is going to be recreated
@@ -92,11 +93,9 @@ pub struct Frameres {
     uniforms: HashMap<Handle<Node>, Buffer>,
     descriptors: Descriptors,
     pub command_buffer: vk::CommandBuffer,
-    pub fence: vk::Fence,
-    pub can_wait: bool,
+    pub fence: Fence,
     pub image_ready: Semaphore,
     pub image_drawn: Semaphore,
-    device: Rc<Device>,
 }
 
 impl Frameres {
@@ -113,47 +112,21 @@ impl Frameres {
             buffers[0]
         };
 
-        // Fence (device)
-        let fence = {
-            let create_info = vk::FenceCreateInfo::builder()
-                .flags(vk::FenceCreateFlags::SIGNALED)
-                .build();
-            unsafe { dev.device.create_fence(&create_info, None) }
-        }
-        .expect("Failed to create Vulkan fence");
-
         Self {
             uniforms: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
-            fence,
-            can_wait: true,
+            fence: Fence::signaled(&dev.device),
             image_ready: Semaphore::new(&dev.device),
             image_drawn: Semaphore::new(&dev.device),
-            device: Rc::clone(&dev.device),
         }
     }
 
     pub fn wait(&mut self) {
-        if !self.can_wait {
-            return;
+        if self.fence.can_wait {
+            self.fence.wait();
+            self.fence.reset();
         }
-
-        unsafe {
-            self.device
-                .wait_for_fences(&[self.fence], true, u64::max_value())
-                .expect("Failed to wait for Vulkan frame fence");
-            self.device
-                .reset_fences(&[self.fence])
-                .expect("Failed to reset Vulkan frame fence");
-        }
-        self.can_wait = false;
-    }
-}
-
-impl Drop for Frameres {
-    fn drop(&mut self) {
-        unsafe { self.device.destroy_fence(self.fence, None) }
     }
 }
 
@@ -385,11 +358,11 @@ impl Frame {
             .build()];
         unsafe {
             self.device
-                .queue_submit(dev.graphics_queue, &submits, self.res.fence)
+                .queue_submit(dev.graphics_queue, &submits, self.res.fence.fence)
         }
         .expect("Failed to submit to Vulkan queue");
 
-        self.res.can_wait = true;
+        self.res.fence.can_wait = true;
 
         // Present result
         let pres_image_indices = [image_index];
