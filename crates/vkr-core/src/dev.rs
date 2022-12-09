@@ -8,14 +8,14 @@ use std::{
     rc::Rc,
 };
 
-use crate::{ctx::Ctx, surface::Surface};
+use crate::{ctx::Ctx, surface::Surface, Queue};
 
 use ash::vk;
 
 pub struct Dev {
     pub surface_format: vk::SurfaceFormatKHR,
     pub graphics_command_pool: vk::CommandPool,
-    pub graphics_queue: vk::Queue,
+    pub graphics_queue: Queue,
     pub physical: vk::PhysicalDevice,
 
     /// Needs to be public if we want to create buffers outside this module.
@@ -96,7 +96,9 @@ impl Dev {
                 .expect("Failed to create Vulkan logical device")
         };
 
-        let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index, 0) };
+        let device = Rc::new(device);
+
+        let graphics_queue = Queue::new(&device, graphics_queue_index);
 
         // Command pool
         let create_info = vk::CommandPoolCreateInfo::builder()
@@ -135,7 +137,7 @@ impl Dev {
             graphics_queue,
             physical,
             allocator: Rc::new(RefCell::new(allocator)),
-            device: Rc::new(device),
+            device,
         }
     }
 
