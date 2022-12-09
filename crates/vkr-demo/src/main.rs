@@ -4,6 +4,7 @@
 
 use vkr::{
     ash::vk,
+    image::Image,
     sdl2::{
         event::{Event, WindowEvent},
         keyboard::Keycode,
@@ -59,6 +60,8 @@ pub fn main() {
     let mut nodes = Pack::new();
     let rect = nodes.push(Node::new());
     let lines = nodes.push(Node::new());
+
+    let _image = Image::load(&dev, "crates/vkr-demo/res/image/test.png");
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {

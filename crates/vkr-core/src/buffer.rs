@@ -2,9 +2,11 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{cell::RefCell, fs::File, path::Path, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use ash::vk;
+
+use crate::image::Png;
 
 pub struct Buffer {
     allocation: vk_mem::Allocation,
@@ -57,14 +59,8 @@ impl Buffer {
     }
 
     /// Loads data from a png image in `path` directly into a staging buffer
-    pub fn load(allocator: &Rc<RefCell<vk_mem::Allocator>>, path: &str) -> Self {
-        let path = Path::new(path);
-        let file = File::open(path).unwrap();
-
-        let decoder = png::Decoder::new(file);
-        let mut reader = decoder.read_info().unwrap();
-
-        let size = reader.output_buffer_size();
+    pub fn load(allocator: &Rc<RefCell<vk_mem::Allocator>>, png: &mut Png) -> Self {
+        let size = png.reader.output_buffer_size();
         let usage = vk::BufferUsageFlags::TRANSFER_SRC;
 
         // Create staging buffer
@@ -78,7 +74,7 @@ impl Buffer {
         let buf = unsafe { std::slice::from_raw_parts_mut(data, size) };
 
         // Read the next frame. An APNG might contain multiple frames.
-        reader.next_frame(buf).unwrap();
+        png.reader.next_frame(buf).unwrap();
 
         unsafe { alloc.unmap_memory(allocation) };
 
