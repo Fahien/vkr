@@ -1,6 +1,6 @@
 [package]
 name = "vkr-demo"
-version = "0.0.6"
+version = "0.0.7"
 authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
 edition = "2018"
 license = "MIT"
