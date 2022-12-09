@@ -52,12 +52,12 @@ impl Swapchain {
 
         let mut images = Vec::new();
         for image in swapchain_images.into_iter() {
-            images.push(Image::new(
+            images.push(Image::unmanaged(
                 image,
-                dev.surface_format.format,
-                dev.surface_format.color_space,
                 width,
                 height,
+                dev.surface_format.format,
+                dev.surface_format.color_space,
             ));
         }
 

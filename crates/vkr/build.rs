@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 use std::error::Error;
-use std::fs::{read_to_string, File};
+use std::fs::{create_dir, read_to_string, File};
+use std::io::BufWriter;
+use std::path::Path;
 
 use glsl::parser::Parse as _;
 use glsl::syntax::ShaderStage;
@@ -35,13 +37,43 @@ fn transpile(prefix: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ["res/shader/vert", "res/shader/frag"]
-        .iter()
-        .for_each(|prefix| {
-            let err_message = format!("Failed to transpile {}", prefix);
-            transpile(prefix).expect(&err_message);
-        });
+fn compile_shaders() -> Result<(), Box<dyn Error>> {
+    let shader_prefixes = ["res/shader/vert", "res/shader/frag"];
+    for prefix in shader_prefixes {
+        transpile(prefix)?;
+    }
+    Ok(())
+}
 
+fn create_test_image() -> Result<(), Box<dyn Error>> {
+    let image_dir = Path::new(r"res/image");
+    if !Path::exists(image_dir) {
+        create_dir(image_dir)?;
+    }
+
+    let path = Path::new(r"res/image/test.png");
+    if Path::exists(path) {
+        return Ok(());
+    }
+
+    let file = File::create(path)?;
+    let w = BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(w, 2, 2);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+
+    let mut writer = encoder.write_header()?;
+    // 4 pixels
+    let data = [
+        180, 100, 10, 255, 20, 190, 10, 205, 40, 10, 200, 255, 80, 100, 200, 255,
+    ];
+    writer.write_image_data(&data)?;
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    compile_shaders()?;
+    create_test_image()?;
     Ok(())
 }
