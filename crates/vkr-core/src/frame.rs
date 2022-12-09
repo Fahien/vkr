@@ -8,7 +8,7 @@ use ash::{vk, Device};
 
 use crate::{
     buffer::Buffer, ctx::Ctx, dev::Dev, image::Image, pass::Pass, pipeline::Pipeline,
-    swapchain::Swapchain, Descriptors, Handle, Mat4, Node, Pack, Primitive, Surface,
+    swapchain::Swapchain, Descriptors, Handle, Mat4, Node, Pack, Primitive, Semaphore, Surface,
 };
 
 /// This is the one that is going to be recreated
@@ -107,8 +107,8 @@ pub struct Frameres {
     pub command_buffer: vk::CommandBuffer,
     pub fence: vk::Fence,
     pub can_wait: bool,
-    pub image_ready: vk::Semaphore,
-    pub image_drawn: vk::Semaphore,
+    pub image_ready: Semaphore,
+    pub image_drawn: Semaphore,
     device: Rc<Device>,
 }
 
@@ -135,29 +135,14 @@ impl Frameres {
         }
         .expect("Failed to create Vulkan fence");
 
-        // Semaphores (device)
-        let (image_ready, image_drawn) = {
-            let create_info = vk::SemaphoreCreateInfo::builder().build();
-            unsafe {
-                (
-                    dev.device
-                        .create_semaphore(&create_info, None)
-                        .expect("Failed to create Vulkan semaphore"),
-                    dev.device
-                        .create_semaphore(&create_info, None)
-                        .expect("Failed to create Vulkan semaphore"),
-                )
-            }
-        };
-
         Self {
             uniforms: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
             can_wait: true,
-            image_ready,
-            image_drawn,
+            image_ready: Semaphore::new(&dev.device),
+            image_drawn: Semaphore::new(&dev.device),
             device: Rc::clone(&dev.device),
         }
     }
@@ -181,11 +166,7 @@ impl Frameres {
 
 impl Drop for Frameres {
     fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_semaphore(self.image_drawn, None);
-            self.device.destroy_semaphore(self.image_ready, None);
-            self.device.destroy_fence(self.fence, None)
-        }
+        unsafe { self.device.destroy_fence(self.fence, None) }
     }
 }
 
@@ -382,11 +363,11 @@ impl Frame {
         image_index: u32,
     ) -> Result<(), vk::Result> {
         // Wait for the image to be available ..
-        let wait_semaphores = [self.res.image_ready];
+        let wait_semaphores = [self.res.image_ready.semaphore];
         // .. at color attachment output stage
         let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [self.res.command_buffer];
-        let signal_semaphores = [self.res.image_drawn];
+        let signal_semaphores = [self.res.image_drawn.semaphore];
         let submits = [vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_dst_stage_mask)
@@ -404,7 +385,7 @@ impl Frame {
         // Present result
         let pres_image_indices = [image_index];
         let pres_swapchains = [swapchain.swapchain];
-        let pres_semaphores = [self.res.image_drawn];
+        let pres_semaphores = [self.res.image_drawn.semaphore];
         let present_info = vk::PresentInfoKHR::builder()
             .image_indices(&pres_image_indices)
             .swapchains(&pres_swapchains)
@@ -415,7 +396,9 @@ impl Frame {
                 .ext
                 .queue_present(dev.graphics_queue, &present_info)
         } {
-            Ok(_subotimal) => Ok(()),
+            Ok(false) => Ok(()),
+            // Suboptimal
+            Ok(true) => Err(vk::Result::ERROR_OUT_OF_DATE_KHR),
             Err(result) => Err(result),
         }
     }
@@ -498,15 +481,20 @@ impl Frames for SwapchainFrames {
             self.swapchain.ext.acquire_next_image(
                 self.swapchain.swapchain,
                 u64::max_value(),
-                frame.res.image_ready,
+                frame.res.image_ready.semaphore,
                 vk::Fence::null(),
             )
         };
 
         match acquire_res {
-            Ok((image_index, _)) => {
+            Ok((image_index, false)) => {
                 self.image_index = image_index;
                 Ok(frame)
+            }
+            // Suboptimal
+            Ok((_, true)) => {
+                self.current = 0;
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR)
             }
             Err(result) => {
                 self.current = 0;
