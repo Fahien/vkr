@@ -2,7 +2,7 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs::File, path::Path, rc::Rc};
 
 use ash::vk;
 
@@ -52,6 +52,41 @@ impl Buffer {
             buffer,
             size,
             usage,
+            allocator: allocator.clone(),
+        }
+    }
+
+    /// Loads data from a png image in `path` directly into a staging buffer
+    pub fn load(allocator: &Rc<RefCell<vk_mem::Allocator>>, path: &str) -> Self {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+
+        let decoder = png::Decoder::new(file);
+        let mut reader = decoder.read_info().unwrap();
+
+        let size = reader.output_buffer_size();
+        let usage = vk::BufferUsageFlags::TRANSFER_SRC;
+
+        // Create staging buffer
+        let (buffer, allocation) =
+            Self::create_buffer(&allocator.borrow(), size as vk::DeviceSize, usage);
+
+        let alloc = allocator.borrow();
+        let data = unsafe { alloc.map_memory(allocation) }.expect("Failed to map Vulkan memory");
+
+        // Allocate the output buffer
+        let buf = unsafe { std::slice::from_raw_parts_mut(data, size) };
+
+        // Read the next frame. An APNG might contain multiple frames.
+        reader.next_frame(buf).unwrap();
+
+        unsafe { alloc.unmap_memory(allocation) };
+
+        Self {
+            allocation,
+            buffer,
+            usage,
+            size: size as vk::DeviceSize,
             allocator: allocator.clone(),
         }
     }
