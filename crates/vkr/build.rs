@@ -38,7 +38,12 @@ fn transpile(prefix: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn compile_shaders() -> Result<(), Box<dyn Error>> {
-    let shader_prefixes = ["res/shader/vert", "res/shader/frag"];
+    let shader_prefixes = [
+        "res/shader/main.vert",
+        "res/shader/main.frag",
+        "res/shader/line.vert",
+        "res/shader/line.frag",
+    ];
     for prefix in shader_prefixes {
         transpile(prefix)?;
     }

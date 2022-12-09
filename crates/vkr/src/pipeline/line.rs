@@ -4,10 +4,8 @@
 
 use std::{ffi::CString, rc::Rc};
 
-use byteorder::{ByteOrder, NativeEndian};
-
 use memoffset::offset_of;
-use vkr_core::{Dev, Pass, Pipeline, Point3};
+use vkr_core::{Dev, Pass, Pipeline, Point3, ShaderModule};
 
 use vkr_core::ash::{self, vk};
 
@@ -74,36 +72,25 @@ impl LinePipeline {
 
         // Graphics pipeline (shaders, renderpass)
         let graphics = {
-            let frag_spv = include_bytes!("../../res/shader/frag.spv");
-            let vert_spv = include_bytes!("../../res/shader/vert.spv");
+            let frag_mod = ShaderModule::new(
+                &dev.device,
+                include_bytes!("../../res/shader/line.frag.spv"),
+            );
 
-            let mut frag_code = vec![0; frag_spv.len() / std::mem::size_of::<u32>()];
-            let mut vert_code = vec![0; vert_spv.len() / std::mem::size_of::<u32>()];
-
-            NativeEndian::read_u32_into(vert_spv, vert_code.as_mut_slice());
-            NativeEndian::read_u32_into(frag_spv, frag_code.as_mut_slice());
-
-            let create_info = vk::ShaderModuleCreateInfo::builder()
-                .code(frag_code.as_slice())
-                .build();
-            let frag_mod = unsafe { dev.device.create_shader_module(&create_info, None) }
-                .expect("Failed to create Vulkan shader module");
-
-            let create_info = vk::ShaderModuleCreateInfo::builder()
-                .code(vert_code.as_slice())
-                .build();
-            let vert_mod = unsafe { dev.device.create_shader_module(&create_info, None) }
-                .expect("Failed to create Vulkan shader module");
+            let vert_mod = ShaderModule::new(
+                &dev.device,
+                include_bytes!("../../res/shader/line.vert.spv"),
+            );
 
             let entrypoint = CString::new("main").expect("Failed to create main entrypoint");
             let vert_stage = vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::VERTEX)
-                .module(vert_mod)
+                .module(vert_mod.shader)
                 .name(&entrypoint)
                 .build();
             let frag_stage = vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::FRAGMENT)
-                .module(frag_mod)
+                .module(frag_mod.shader)
                 .name(&entrypoint)
                 .build();
 
@@ -187,10 +174,7 @@ impl LinePipeline {
                     .create_graphics_pipelines(vk::PipelineCache::null(), &create_info, None)
             }
             .expect("Failed to create Vulkan graphics pipeline");
-            unsafe {
-                dev.device.destroy_shader_module(vert_mod, None);
-                dev.device.destroy_shader_module(frag_mod, None);
-            }
+
             pipelines[0]
         };
 

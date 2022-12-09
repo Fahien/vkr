@@ -64,3 +64,6 @@ pub use sync::*;
 
 pub mod queue;
 pub use queue::*;
+
+pub mod shader;
+pub use shader::*;

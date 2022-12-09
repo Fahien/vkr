@@ -266,6 +266,7 @@ name = "vkr-core"
 version = "0.0.7"
 dependencies = [
  "ash",
+ "byteorder",
  "png",
  "sdl2",
  "vk-mem",
