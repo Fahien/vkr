@@ -299,3 +299,14 @@ impl Drop for ImageView {
         }
     }
 }
+
+pub struct Texture {
+    pub view: Handle<ImageView>,
+    pub sampler: Handle<Sampler>,
+}
+
+impl Texture {
+    pub fn new(view: Handle<ImageView>, sampler: Handle<Sampler>) -> Self {
+        Self { view, sampler }
+    }
+}
