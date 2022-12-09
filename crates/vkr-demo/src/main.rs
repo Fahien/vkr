@@ -5,11 +5,13 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Node, Pass, Point3,
-    Quat, Surface, Swapchain, SwapchainFrames, Vec3, Vertex, Vkr, Win,
+    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Node, Pack, Pass,
+    Point3, Quat, Surface, Swapchain, SwapchainFrames, Timer, Vec3, Vertex, Vkr, Win,
 };
 
 pub fn main() {
+    let mut timer = Timer::new();
+
     let win = Win::new();
     let (width, height) = win.window.drawable_size();
 
@@ -43,13 +45,14 @@ pub fn main() {
             Point3::new(Vec3::new(-0.3, -0.3, 0.0), Color::new(1.0, 0.0, 0.3, 1.0)),
         ),
     ];
-    let mut line_buffer =
+    let mut lines_vertex_buffer =
         Buffer::new::<Vertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
-    line_buffer.upload_arr(&lines);
+    lines_vertex_buffer.upload_arr(&lines);
 
     let triangle_pipeline = MainPipeline::new(&mut dev, &pass, width, height);
 
-    let mut buffer = Buffer::new::<Vertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
+    let mut rect_vertex_buffer =
+        Buffer::new::<Vertex>(&dev.allocator, vk::BufferUsageFlags::VERTEX_BUFFER);
     let vertices = [
         Vertex::new(-0.2, -0.2, 0.0),
         Vertex::new(0.2, -0.2, 0.0),
@@ -58,9 +61,11 @@ pub fn main() {
         Vertex::new(0.2, 0.2, 0.0),
         Vertex::new(-0.2, 0.2, 0.0),
     ];
-    buffer.upload_arr(&vertices);
+    rect_vertex_buffer.upload_arr(&vertices);
 
-    let mut node = Node::new();
+    let mut nodes = Pack::new();
+    let rect = nodes.push(Node::new());
+    let lines = nodes.push(Node::new());
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
@@ -76,8 +81,13 @@ pub fn main() {
             }
         }
 
-        let rot = Quat::axis_angle(Vec3::new(0.0, 0.0, 1.0), 0.01);
-        node.trs.rotate(&rot);
+        let delta = timer.get_delta().as_secs_f32();
+
+        let rot = Quat::axis_angle(Vec3::new(0.0, 0.0, 1.0), delta / 2.0);
+        nodes.get_mut(rect).unwrap().trs.rotate(&rot);
+
+        let rot = Quat::axis_angle(Vec3::new(0.0, 0.0, 1.0), -delta / 2.0);
+        nodes.get_mut(lines).unwrap().trs.rotate(&rot);
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -96,9 +106,8 @@ pub fn main() {
         };
 
         frame.begin(&pass);
-        frame.model_buffer.upload(&node.trs);
-        frame.draw(&triangle_pipeline, &buffer);
-        frame.draw(&line_pipeline, &line_buffer);
+        frame.draw(&triangle_pipeline, &nodes, &rect_vertex_buffer, rect);
+        frame.draw(&line_pipeline, &nodes, &lines_vertex_buffer, lines);
         frame.end();
 
         match sfs.present(&dev) {

@@ -2,13 +2,13 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use std::rc::Rc;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use ash::{vk, Device};
 
 use crate::{
     buffer::Buffer, ctx::Ctx, dev::Dev, image::Image, pass::Pass, pipeline::Pipeline,
-    swapchain::Swapchain, Descriptors, Mat4, Surface, Vertex,
+    swapchain::Swapchain, Descriptors, Handle, Mat4, Node, Pack, Surface, Vertex,
 };
 
 /// This is the one that is going to be recreated
@@ -101,6 +101,8 @@ impl Drop for Framebuffer {
 /// Frame resources that do not need to be recreated
 /// when the swapchain goes out of date
 pub struct Frameres {
+    /// Uniform buffers for model matrix are associated to nodes
+    uniforms: HashMap<Handle<Node>, Buffer>,
     descriptors: Descriptors,
     pub command_buffer: vk::CommandBuffer,
     pub fence: vk::Fence,
@@ -149,6 +151,7 @@ impl Frameres {
         };
 
         Self {
+            uniforms: HashMap::new(),
             descriptors: Descriptors::new(dev),
             command_buffer,
             fence,
@@ -191,6 +194,9 @@ pub struct Frame {
     pub res: Frameres,
     /// TODO: An buffer for each node
     pub model_buffer: Buffer,
+
+    /// A frame should be able to allocate a uniform buffer on draw
+    allocator: Rc<RefCell<vk_mem::Allocator>>,
     pub device: Rc<Device>,
 }
 
@@ -205,6 +211,7 @@ impl Frame {
             buffer,
             res,
             model_buffer,
+            allocator: dev.allocator.clone(),
             device: Rc::clone(&dev.device),
         }
     }
@@ -234,17 +241,20 @@ impl Frame {
         };
     }
 
-    pub fn draw(&mut self, pipeline: &impl Pipeline, buffer: &Buffer) {
+    pub fn bind_model_buffer(
+        &mut self,
+        pipeline: &impl Pipeline,
+        nodes: &Pack<Node>,
+        node: Handle<Node>,
+    ) {
         let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
-        unsafe {
-            self.device.cmd_bind_pipeline(
-                self.res.command_buffer,
-                graphics_bind_point,
-                pipeline.get_pipeline(),
-            )
-        };
 
-        if let Some(sets) = self.res.descriptors.sets.get(&pipeline.get_layout()) {
+        if let Some(sets) = self
+            .res
+            .descriptors
+            .sets
+            .get(&(pipeline.get_layout(), node))
+        {
             unsafe {
                 self.device.cmd_bind_descriptor_sets(
                     self.res.command_buffer,
@@ -255,13 +265,22 @@ impl Frame {
                     &[],
                 );
             }
+
+            // If there is a descriptor set, there must be a uniform buffer
+            let model = self.res.uniforms.get_mut(&node).unwrap();
+            model.upload(&nodes.get(node).unwrap().trs.matrix);
         } else {
+            // Create a new uniform buffer for this node's model matrix
+            let mut model =
+                Buffer::new::<Mat4>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
+            model.upload(&nodes.get(node).unwrap().trs.matrix);
+
             let sets = self.res.descriptors.allocate(&[pipeline.get_set_layout()]);
 
             // Update immediately the descriptor sets
             let buffer_info = vk::DescriptorBufferInfo::builder()
                 .range(std::mem::size_of::<Mat4>() as vk::DeviceSize)
-                .buffer(self.model_buffer.buffer)
+                .buffer(model.buffer)
                 .build();
 
             let descriptor_write = vk::WriteDescriptorSet::builder()
@@ -284,14 +303,35 @@ impl Frame {
                     &[],
                 );
             }
+
+            self.res.uniforms.insert(node, model);
             self.res
                 .descriptors
                 .sets
-                .insert(pipeline.get_layout(), sets);
+                .insert((pipeline.get_layout(), node), sets);
         }
+    }
+
+    pub fn draw(
+        &mut self,
+        pipeline: &impl Pipeline,
+        nodes: &Pack<Node>,
+        vertex_buffer: &Buffer,
+        node: Handle<Node>,
+    ) {
+        let graphics_bind_point = vk::PipelineBindPoint::GRAPHICS;
+        unsafe {
+            self.device.cmd_bind_pipeline(
+                self.res.command_buffer,
+                graphics_bind_point,
+                pipeline.get_pipeline(),
+            )
+        };
+
+        self.bind_model_buffer(pipeline, nodes, node);
 
         let first_binding = 0;
-        let buffers = [buffer.buffer];
+        let buffers = [vertex_buffer.buffer];
         let offsets = [vk::DeviceSize::default()];
         unsafe {
             self.device.cmd_bind_vertex_buffers(
@@ -302,7 +342,7 @@ impl Frame {
             );
         }
 
-        let vertex_count = buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
+        let vertex_count = vertex_buffer.size as u32 / std::mem::size_of::<Vertex>() as u32;
         unsafe {
             self.device
                 .cmd_draw(self.res.command_buffer, vertex_count, 1, 0, 0);

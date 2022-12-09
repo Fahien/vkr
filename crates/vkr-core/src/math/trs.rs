@@ -7,7 +7,7 @@ use crate::{Mat4, Quat};
 /// Transform
 #[repr(C)]
 pub struct Trs {
-    matrix: Mat4,
+    pub matrix: Mat4,
 }
 
 impl Default for Trs {
