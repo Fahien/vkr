@@ -22,3 +22,6 @@ pub use mat4::*;
 
 pub mod quat;
 pub use quat::*;
+
+pub mod trs;
+pub use trs::*;

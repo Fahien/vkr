@@ -52,3 +52,6 @@ pub use descriptor::*;
 
 pub mod frame;
 pub use frame::*;
+
+pub mod model;
+pub use model::*;

@@ -10,6 +10,7 @@ use std::{
 use crate::{Quat, Vec3};
 
 #[derive(Default, PartialEq)]
+#[repr(C)]
 /// Row-major 4x4 Matrix
 pub struct Mat4 {
     values: [f32x4; 4],

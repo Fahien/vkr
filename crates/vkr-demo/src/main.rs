@@ -5,7 +5,7 @@
 use vkr::{
     ash::vk,
     sdl2::{event::Event, keyboard::Keycode},
-    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Mat4, Pass, Point3,
+    Buffer, Color, Dev, Framebuffer, Frames, Line, LinePipeline, MainPipeline, Node, Pass, Point3,
     Quat, Surface, Swapchain, SwapchainFrames, Vec3, Vertex, Vkr, Win,
 };
 
@@ -60,7 +60,7 @@ pub fn main() {
     ];
     buffer.upload_arr(&vertices);
 
-    let mut model = Mat4::identity();
+    let mut node = Node::new();
 
     let mut events = win.ctx.event_pump().expect("Failed to create SDL events");
     'running: loop {
@@ -77,7 +77,7 @@ pub fn main() {
         }
 
         let rot = Quat::axis_angle(Vec3::new(0.0, 0.0, 1.0), 0.01);
-        model.rotate(&rot);
+        node.trs.rotate(&rot);
 
         let frame = match sfs.next_frame() {
             Ok(frame) => frame,
@@ -96,7 +96,7 @@ pub fn main() {
         };
 
         frame.begin(&pass);
-        frame.model_buffer.upload(&model);
+        frame.model_buffer.upload(&node.trs);
         frame.draw(&triangle_pipeline, &buffer);
         frame.draw(&line_pipeline, &line_buffer);
         frame.end();
