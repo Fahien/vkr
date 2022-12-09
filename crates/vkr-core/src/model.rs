@@ -2,7 +2,10 @@
 // Author: Antonio Caggiano <info@antoniocaggiano.eu>
 // SPDX-License-Identifier: MIT
 
-use crate::{Handle, Trs};
+use crate::{
+    image::{Image, ImageView, Texture},
+    Handle, Pack, Sampler, Trs,
+};
 
 #[derive(Default)]
 pub struct Node {
@@ -15,6 +18,32 @@ impl Node {
         Node {
             trs: Trs::new(),
             children: vec![],
+        }
+    }
+}
+
+pub struct Model {
+    pub nodes: Pack<Node>,
+    pub images: Pack<Image>,
+    pub views: Pack<ImageView>,
+    pub samplers: Pack<Sampler>,
+    pub textures: Pack<Texture>,
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Model {
+    pub fn new() -> Self {
+        Self {
+            nodes: Pack::new(),
+            images: Pack::new(),
+            views: Pack::new(),
+            samplers: Pack::new(),
+            textures: Pack::new(),
         }
     }
 }
