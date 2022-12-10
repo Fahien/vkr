@@ -11,5 +11,4 @@ byteorder = "1.4.3"
 memoffset = "0.7.1"
 
 [build-dependencies]
-glsl = { version = "6.0.1", features = ["spirv"] }
-png = "0.17.7"
+vkr-pipe = { path = "../vkr-pipe" }

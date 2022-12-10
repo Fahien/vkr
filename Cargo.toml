@@ -1,5 +1,7 @@
 [workspace]
 members = [
     "crates/vkr-core",
+    "crates/vkr-pipe",
+    "crates/vkr",
     "crates/vkr-demo",
 ]

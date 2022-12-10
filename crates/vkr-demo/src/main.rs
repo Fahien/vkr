@@ -22,16 +22,22 @@ pub fn main() {
     let vkr = Vkr::new(&win);
 
     let surface = Surface::new(&win, &vkr.ctx);
-    let mut dev = Dev::new(&vkr.ctx, &surface);
+    let mut dev = Dev::new(&vkr.ctx, Some(&surface));
 
     let pass = Pass::new(&mut dev);
 
     let mut sfs = SwapchainFrames::new(&vkr.ctx, &surface, &mut dev, width, height, &pass);
 
-    let line_pipeline = LinePipeline::new(&mut dev, &pass, width, height);
+    let line_pipeline = LinePipeline::new::<Point3>(
+        &mut dev,
+        vk::PrimitiveTopology::LINE_STRIP,
+        &pass,
+        width,
+        height,
+    );
 
     let lines_primitive = {
-        // Notice how the first line appears at the top of the picture as Vulkan Y axis is pointing downwards
+        // Notice how the first line appears atd the top of the picture as Vulkan Y axis is pointing downwards
         let lines_vertices = vec![
             Point3::new(Vec3::new(-0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
             Point3::new(Vec3::new(0.3, -0.3, 0.0), Color::new(1.0, 1.0, 0.0, 1.0)),
@@ -42,7 +48,13 @@ pub fn main() {
         Primitive::new(&dev.allocator, &lines_vertices)
     };
 
-    let triangle_pipeline = MainPipeline::new(&mut dev, &pass, width, height);
+    let triangle_pipeline = MainPipeline::new::<Vertex>(
+        &mut dev,
+        vk::PrimitiveTopology::TRIANGLE_LIST,
+        &pass,
+        width,
+        height,
+    );
 
     let rect_primitive = {
         let vertices = vec![

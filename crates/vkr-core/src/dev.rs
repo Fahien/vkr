@@ -29,7 +29,7 @@ impl Dev {
     fn get_graphics_queue_index(
         instance: &ash::Instance,
         physical: vk::PhysicalDevice,
-        surface: &Surface,
+        surface: Option<&Surface>,
     ) -> u32 {
         // Queue information (instance, physical device)
         let queue_properties =
@@ -38,12 +38,19 @@ impl Dev {
         let mut graphics_queue_index = std::u32::MAX;
 
         for (i, queue) in queue_properties.iter().enumerate() {
-            let supports_presentation = unsafe {
-                surface
-                    .ext
-                    .get_physical_device_surface_support(physical, i as u32, surface.surface)
+            let mut supports_presentation = true;
+
+            if let Some(surface) = surface {
+                supports_presentation = unsafe {
+                    surface.ext.get_physical_device_surface_support(
+                        physical,
+                        i as u32,
+                        surface.surface,
+                    )
+                }
+                .expect("Failed to check presentation support for Vulkan physical device");
             }
-            .expect("Failed to check presentation support for Vulkan physical device");
+
             if queue.queue_flags.contains(vk::QueueFlags::GRAPHICS) && supports_presentation {
                 graphics_queue_index = i as u32;
                 break;
@@ -58,7 +65,7 @@ impl Dev {
         graphics_queue_index
     }
 
-    pub fn new(ctx: &Ctx, surface: &Surface) -> Self {
+    pub fn new(ctx: &Ctx, surface: Option<&Surface>) -> Self {
         // Physical device
         let physical = {
             let phydevs = unsafe {
@@ -82,10 +89,11 @@ impl Dev {
             .build()];
 
         let portability_subset_name = CString::new("VK_KHR_portability_subset").unwrap();
-        let device_extensions = [
-            ash::extensions::khr::Swapchain::name().as_ptr(),
-            portability_subset_name.as_ptr(),
-        ];
+        let mut device_extensions = vec![portability_subset_name.as_ptr()];
+        if surface.is_some() {
+            device_extensions.push(ash::extensions::khr::Swapchain::name().as_ptr());
+        }
+
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_infos)
             .enabled_extension_names(&device_extensions);
@@ -113,7 +121,7 @@ impl Dev {
         };
 
         // Surface format
-        let surface_format = {
+        let surface_format = if let Some(surface) = surface {
             let surface_formats = unsafe {
                 surface
                     .ext
@@ -122,6 +130,11 @@ impl Dev {
             .expect("Failed to get Vulkan physical device surface formats");
 
             surface_formats[1]
+        } else {
+            vk::SurfaceFormatKHR::builder()
+                .format(vk::Format::R8G8B8A8_SRGB)
+                .color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
+                .build()
         };
         println!("Surface format: {:?}", surface_format.format);
 

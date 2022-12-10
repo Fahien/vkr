@@ -1,0 +1,25 @@
+[package]
+name = "vkr-pipe"
+version = "0.0.7"
+authors = ["Antonio Caggiano <info@antoniocaggiano.eu>"]
+edition = "2018"
+license = "MIT"
+
+[[test]]
+name = "gen_pipelines"
+path = "tests/test.rs"
+
+[[test]]
+name = "pipelines"
+path = "tests/pipeline/test.rs"
+
+[dependencies]
+vkr-core = { path = "../vkr-core", default-features = false }
+glsl = { version = "6.0.1", features = ["spirv"] }
+shaderc = "0.6"
+spirv-reflect = "0.2.3"
+proc-macro2 = "1.0"
+syn = { version = "1.0", features = ["full"] }
+quote = "1.0"
+prettyplease = "0.1"
+memoffset = "0.7.1"

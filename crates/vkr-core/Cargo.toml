@@ -11,6 +11,7 @@ sdl2 = { version = "0.35.2", optional = true }
 vk-mem = { git = "https://github.com/fahien/vk-mem-rs" }
 png = "0.17.7"
 byteorder = "1.4.3"
+memoffset = "0.7.1"
 
 [features]
 default = ["win"]
