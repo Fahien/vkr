@@ -17,9 +17,6 @@ use shaderc::CompilationArtifact;
 mod template;
 use template::*;
 
-mod attribute;
-use attribute::*;
-
 fn transpile_translation_unit(
     tu: &syntax::TranslationUnit,
     kind: ShaderKind,
@@ -33,12 +30,6 @@ fn transpile_translation_unit(
     let options = shaderc::CompileOptions::new().unwrap();
     let kind = kind.into();
     compiler.compile_into_spirv(&glsl_buffer, kind, "glsl input", "main", Some(&options))
-}
-
-macro_rules! p {
-    ($($tokens: tt)*) => {
-        println!("cargo:warning={}", format!($($tokens)*))
-    }
 }
 
 fn capitalize(s: &str) -> String {
@@ -94,32 +85,9 @@ pub fn transpile(info: CompileInfo) -> Result<(), Box<dyn Error>> {
     // Reflection rust code
     let pipeline_struct_name: TokenStream =
         format!("{}Pipeline", capitalize(&pipeline_name)).parse()?;
-    let rust_code = get_pipeline_template(pipeline_struct_name, vert_spv_data, frag_spv_data);
+    let rust_code = get_pipeline_template(pipeline_struct_name, vert_spv_data, frag_spv_data)?;
     create_dir_all(&info.out)?;
     File::create(out_path)?.write_all(pretty_print_item(rust_code).as_bytes())?;
-
-    let module = spirv_reflect::create_shader_module(vert_spv_data)?;
-
-    let mut attributes = vec![];
-    let input_variables = module.enumerate_input_variables(None)?;
-
-    // We accumulate offset as we process attributes
-    let mut offset = 0;
-    for input in &input_variables {
-        p!(
-            "{}:\t{}({})\tVec{}\tf{}",
-            info.prefix,
-            input.name,
-            input.location,
-            input.numeric.vector.component_count,
-            input.numeric.scalar.width
-        );
-
-        let format = numeric_to_format(&input.numeric);
-        let attribute = Attribute::new(input.location, format, offset);
-        attributes.push(attribute);
-        offset += numeric_size(&input.numeric);
-    }
 
     Ok(())
 }

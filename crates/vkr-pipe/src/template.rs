@@ -1,13 +1,62 @@
+use std::error::Error;
+
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;
+use spirv_reflect::types::ReflectDescriptorType;
+
+//macro_rules! p {
+//    ($($tokens: tt)*) => {
+//        println!("cargo:warning={}", format!($($tokens)*))
+//    }
+//}
+
+fn descriptor_type_to_tokens(descriptor_type: ReflectDescriptorType) -> TokenStream {
+    match descriptor_type {
+        ReflectDescriptorType::Undefined => todo!(),
+        ReflectDescriptorType::Sampler => todo!(),
+        ReflectDescriptorType::CombinedImageSampler => todo!(),
+        ReflectDescriptorType::SampledImage => todo!(),
+        ReflectDescriptorType::StorageImage => todo!(),
+        ReflectDescriptorType::UniformTexelBuffer => todo!(),
+        ReflectDescriptorType::StorageTexelBuffer => todo!(),
+        ReflectDescriptorType::UniformBuffer => quote! { vk::DescriptorType::UNIFORM_BUFFER },
+        ReflectDescriptorType::StorageBuffer => todo!(),
+        ReflectDescriptorType::UniformBufferDynamic => todo!(),
+        ReflectDescriptorType::StorageBufferDynamic => todo!(),
+        ReflectDescriptorType::InputAttachment => todo!(),
+        ReflectDescriptorType::AccelerationStructureNV => todo!(),
+    }
+}
 
 pub fn get_pipeline_template(
     pipeline_struct_name: TokenStream,
     vert_spv_data: &[u8],
     frag_spv_data: &[u8],
-) -> TokenStream {
+) -> Result<TokenStream, Box<dyn Error>> {
     let vert_spv = Literal::byte_string(vert_spv_data);
     let frag_spv = Literal::byte_string(frag_spv_data);
+
+    let module = spirv_reflect::create_shader_module(vert_spv_data)?;
+
+    let mut set_layout_bindings_gen = quote! {};
+
+    let desc_sets = module.enumerate_descriptor_sets(None)?;
+    for desc_set in &desc_sets {
+        for bind in &desc_set.bindings {
+            let binding = bind.binding;
+            let descriptor_type = descriptor_type_to_tokens(bind.descriptor_type);
+            let count = bind.count;
+
+            set_layout_bindings_gen.extend(quote! {
+                vk::DescriptorSetLayoutBinding::builder()
+                .binding(#binding)
+                .descriptor_type(#descriptor_type)
+                .descriptor_count(#count)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+            });
+        }
+    }
 
     let rust_code = quote! {
     /// Copyright © 2021-2022
@@ -31,6 +80,13 @@ pub fn get_pipeline_template(
     }
 
     impl #pipeline_struct_name {
+        /// If I understand it correctly, a descriptor set may have multiple bindings
+        fn get_set_layout_bindings() -> Vec<vk::DescriptorSetLayoutBinding> {
+            vec![
+                #set_layout_bindings_gen
+            ]
+        }
+
         pub fn new<V: VertexInput>(
             dev: &mut Dev,
             topology: vk::PrimitiveTopology,
@@ -38,15 +94,9 @@ pub fn get_pipeline_template(
             width: u32,
             height: u32
         ) -> Self {
-            let set_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
-                .binding(0)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1) // Referring the shader
-                .stage_flags(vk::ShaderStageFlags::VERTEX)
-                .build();
-            let arr_bindings = vec![set_layout_bindings];
-
-            let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&arr_bindings);
+            let set_layout_bindings = Self::get_set_layout_bindings();
+            let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(&set_layout_bindings);
 
             let set_layout = unsafe {
                 dev.device
@@ -206,5 +256,5 @@ pub fn get_pipeline_template(
     }
     };
 
-    rust_code
+    Ok(rust_code)
 }

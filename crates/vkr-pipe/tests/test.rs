@@ -8,5 +8,7 @@ use vkr_pipe::{transpile, CompileInfo};
 
 #[test]
 fn simple() -> Result<(), Box<dyn Error>> {
-    transpile(CompileInfo::new("tests/shader/simple", "tests/pipeline"))
+    transpile(CompileInfo::new("tests/shader/simple", "tests/pipeline"))?;
+    transpile(CompileInfo::new("tests/shader/model", "tests/pipeline"))?;
+    Ok(())
 }
