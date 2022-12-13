@@ -11,7 +11,6 @@ use glsl::parser::Parse as _;
 use glsl::syntax::{self, ShaderStage};
 use glsl::transpiler;
 use glsl::transpiler::spirv::ShaderKind;
-use proc_macro2::TokenStream;
 use shaderc::CompilationArtifact;
 
 mod template;
@@ -30,14 +29,6 @@ fn transpile_translation_unit(
     let options = shaderc::CompileOptions::new().unwrap();
     let kind = kind.into();
     compiler.compile_into_spirv(&glsl_buffer, kind, "glsl input", "main", Some(&options))
-}
-
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
 }
 
 fn pretty_print_item(ts: proc_macro2::TokenStream) -> String {
@@ -83,9 +74,7 @@ pub fn transpile(info: CompileInfo) -> Result<(), Box<dyn Error>> {
     let frag_spv_data = frag_artifact.as_binary_u8();
 
     // Reflection rust code
-    let pipeline_struct_name: TokenStream =
-        format!("{}Pipeline", capitalize(&pipeline_name)).parse()?;
-    let rust_code = get_pipeline_template(pipeline_struct_name, vert_spv_data, frag_spv_data)?;
+    let rust_code = get_pipeline_template(&pipeline_name, vert_spv_data, frag_spv_data)?;
     create_dir_all(&info.out)?;
     File::create(out_path)?.write_all(pretty_print_item(rust_code).as_bytes())?;
 

@@ -238,7 +238,7 @@ impl Frame {
                 Buffer::new::<Mat4>(&self.allocator, vk::BufferUsageFlags::UNIFORM_BUFFER);
             model.upload(&nodes.get(node).unwrap().trs.matrix);
 
-            let sets = self.res.descriptors.allocate(&[pipeline.get_set_layout()]);
+            let sets = self.res.descriptors.allocate(pipeline.get_set_layouts());
 
             // Update immediately the descriptor sets
             let buffer_info = vk::DescriptorBufferInfo::builder()

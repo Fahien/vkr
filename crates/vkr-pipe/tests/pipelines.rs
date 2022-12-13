@@ -1,10 +1,7 @@
 use vkr_core::{ash::vk, *};
 
-mod simple;
-use simple::*;
-
-mod model;
-use model::*;
+mod pipeline;
+use pipeline::*;
 
 #[test]
 fn simple() {

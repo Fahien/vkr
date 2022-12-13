@@ -11,7 +11,7 @@ path = "tests/test.rs"
 
 [[test]]
 name = "pipelines"
-path = "tests/pipeline/test.rs"
+path = "tests/pipelines.rs"
 
 [dependencies]
 vkr-core = { path = "../vkr-core", default-features = false }
